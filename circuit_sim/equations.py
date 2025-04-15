@@ -165,7 +165,7 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
     return kcl_equations
 
 
-def find_loops(electrical_nodes, components_cleaned):
+def find_loops(electrical_nodes, circuit_components):
     """
     Find closed loops in the circuit using Depth-First Search (DFS).
 
@@ -181,7 +181,7 @@ def find_loops(electrical_nodes, components_cleaned):
     for node_id, terminals in electrical_nodes.items():
         # For each terminal, find its component and connected node
         for comp_id, terminal_id in terminals:
-            comp_data = components_cleaned.get(comp_id)
+            comp_data = circuit_components.get(comp_id)
             if not comp_data:
                 continue  # Skip if component is not found
 
@@ -215,3 +215,5 @@ def find_loops(electrical_nodes, components_cleaned):
             visited.add(node)
 
     return loops
+
+
