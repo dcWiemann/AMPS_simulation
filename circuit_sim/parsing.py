@@ -1,4 +1,4 @@
-
+import sympy as sp
 
 def build_electrical_nodes(components, connections):
     """
@@ -99,3 +99,56 @@ def build_circuit_components(components, electrical_nodes):
         }
 
     return circuit_components
+
+
+
+def assign_voltage_variables(electrical_nodes, circuit_components):
+    """
+    Assigns voltage variables to electrical nodes.
+    If a ground node exists in the components, it is used as the reference (0V).
+    
+    Returns:
+    - voltage_vars: { electrical_node_id: voltage_variable }
+    - ground_node: The chosen ground node (for reference voltage)
+    """
+    voltage_vars = {}
+
+    # Step 1: Find a ground node in circuit_components (if it exists)
+    ground_node = None
+    for comp_id, comp in circuit_components.items():
+        if comp["type"] == "ground":  # Ground components must have only 1 terminal
+            if len(comp["terminals"]) == 1:
+                ground_node = next(iter(comp["terminals"].values()))  # Get the electrical node ID
+                break  # Use the first found ground
+
+    # Step 2: If no explicit ground found, default to the lowest node ID
+    if ground_node is None:
+        ground_node = min(electrical_nodes.keys())  
+
+    # Step 3: Assign voltage variables
+    for node_id in electrical_nodes:
+        if node_id == ground_node:
+            voltage_vars[node_id] = 0  # Ground node has 0V
+        else:
+            voltage_vars[node_id] = sp.Symbol(f"V_{node_id}")  # Symbolic voltage variable
+    
+    return voltage_vars, ground_node
+
+
+def assign_current_variables(circuit_components):
+    """
+    Assigns current variables to circuit components based on the cleaned format.
+
+    Returns:
+    - current_vars: { component_id: current_variable }
+    """
+    current_vars = {}
+
+    for comp_id, comp in circuit_components.items():
+        comp_type = comp["type"]
+
+        # Voltage sources enforce their own current, so we don't assign them
+        if comp_type not in ["voltage-source", "ground"]:  
+            current_vars[comp_id] = sp.Symbol(f"I_{comp_id}")  # Assign symbolic current variable
+
+    return current_vars
