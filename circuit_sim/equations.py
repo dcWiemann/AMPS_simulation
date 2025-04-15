@@ -292,3 +292,93 @@ def write_kvl_equations(loops, voltage_vars, components_cleaned, current_vars):
         kvl_equations.append(equation)
 
     return kvl_equations
+
+
+def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_vars, input_vars, components_cleaned):
+    """
+    Eliminates helper variables by solving for them in terms of state variables and input variables.
+
+    Parameters:
+    - kcl_eqs: List of symbolic KCL equations.
+    - kvl_eqs: List of symbolic KVL equations.
+    - voltage_vars: Dictionary mapping electrical nodes to voltage variables.
+    - current_vars: Dictionary mapping components to current variables.
+    - state_vars: Dictionary mapping state variable names to their expressions.
+    - input_vars: Dictionary mapping input variable names to their expressions.
+    - components_cleaned: Dictionary containing cleaned component data.
+    - electrical_nodes: Dictionary mapping node indices to connected components.
+
+    Returns:
+    - Reduced system of KCL and KVL equations without helper variables, fully expressed in terms of state and input variables.
+    """
+
+    # Step 1: Identify helper variables (present in voltage_vars or current_vars but not in state_vars)
+    helper_vars = set(voltage_vars.values()).union(set(current_vars.values())) - set(state_vars.keys())
+
+    # Step 2: Generate equations for resistors and capacitors ### Todo inductor voltages
+    helper_eqs = []
+    for comp_id, comp_data in components_cleaned.items():
+        if comp_data["type"] == "resistor":
+            r_value = sp.Symbol(f"{comp_id}_value")  # Symbolic resistance value
+            i_r = current_vars[comp_id]  # Current through the resistor
+            
+            # Extract node voltages
+            terminals = comp_data["terminals"]
+            node_1 = terminals["0"]
+            node_2 = terminals["1"]
+            
+            v_node_1 = voltage_vars.get(node_1, f"V_{node_1}")
+            v_node_2 = voltage_vars.get(node_2, f"V_{node_2}")
+            
+            # Ohm’s Law: (V1 - V2) = IR
+            helper_eqs.append((v_node_1 - v_node_2) - r_value * i_r)
+
+        elif comp_data["type"] == "capacitor":
+            # Capacitor current equation: i = C dv/dt
+            c_value = sp.Symbol(f"{comp_id}_value")  # Symbolic capacitance value
+            i_c = current_vars[comp_id]  # Current through the capacitor
+            
+            # Extract terminal nodes
+            terminals = comp_data["terminals"]
+            node_1 = terminals["0"]
+            node_2 = terminals["1"]
+
+            # Get node voltage symbols
+            v_node_1 = voltage_vars.get(node_1, f"V_{node_1}")
+            v_node_2 = voltage_vars.get(node_2, f"V_{node_2}")
+
+            # Voltage difference across the capacitor
+            v_cap = v_node_1 - v_node_2
+
+            # Define the differential equation for capacitor current
+            d_v_cap_dt = sp.Symbol(f"dV_{comp_id}/dt")  # Symbol for dv/dt
+            helper_eqs.append(i_c - c_value * d_v_cap_dt)
+
+    # Step 3: Solve for helper variables
+    solved_helpers = sp.solve(helper_eqs, helper_vars)
+
+
+    # Convert state_vars and input_vars into equations of the form: expression - variable = 0
+    state_eqs = [var - expr for var, expr in state_vars.items()]
+    input_eqs = [var - expr for var, expr in input_vars.items()]
+
+    # Solve for node voltages (e.g., V_1 and V_2)
+    node_voltage_subs = sp.solve(state_eqs + input_eqs, list(voltage_vars.values()))
+
+
+    # Step 5: Substitute helper variables into KCL and KVL equations
+    reduced_kcl = [eq.subs(solved_helpers) for eq in kcl_eqs]
+    reduced_kvl = [eq.subs(solved_helpers) for eq in kvl_eqs]
+
+    # Apply the substitutions to KCL and KVL equations
+    reduced_kcl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kcl_eqs]
+    reduced_kvl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kvl_eqs]
+
+    # print("Solved Helpers:")
+    # print(solved_helpers)
+    # print("\nReduced KCL Equations:")
+    # print(reduced_kcl)
+    # print("\nReduced KVL Equations:")
+    # print(reduced_kvl)
+
+    return reduced_kcl, reduced_kvl
