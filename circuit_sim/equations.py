@@ -1,4 +1,5 @@
 import sympy as sp
+from collections import defaultdict
 
 def extract_input_and_state_vars(circuit_components, voltage_vars, current_vars):
     """
@@ -162,3 +163,55 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
         kcl_equations.append(equation)  # Store symbolic equation
 
     return kcl_equations
+
+
+def find_loops(electrical_nodes, components_cleaned):
+    """
+    Find closed loops in the circuit using Depth-First Search (DFS).
+
+    Parameters:
+    - electrical_nodes: { electrical_node_id: set((component_id, terminal_id), ...) }
+
+    Returns:
+    - loops: A list of loops, where each loop is a list of electrical nodes forming a cycle.
+    """
+    # Step 1: Build adjacency list for electrical nodes
+    graph = defaultdict(set)
+
+    for node_id, terminals in electrical_nodes.items():
+        # For each terminal, find its component and connected node
+        for comp_id, terminal_id in terminals:
+            comp_data = components_cleaned.get(comp_id)
+            if not comp_data:
+                continue  # Skip if component is not found
+
+            # Get the other terminal of the component
+            for other_terminal_id, other_node_id in comp_data["terminals"].items():
+                if other_node_id != node_id:  # Ensure it's a different node
+                    graph[node_id].add(other_node_id)
+                    graph[other_node_id].add(node_id)  # Bidirectional edge
+
+    # Step 2: Find loops using DFS
+    loops = []
+    visited = set()
+
+    def dfs(node, path, start_node):
+        """Recursive DFS to find loops."""
+        for neighbor in graph[node]:
+            if neighbor == start_node and len(path) > 2:
+                # Found a valid loop, normalize order to prevent duplicates
+                loop = sorted(path[:])
+                if loop not in loops:
+                    loops.append(loop)
+                continue
+
+            if neighbor not in path:  # Prevent backtracking
+                dfs(neighbor, path + [neighbor], start_node)
+
+    # Step 3: Start DFS from each node
+    for node in graph:
+        if node not in visited:
+            dfs(node, [node], node)
+            visited.add(node)
+
+    return loops
