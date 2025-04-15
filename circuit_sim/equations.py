@@ -165,6 +165,7 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
     return kcl_equations
 
 
+
 def find_loops(electrical_nodes, circuit_components):
     """
     Find closed loops in the circuit using Depth-First Search (DFS).
@@ -217,3 +218,77 @@ def find_loops(electrical_nodes, circuit_components):
     return loops
 
 
+
+def write_kvl_equations(loops, voltage_vars, components_cleaned, current_vars):
+    """
+    Generate Kirchhoff's Voltage Law (KVL) equations using component voltage relations.
+
+    Parameters:
+    - loops: List of detected loops, each represented as a list of electrical nodes.
+    - voltage_vars: { electrical_node_id: voltage_variable } (dictionary of node voltage symbols)
+    - components_cleaned: { component_id: { "type": str, "value": float, "terminals": {terminal_id: electrical_node} } }
+    - current_vars: { component_id: current_variable } (Dictionary mapping components to symbolic current variables)
+
+    Returns:
+    - kvl_equations: List of symbolic KVL equations.
+    """
+    kvl_equations = []
+
+    for loop in loops:
+        equation = 0  # Initialize symbolic equation
+
+        # Iterate through the loop, processing components
+        for i in range(len(loop)):
+            node_a = loop[i]
+            node_b = loop[(i + 1) % len(loop)]  # Next node in the loop (wraps around)
+
+            # Find the component connecting these two nodes
+            component_id = None
+            component = None
+            terminal_a = None
+            terminal_b = None
+
+            for comp_id, comp_data in components_cleaned.items():
+                terminals = comp_data["terminals"]
+                if set(terminals.values()) == {node_a, node_b}:  # Component connects these two nodes
+                    component_id = comp_id
+                    component = comp_data
+                    # Identify which terminal corresponds to which node
+                    for term_id, node in terminals.items():
+                        if node == node_a:
+                            terminal_a = term_id
+                        elif node == node_b:
+                            terminal_b = term_id
+                    break
+
+            if component is None:
+                continue  # No component directly connects these nodes
+
+            comp_type = component["type"]
+            value = sp.Symbol(f"{component_id}_value") if component["value"] is not None else None
+
+            # Determine voltage drop direction based on terminal convention
+            v_a = voltage_vars.get(node_a, sp.Symbol(f"V_{node_a}"))
+            v_b = voltage_vars.get(node_b, sp.Symbol(f"V_{node_b}"))
+            voltage_diff = v_a - v_b if terminal_a == "0" else v_b - v_a  # Polarity correction
+
+            # Apply voltage relation based on component type
+            if comp_type == "resistor":
+                equation += (value * current_vars[component_id]) if terminal_a == "0" else (-value * current_vars[component_id]) 
+
+            elif comp_type == "capacitor":
+                equation += sp.Symbol(f"V_{component_id}") if terminal_a == "0" else -sp.Symbol(f"V_{component_id}")
+
+            elif comp_type == "inductor":
+                equation += (value * sp.Symbol(f"d{current_vars[component_id]}/dt")) if terminal_a == "0" else (-value * sp.Symbol(f"d{current_vars[component_id]}/dt"))
+
+            elif comp_type == "voltage-source":
+                equation += sp.Symbol(f"V_in_{component_id}") if terminal_a == "0" else -sp.Symbol(f"V_in_{component_id}")
+
+            else:
+                print(f"⚠ Warning: Unknown component type '{comp_type}' for {component_id}, ignoring in KVL.")
+
+        # Kirchhoff's Voltage Law states ΣV = 0
+        kvl_equations.append(equation)
+
+    return kvl_equations
