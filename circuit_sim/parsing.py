@@ -63,3 +63,39 @@ def build_electrical_nodes(components, connections):
         electrical_nodes[assigned_node].add(component_terminal)
 
     return electrical_nodes
+
+
+
+def build_circuit_components(components, electrical_nodes):
+    """
+    Extracts and structures only relevant information for circuit simulation.
+
+    Returns:
+    - circuit_components: {component_id: { "type": str, "value": float, "terminals": {terminal_id: electrical_node} } }
+    """
+    circuit_components = {}
+
+    # Reverse map: electrical node -> (component_id, terminal_id)
+    terminal_to_node = {term: node for node, terminals in electrical_nodes.items() for term in terminals}
+
+    for comp in components:
+        comp_id = comp["id"]
+        comp_type = comp["data"]["componentType"]
+        comp_value = comp["data"].get("value", None)  # Some components might not have a value
+        terminals = {}
+
+        # Extract terminal mappings
+        for terminal in comp["data"].get("terminals", []):
+            term_id = terminal["id"]
+            term_key = (comp_id, term_id)
+            if term_key in terminal_to_node:
+                terminals[term_id] = terminal_to_node[term_key]  # Map terminal to electrical node
+
+        # Store cleaned component data
+        circuit_components[comp_id] = {
+            "type": comp_type,
+            "value": comp_value,
+            "terminals": terminals
+        }
+
+    return circuit_components
