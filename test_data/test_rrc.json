@@ -1,0 +1,230 @@
+{
+  "nodes": [
+    {
+      "id": "V_in",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 200,
+        "y": 260
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Voltage Source",
+        "componentType": "voltage-source",
+        "value": 5
+      }
+    },
+    {
+      "id": "R1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 280,
+        "y": 210
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 0,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 80,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 1000
+      }
+    },
+    {
+      "id": "C",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 410,
+        "y": 270
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 0,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 80,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.001
+      }
+    },
+    {
+      "id": "R2",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 290,
+        "y": 140
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 0,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 80,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 1000
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "vueflow__edge-dndnode_60-dndnode_50",
+      "type": "step",
+      "source": "R1",
+      "target": "V_in",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 279.9999980729265,
+      "sourceY": 246.00009230762146,
+      "targetX": 244.00009230762146,
+      "targetY": 264
+    },
+    {
+      "id": "vueflow__edge-dndnode_70-dndnode_61",
+      "type": "step",
+      "source": "C",
+      "target": "R1",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 454.00009230762146,
+      "sourceY": 270.00002306091307,
+      "targetX": 360.00018654231644,
+      "targetY": 254.00009230762146
+    },
+    {
+      "id": "vueflow__edge-dndnode_60-dndnode_80",
+      "type": "step",
+      "source": "R1",
+      "target": "R2",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 279.9999980729265,
+      "sourceY": 246.00009230762146,
+      "targetX": 289.9999980729265,
+      "targetY": 176.00009230762146
+    },
+    {
+      "id": "vueflow__edge-dndnode_61-dndnode_81",
+      "type": "step",
+      "source": "R1",
+      "target": "R2",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 360.00018654231644,
+      "sourceY": 254.00009230762146,
+      "targetX": 370.00018654231644,
+      "targetY": 184.00009230762146
+    },
+    {
+      "id": "vueflow__edge-dndnode_71-dndnode_51",
+      "type": "step",
+      "source": "C",
+      "target": "V_in",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 446.00009230762146,
+      "sourceY": 350.000211530303,
+      "targetX": 236.00009230762146,
+      "targetY": 336.0001846152429
+    }
+  ],
+  "position": [
+    68.22792598317983,
+    38.6161940970552
+  ],
+  "zoom": 1.2212933453912214,
+  "viewport": {
+    "x": 68.22792598317983,
+    "y": 38.6161940970552,
+    "zoom": 1.2212933453912214
+  }
+}

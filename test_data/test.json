@@ -1,0 +1,103 @@
+{
+  "nodes": [
+    {
+      "id": "n0",
+      "type": "electrical-component",
+      "componentType": "voltage-source",
+      "value": 5,
+      "initialized": false,
+      "position": {
+        "x": 361.3333333333333,
+        "y": 211.33333333333337
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "orientation": "vertical"
+      }
+    },
+    {
+      "id": "n1",
+      "type": "electrical-component",
+      "componentType": "resistor",
+      "value": 1000,
+      "initialized": false,
+      "position": {
+        "x": 479.43587058109154,
+        "y": 118.28814548939835
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": "n2",
+      "type": "electrical-component",
+      "componentType": "capacitor",
+      "value": 0.001,
+      "initialized": false,
+      "position": {
+        "x": 630.4078175337708,
+        "y": 118.28814548939835
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "orientation": "horizontal"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e2-1",
+      "type": "step",
+      "source": "n2",
+      "target": "n1",
+      "sourceHandle": 1,
+      "targetHandle": 0,
+      "data": {},
+      "label": "",
+      "sourceX": 630.4078175337708,
+      "sourceY": 158.28814895513628,
+      "targetX": 559.4358775125675,
+      "targetY": 158.28817079068278
+    },
+    {
+      "id": "e1-0",
+      "type": "step",
+      "source": "n1",
+      "target": "n0",
+      "sourceHandle": 1,
+      "targetHandle": 1,
+      "data": {},
+      "label": "",
+      "sourceX": 479.43587058109154,
+      "sourceY": 158.28817079068278,
+      "targetX": 401.3333333333333,
+      "targetY": 211.33333333333337
+    },
+    {
+      "id": "e2-0",
+      "type": "step",
+      "source": "n2",
+      "target": "n0",
+      "sourceHandle": 0,
+      "targetHandle": 0,
+      "data": {},
+      "label": "",
+      "sourceX": 710.4078681363396,
+      "sourceY": 158.28814895513628,
+      "targetX": 401.3333333333333,
+      "targetY": 291.3333129882813
+    }
+  ],
+  "position": [
+    67.030898422713,
+    21.97958176386311
+  ],
+  "zoom": 1.3976106439571594,
+  "viewport": {
+    "x": 67.030898422713,
+    "y": 21.97958176386311,
+    "zoom": 1.3976106439571594
+  }
+}
