@@ -280,7 +280,7 @@ def write_kvl_equations(loops, voltage_vars, circuit_components, current_vars):
                 equation += sp.Symbol(f"V_{component_id}") if terminal_a == "0" else -sp.Symbol(f"V_{component_id}")
 
             elif comp_type == "inductor":
-                equation += (value * sp.Symbol(f"d{current_vars[component_id]}/dt")) if terminal_a == "0" else (-value * sp.Symbol(f"d{current_vars[component_id]}/dt"))
+                equation += (value * sp.Symbol(f"d{current_vars[component_id]}_dt")) if terminal_a == "0" else (-value * sp.Symbol(f"d{current_vars[component_id]}_dt"))
 
             elif comp_type == "voltage-source":
                 equation += sp.Symbol(f"V_in_{component_id}") if terminal_a == "0" else -sp.Symbol(f"V_in_{component_id}")
@@ -351,7 +351,7 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
             v_cap = v_node_1 - v_node_2
 
             # Define the differential equation for capacitor current
-            d_v_cap_dt = sp.Symbol(f"dV_{comp_id}/dt")  # Symbol for dv/dt
+            d_v_cap_dt = sp.Symbol(f"dV_{comp_id}_dt")  # Symbol for dv/dt
             helper_eqs.append(i_c - c_value * d_v_cap_dt)
 
     # Step 3: Solve for helper variables
@@ -401,7 +401,8 @@ def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
     system_equations = reduced_kcl + reduced_kvl
 
     # Define derivative symbols
-    state_derivatives = [sp.Symbol(f"d{var}/dt") for var in state_vars]
+    state_derivatives = [sp.Symbol(f"d{var}_dt") for var in state_vars]
+    print("ℹ️ State Derivatives:", state_derivatives)
 
     # Solve for the time derivatives of state variables
     solved_derivatives = sp.solve(system_equations, state_derivatives)
@@ -415,7 +416,7 @@ def extract_state_space_matrices(state_derivatives, state_vars, input_vars):
     Converts the state derivative dictionary into matrix form and computes Jacobians for A and B.
 
     Parameters:
-    - state_derivatives: Dictionary {d(state_variable)/dt: derivative_expression}.
+    - state_derivatives: Dictionary {d(state_variable)_dt: derivative_expression}.
     - state_vars: Dictionary {state_variable: expression}.
     - input_vars: Dictionary {input_variable: expression}.
 
@@ -428,7 +429,7 @@ def extract_state_space_matrices(state_derivatives, state_vars, input_vars):
     input_vars = list(input_vars.keys())  
 
     # Create symbolic time derivative variables for state variables
-    state_derivative_symbols = [sp.Symbol(f"d{var}/dt") for var in state_vars]
+    state_derivative_symbols = [sp.Symbol(f"d{var}_dt") for var in state_vars]
 
     # Ensure all state derivatives exist in the dictionary
     dx_dt_sol = sp.Matrix([state_derivatives.get(derivative) for derivative in state_derivative_symbols])
