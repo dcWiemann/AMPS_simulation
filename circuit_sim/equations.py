@@ -315,7 +315,7 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     # Step 1: Identify helper variables (present in voltage_vars or current_vars but not in state_vars)
     helper_vars = set(voltage_vars.values()).union(set(current_vars.values())) - set(state_vars.keys())
 
-    # Step 2: Generate equations for resistors and capacitors ### Todo inductor voltages
+    # Step 2: Generate equations for resistors and capacitors 
     helper_eqs = []
     for comp_id, comp_data in components_cleaned.items():
         if comp_data["type"] == "resistor":
@@ -382,3 +382,28 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     # print(reduced_kvl)
 
     return reduced_kcl, reduced_kvl
+
+
+
+def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
+    """
+    Solves the system of equations for the time derivatives of state variables.
+
+    Parameters:
+    - reduced_kcl: List of KCL equations after eliminating helper variables.
+    - reduced_kvl: List of KVL equations after eliminating helper variables.
+    - state_vars: List of symbolic state variables.
+
+    Returns:
+    - Dictionary mapping {state_variable: derivative_expression}
+    """
+    # Merge KCL and KVL equations
+    system_equations = reduced_kcl + reduced_kvl
+
+    # Define derivative symbols
+    state_derivatives = [sp.Symbol(f"d{var}/dt") for var in state_vars]
+
+    # Solve for the time derivatives of state variables
+    solved_derivatives = sp.solve(system_equations, state_derivatives)
+
+    return solved_derivatives
