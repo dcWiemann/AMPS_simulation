@@ -1,7 +1,8 @@
 # import parsing and equations functions
-from parsing import build_electrical_nodes, build_circuit_components, assign_voltage_variables, assign_current_variables
-from equations import extract_input_and_state_vars, write_kcl_equations, write_kvl_equations, find_loops, solve_helper_variables, solve_state_derivatives, extract_state_space_matrices, substitute_component_values
-
+from circuit_sim.parsing import build_electrical_nodes, build_circuit_components, assign_voltage_variables, assign_current_variables
+from circuit_sim.equations import extract_input_and_state_vars, write_kcl_equations, write_kvl_equations, find_loops, solve_helper_variables, solve_state_derivatives, extract_state_space_matrices, substitute_component_values
+from scipy.integrate import solve_ivp
+import numpy as np
 
 def extract_differential_equations(circuit_json):
     # Step 1: Parse JSON
@@ -77,3 +78,41 @@ def extract_differential_equations(circuit_json):
 
     return A_substituted, B_substituted, state_vars
 
+
+
+
+def simulate_circuit(A, B, C, t_span, initial_conditions, input_function):
+    """
+    Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
+
+    Parameters:
+    - A: State matrix (numpy array after substitution).
+    - B: Input matrix (numpy array after substitution).
+    - t_span: Tuple (t_start, t_end) defining the time range.
+    - initial_conditions: Initial state vector (same size as state variables).
+    - input_function: Function u(t) defining the input voltage/current.
+
+    Returns:
+    - t: Time points from simulation.
+    - x: State variable trajectories over time.
+    """
+
+    # Convert A and B to numerical arrays (ensure float type)
+    A_func = np.array(A).astype(float)
+    B_func = np.array(B).astype(float)
+    C_func = np.array(C).astype(float)
+
+    # Define time points at fixed 0.1s intervals
+    t_eval = np.arange(t_span[0], t_span[1], 0.1)  # Time points at 0.1s resolution
+
+    # Define ODE system
+    def state_space_ode(t, x):
+        return A_func @ x + B_func @ np.array([input_function(t)])  # dx/dt = Ax + Bu
+
+    # Solve ODE system
+    sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45", t_eval=t_eval)
+
+    # Compute output y = Cx
+    y = C_func @ sol.y
+
+    return sol.t, sol.y, y
