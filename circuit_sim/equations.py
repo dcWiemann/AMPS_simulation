@@ -440,3 +440,23 @@ def extract_state_space_matrices(state_derivatives, state_vars, input_vars):
     return A, B  # Return the computed matrices
 
 
+def substitute_component_values(expr, components):
+    """
+    Substitutes numerical values for component parameters in the symbolic equation.
+
+    Parameters:
+    - expr: SymPy expression or matrix containing symbolic component parameters.
+    - components: List of circuit components from JSON.
+
+    Returns:
+    - expr_substituted: Expression with component values replaced.
+    """
+    subs_dict = {}
+
+    for component in components:
+        comp_id = component["id"]
+        value = component["data"].get("value")  # Get numerical value
+        if value is not None:
+            subs_dict[sp.Symbol(f"{comp_id}_value")] = value  # Replace symbol with actual value
+
+    return expr.subs(subs_dict)
