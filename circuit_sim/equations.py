@@ -219,14 +219,14 @@ def find_loops(electrical_nodes, circuit_components):
 
 
 
-def write_kvl_equations(loops, voltage_vars, components_cleaned, current_vars):
+def write_kvl_equations(loops, voltage_vars, circuit_components, current_vars):
     """
     Generate Kirchhoff's Voltage Law (KVL) equations using component voltage relations.
 
     Parameters:
     - loops: List of detected loops, each represented as a list of electrical nodes.
     - voltage_vars: { electrical_node_id: voltage_variable } (dictionary of node voltage symbols)
-    - components_cleaned: { component_id: { "type": str, "value": float, "terminals": {terminal_id: electrical_node} } }
+    - circuit_components: { component_id: { "type": str, "value": float, "terminals": {terminal_id: electrical_node} } }
     - current_vars: { component_id: current_variable } (Dictionary mapping components to symbolic current variables)
 
     Returns:
@@ -248,7 +248,7 @@ def write_kvl_equations(loops, voltage_vars, components_cleaned, current_vars):
             terminal_a = None
             terminal_b = None
 
-            for comp_id, comp_data in components_cleaned.items():
+            for comp_id, comp_data in circuit_components.items():
                 terminals = comp_data["terminals"]
                 if set(terminals.values()) == {node_a, node_b}:  # Component connects these two nodes
                     component_id = comp_id
@@ -294,7 +294,7 @@ def write_kvl_equations(loops, voltage_vars, components_cleaned, current_vars):
     return kvl_equations
 
 
-def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_vars, input_vars, components_cleaned):
+def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_vars, input_vars, circuit_components):
     """
     Eliminates helper variables by solving for them in terms of state variables and input variables.
 
@@ -305,7 +305,7 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     - current_vars: Dictionary mapping components to current variables.
     - state_vars: Dictionary mapping state variable names to their expressions.
     - input_vars: Dictionary mapping input variable names to their expressions.
-    - components_cleaned: Dictionary containing cleaned component data.
+    - circuit_components: Dictionary containing cleaned component data.
     - electrical_nodes: Dictionary mapping node indices to connected components.
 
     Returns:
@@ -317,7 +317,7 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
 
     # Step 2: Generate equations for resistors and capacitors 
     helper_eqs = []
-    for comp_id, comp_data in components_cleaned.items():
+    for comp_id, comp_data in circuit_components.items():
         if comp_data["type"] == "resistor":
             r_value = sp.Symbol(f"{comp_id}_value")  # Symbolic resistance value
             i_r = current_vars[comp_id]  # Current through the resistor
@@ -438,6 +438,7 @@ def extract_state_space_matrices(state_derivatives, state_vars, input_vars):
     B = dx_dt_sol.jacobian(input_vars)  # Partial derivatives of dx/dt w.r.t. input variables
 
     return A, B  # Return the computed matrices
+
 
 
 def substitute_component_values(expr, components):
