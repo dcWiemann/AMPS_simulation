@@ -407,3 +407,36 @@ def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
     solved_derivatives = sp.solve(system_equations, state_derivatives)
 
     return solved_derivatives
+
+
+
+def extract_state_space_matrices(state_derivatives, state_vars, input_vars):
+    """
+    Converts the state derivative dictionary into matrix form and computes Jacobians for A and B.
+
+    Parameters:
+    - state_derivatives: Dictionary {d(state_variable)/dt: derivative_expression}.
+    - state_vars: Dictionary {state_variable: expression}.
+    - input_vars: Dictionary {input_variable: expression}.
+
+    Returns:
+    - A: State matrix (Jacobian of dx/dt w.r.t. state variables).
+    - B: Input matrix (Jacobian of dx/dt w.r.t. input variables).
+    """
+    # Convert dictionaries to lists of variables
+    state_vars = list(state_vars.keys())  
+    input_vars = list(input_vars.keys())  
+
+    # Create symbolic time derivative variables for state variables
+    state_derivative_symbols = [sp.Symbol(f"d{var}/dt") for var in state_vars]
+
+    # Ensure all state derivatives exist in the dictionary
+    dx_dt_sol = sp.Matrix([state_derivatives.get(derivative) for derivative in state_derivative_symbols])
+
+    # Compute Jacobians
+    A = dx_dt_sol.jacobian(state_vars)  # Partial derivatives of dx/dt w.r.t. state variables
+    B = dx_dt_sol.jacobian(input_vars)  # Partial derivatives of dx/dt w.r.t. input variables
+
+    return A, B  # Return the computed matrices
+
+
