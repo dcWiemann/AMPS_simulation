@@ -23,7 +23,7 @@ logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 def main():
     # Load the JSON file
-    json_path = os.path.join(os.path.dirname(__file__), 'test_data', 'test_rcrc_sn.json')
+    json_path = os.path.join(os.path.dirname(__file__), 'test_data', 'test_rcl.json')
     with open(json_path, 'r') as file:
         circuit_json = json.load(file)
 
