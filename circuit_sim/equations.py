@@ -1,5 +1,6 @@
 import sympy as sp
 from collections import defaultdict
+import logging
 
 def extract_input_and_state_vars(circuit_components, voltage_vars, current_vars):
     """
@@ -88,7 +89,7 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
             supernodes[supernode_id] = connected_nodes
 
     
-    print("ℹ️ Supernodes detected:", supernodes)
+    logging.info("Supernodes detected: %s", supernodes)
 
     # for supernode_id, nodes in supernodes.items():
     #     print(f"  {supernode_id}: {nodes}")
@@ -292,7 +293,7 @@ def write_kvl_equations(loops, voltage_vars, circuit_components, current_vars):
                 equation += sp.Symbol(f"V_in_{component_id}") if terminal_a == "0" else -sp.Symbol(f"V_in_{component_id}")
 
             else:
-                print(f"⚠ Warning: Unknown component type '{comp_type}' for {component_id}, ignoring in KVL.")
+                logging.warning(f"⚠ Warning: Unknown component type '{comp_type}' for {component_id}, ignoring in KVL.")
 
         # Kirchhoff's Voltage Law states ΣV = 0
         kvl_equations.append(equation)
@@ -408,7 +409,7 @@ def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
 
     # Define derivative symbols
     state_derivatives = [sp.Symbol(f"d{var}_dt") for var in state_vars]
-    print("ℹ️ State Derivatives:", state_derivatives)
+    logging.info("ℹ️ State derivatives: %s", state_derivatives)
 
     # Solve for the time derivatives of state variables
     solved_derivatives = sp.solve(system_equations, state_derivatives)
