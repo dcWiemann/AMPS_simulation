@@ -6,28 +6,15 @@ from circuit_sim.state_space_model import extract_differential_equations, simula
 from circuit_sim.utils import plot_results
 import logging
 
-# Set up logging
+
 logging.basicConfig(
-    filename='amps.log',
-    filemode='w',
-    level=logging.DEBUG, 
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("amps.log"),
+        logging.StreamHandler()
+    ]
 )
-
-# Create a logger specifically for your script/module
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # or INFO, etc.
-
-# Create console handler
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-
-# Set formatting
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-
-# Add handler to your logger
-logger.addHandler(ch)
 
 # Suppress noisy loggers from other libraries
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
