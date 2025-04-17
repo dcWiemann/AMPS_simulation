@@ -30,13 +30,13 @@ def extract_input_and_state_vars(circuit_components, voltage_vars, current_vars)
                 v_b = voltage_vars.get(node_b, sp.Symbol(f"V_{node_b}"))
 
                 helper_var = sp.Symbol(f"V_{comp_id}")  # Helper variable for capacitor voltage
-                state_vars[helper_var] = v_a - v_b  # v_s_dndnode7 = V_A - V_B
+                state_vars[helper_var] = v_a - v_b  # v_s_C = V_A - V_B
 
         elif comp_type == "inductor":
             # Inductor current state variable
             if comp_id in current_vars:
                 helper_var = sp.Symbol(f"I_{comp_id}")  # Helper variable for inductor current
-                state_vars[helper_var] = current_vars[comp_id]  # i_s_dndnode12 = I_dndnode12
+                state_vars[helper_var] = current_vars[comp_id]  # i_s_L = I_L
 
         elif comp_type == "voltage-source":
             # Voltage source input variable
@@ -46,13 +46,13 @@ def extract_input_and_state_vars(circuit_components, voltage_vars, current_vars)
                 v_b = voltage_vars.get(node_b, sp.Symbol(f"V_{node_b}"))
 
                 helper_var = sp.Symbol(f"V_in_{comp_id}")  # Helper variable for voltage source
-                input_vars[helper_var] = v_a - v_b  # v_in_dndnode5 = V_A - V_B
+                input_vars[helper_var] = v_a - v_b  # v_in_V = V_A - V_B
 
         elif comp_type == "current-source":
             # Current source input variable
             if comp_id in current_vars:
                 helper_var = sp.Symbol(f"I_in_{comp_id}")  # Helper variable for current source
-                input_vars[helper_var] = current_vars[comp_id]  # i_in_dndnode12 = I_dndnode12
+                input_vars[helper_var] = current_vars[comp_id]  # i_in_I = I_I
 
     return state_vars, input_vars
 
@@ -85,8 +85,7 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
         # Only create a supernode if the voltage source connects **two non-ground nodes**
         if ground_node not in connected_nodes:
             # print(f"Creating supernode for {vs_id}...")
-            supernode_id = f"supernode_{vs_id}"
-            supernodes[supernode_id] = connected_nodes
+            supernodes[vs_id] = connected_nodes
 
     
     logging.info("Supernodes detected: %s", supernodes)
@@ -144,11 +143,11 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
 
         kcl_equations.append(equation)
 
-    # Step 3: Write KCL for supernodes ### Todo: Fix this
+    # Step 3: Write KCL for supernodes
     for supernode_id, nodes in supernodes.items():
         # print(f"Supernode {supernode_id} - Nodes: {nodes}")
         equation = 0  # Initialize symbolic equation
-
+        logging.info("ℹ️ Processing supernode %s with nodes %s", supernode_id, nodes)
         for node in nodes:
             if node in electrical_nodes:
                 for comp_id, terminal_id in electrical_nodes[node]:
@@ -162,11 +161,12 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
                     # Express current for each component type
                     if comp_id in current_vars:
                         equation += current_vars[comp_id]
+                        logging.info("ℹ️ Current variable %s added to equation: %s", current_vars[comp_id], equation)
 
                     # else:
                     #     print(f"⚠ Warning: Unknown component type '{comp_type}' for {comp_id} in supernode {supernode_id}, node {node_id} kcl equation may be incorrect.")
 
-
+        logging.info("ℹ️ Supernode equation: %s = 0", equation)
         kcl_equations.append(equation)  # Store symbolic equation
 
     return kcl_equations
