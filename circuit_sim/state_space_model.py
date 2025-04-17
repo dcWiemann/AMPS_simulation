@@ -63,7 +63,7 @@ def extract_differential_equations(circuit_json):
     logging.info("✅ State derivatives: %s", differential_equations)
 
     # Step 9: Extract state space matrices
-    A, B = extract_state_space_matrices(state_derivatives, state_vars, input_vars)
+    A, B = extract_state_space_matrices(differential_equations, state_vars, input_vars)
     logging.info("✅ Symbolic State matrix A: %s", A)
     logging.info("✅ Symbolic Input matrix B: %s", B)
 

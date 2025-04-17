@@ -541,10 +541,11 @@ def extract_state_space_matrices(state_derivatives, state_vars, input_vars):
     input_vars = list(input_vars.keys())  
 
     # Create symbolic time derivative variables for state variables
-    state_derivative_symbols = [sp.Symbol(f"d{var}_dt") for var in state_vars]
+    # state_derivative_symbols = [sp.Symbol(f"d{var}_dt") for var in state_vars]
 
     # Ensure all state derivatives exist in the dictionary
-    dx_dt_sol = sp.Matrix([state_derivatives.get(derivative) for derivative in state_derivative_symbols])
+    # dx_dt_sol = sp.Matrix([state_derivatives.get(derivative) for derivative in state_derivatives.values()])
+    dx_dt_sol = sp.Matrix(list(state_derivatives.values()))  # Convert to matrix form
 
     # Compute Jacobians
     A = dx_dt_sol.jacobian(state_vars)  # Partial derivatives of dx/dt w.r.t. state variables
