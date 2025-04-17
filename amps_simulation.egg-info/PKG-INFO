@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: amps_simulation
+Version: 0.1.0
+Summary: AMPS Circuit Simulation Package
+Author: Dorothea Wiemann, David Pogorzelski
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE.txt
+Requires-Dist: numpy
+Requires-Dist: sympy
+Requires-Dist: scipy
+Provides-Extra: test
+Requires-Dist: pytest>=6.0; extra == "test"
+Dynamic: license-file
+Dynamic: requires-python
+
+# Analysis and Simulation of Power Systems
+
+**amps** is a lightweight and extensible circuit simulation tool written in Python.  
+
+## License
+MIT License. See `LICENSE` file for details.

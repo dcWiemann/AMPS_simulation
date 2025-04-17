@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amps_simulation"
+version = "0.1.0"
+description = "AMPS Circuit Simulation Package"
+authors = [{name = "Dorothea C. Wiemann, David Pogorzelski"}]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "sympy",
+    "scipy"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=6.0"
+]

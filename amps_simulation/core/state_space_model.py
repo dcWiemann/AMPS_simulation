@@ -1,6 +1,6 @@
 # import parsing and equations functions
-from circuit_sim.parsing import build_electrical_nodes, build_circuit_components, assign_voltage_variables, assign_current_variables
-from circuit_sim.equations import extract_input_and_state_vars, write_kcl_equations, write_kvl_equations, find_loops, solve_helper_variables, solve_state_derivatives, extract_state_space_matrices, substitute_component_values
+from amps_simulation.core.parsing import build_electrical_nodes, build_circuit_components, assign_voltage_variables, assign_current_variables
+from amps_simulation.core.equations import extract_input_and_state_vars, write_kcl_equations, write_kvl_equations, find_loops, solve_helper_variables, solve_state_derivatives, extract_state_space_matrices, substitute_component_values
 from scipy.integrate import solve_ivp
 import numpy as np
 import logging
