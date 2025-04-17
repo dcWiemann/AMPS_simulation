@@ -377,16 +377,34 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
             helper_eqs_current.append(i_c - c_value * d_v_cap_dt)
             helper_eqs_voltage.append(v_cap - sp.Symbol(f"V_{comp_id}"))  # Voltage across the capacitor
 
+        elif comp_data["type"] == "voltage-source":
+            # Voltage source equation: V = V_in
+            terminals = comp_data["terminals"]
+            node_1 = terminals["0"]
+            node_2 = terminals["1"]
+
+            v_node_1 = voltage_vars.get(node_1, f"V_{node_1}")
+            v_node_2 = voltage_vars.get(node_2, f"V_{node_2}")
+
+            # Voltage difference across the voltage source
+            v_source = sp.Symbol(f"V_in_{comp_id}")
+            helper_eqs_voltage.append(v_node_1 - v_node_2 - v_source)
+
+    logging.info("ℹ️ Helper equations current: %s", helper_eqs_current)
+    logging.info("ℹ️ Helper equations voltage: %s", helper_eqs_voltage)
+
     # Step 3: Solve for helper variables
     solved_helpers_current = sp.solve(helper_eqs_current, helper_vars_current)
-    solved_helpers_voltage = sp.solve(helper_eqs_voltage, helper_vars_voltage)
+    solved_helpers_voltage = sp.solve(helper_eqs_voltage, helper_vars_voltage) ### TODO don't solve voltages here
     solved_helpers = {**solved_helpers_current, **solved_helpers_voltage}
     logging.info("ℹ️ Solved helper variables: %s", solved_helpers)
 
 
-    # Convert state_vars and input_vars into equations of the form: expression - variable = 0
+    # Convert state_vars and input_vars into equations of the form: expression - variable = 0 ### Todo: remove
     state_eqs = [var - expr for var, expr in state_vars.items()]
     input_eqs = [var - expr for var, expr in input_vars.items()]
+    logging.info("ℹ️ State equations: %s", state_eqs)
+    logging.info("ℹ️ Input equations: %s", input_eqs)
 
     # Solve for node voltages (e.g., V_1 and V_2)
     node_voltage_subs = sp.solve(state_eqs + input_eqs, list(voltage_vars.values()))
