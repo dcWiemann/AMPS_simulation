@@ -32,7 +32,8 @@ def extract_differential_equations(circuit_json):
     logging.info("✅ Input variables: %s", input_vars)
 
     # Step 5: Write KCL equations
-    kcl_equations = write_kcl_equations(electrical_nodes, current_vars, circuit_components, ground_node)
+    kcl_equations, supernodes = write_kcl_equations(electrical_nodes, current_vars, circuit_components, ground_node)
+    logging.info("✅ Supernodes: %s", supernodes)
 
     # Step 6: Write KVL equations
     loops = find_loops(electrical_nodes, circuit_components)

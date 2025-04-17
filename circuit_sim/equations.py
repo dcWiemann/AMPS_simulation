@@ -169,7 +169,7 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
         logging.info("ℹ️ Supernode equation: %s = 0", equation)
         kcl_equations.append(equation)  # Store symbolic equation
 
-    return kcl_equations
+    return kcl_equations, supernodes
 
 
 
