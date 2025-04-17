@@ -53,14 +53,14 @@ def extract_differential_equations(circuit_json):
     # Step 7: Solve helper variables ### here
     # passive_eqs = write_passive_component_equations(components, connections, voltage_vars, current_vars)
 
-    reduced_kcl, reduced_kvl = solve_helper_variables(kcl_equations, kvl_equations, voltage_vars, current_vars, state_vars, input_vars, circuit_components)
-    logging.info("✅ Reduced KCL equations: %s", reduced_kcl)
-    logging.info("✅ Reduced KVL equations: %s", reduced_kvl)
-
+    solved_helpers = solve_helper_variables(kcl_equations, kvl_equations, voltage_vars, current_vars, state_vars, input_vars, circuit_components)
+    # logging.info("✅ Reduced KCL equations: %s", reduced_kcl)
+    # logging.info("✅ Reduced KVL equations: %s", reduced_kvl)
+    logging.info("✅ Solved helper variables: %s", solved_helpers)
 
     # Step 8: Solve for state derivatives
-    state_derivatives = solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars)
-    logging.info("✅ State derivatives: %s", state_derivatives)
+    differential_equations = solve_state_derivatives(solved_helpers, state_derivatives)
+    logging.info("✅ State derivatives: %s", differential_equations)
 
     # Step 9: Extract state space matrices
     A, B = extract_state_space_matrices(state_derivatives, state_vars, input_vars)

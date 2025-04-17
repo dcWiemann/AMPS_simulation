@@ -475,8 +475,8 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
 
 
     # Step 5: Substitute helper variables into KCL and KVL equations
-    reduced_kcl = [eq.subs(solved_helpers) for eq in kcl_eqs]
-    reduced_kvl = [eq.subs(solved_helpers) for eq in kvl_eqs]
+    # reduced_kcl = [eq.subs(solved_helpers) for eq in kcl_eqs]
+    # reduced_kvl = [eq.subs(solved_helpers) for eq in kvl_eqs]
 
     # Apply the substitutions to KCL and KVL equations
     # reduced_kcl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kcl_eqs]
@@ -489,11 +489,12 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     # print("\nReduced KVL Equations:")
     # print(reduced_kvl)
 
-    return reduced_kcl, reduced_kvl
+    # return reduced_kcl, reduced_kvl
+    return solved_helpers
 
 
 
-def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
+def solve_state_derivatives(solved_helpers, state_derivatives):
     """
     Solves the system of equations for the time derivatives of state variables.
 
@@ -506,7 +507,10 @@ def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
     - Dictionary mapping {state_variable: derivative_expression}
     """
     # Merge KCL and KVL equations
-    system_equations = reduced_kcl + reduced_kvl
+    # system_equations = reduced_kcl + reduced_kvl
+
+    # substitute solved helper variables into the state_derivatives
+    differential_equations = {var: expr.subs(solved_helpers) for var, expr in state_derivatives.items()}
 
     # Define derivative symbols
     # state_derivatives = [sp.Symbol(f"d{var}_dt") for var in state_vars]
@@ -515,7 +519,7 @@ def solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars):
     # Solve for the time derivatives of state variables
     # solved_derivatives = sp.solve(system_equations, state_derivatives)
 
-    return solved_derivatives
+    return differential_equations
 
 
 
