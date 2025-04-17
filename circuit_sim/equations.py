@@ -319,8 +319,15 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     - Reduced system of KCL and KVL equations without helper variables, fully expressed in terms of state and input variables.
     """
 
-    # Step 1: Identify helper variables (present in voltage_vars or current_vars but not in state_vars)
-    helper_vars = set(voltage_vars.values()).union(set(current_vars.values())) - set(state_vars.keys())
+    # Step 1: Identify helper variables (present in voltage_vars or current_vars but not in state_vars or input_vars)
+    helper_vars = (
+    set(voltage_vars.values()).union(set(current_vars.values()))
+    - set(state_vars.keys())
+    - set(input_vars.keys())
+    )
+    helper_vars.discard(0) # Remove zero if present
+
+    logging.info("ℹ️ Helper variables: %s", helper_vars)
 
     # Step 2: Generate equations for resistors and capacitors 
     helper_eqs = []
