@@ -1,2 +1,6 @@
 .DS_Store
 archive/
+circuit_sim/__pycache__/
+todo/
+plecs/
+amps.log
