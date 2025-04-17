@@ -337,13 +337,16 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     logging.info("ℹ️ Helper variables voltage: %s", helper_vars_voltage)
 
     # Step 2: Generate equations for resistors and capacitors 
-    helper_eqs_current = []
-    helper_eqs_voltage = []
+    helper_eqs = []
+
+    unknown_vars = helper_vars_voltage # node voltages and resistor currents (add in for loop below)
     for comp_id, comp_data in circuit_components.items():
         if comp_data["type"] == "resistor":
             r_value = sp.Symbol(f"{comp_id}_value")  # Symbolic resistance value
             i_r = current_vars[comp_id]  # Current through the resistor
-            
+            # Add to unknown_vars
+            unknown_vars.add(i_r)
+
             # Extract node voltages
             terminals = comp_data["terminals"]
             node_1 = terminals["0"]
@@ -353,7 +356,7 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
             v_node_2 = voltage_vars.get(node_2, f"V_{node_2}")
             
             # Ohm’s Law: (V1 - V2) = IR
-            helper_eqs_current.append((v_node_1 - v_node_2) - r_value * i_r)
+            helper_eqs.append((v_node_1 - v_node_2) - r_value * i_r)
 
         elif comp_data["type"] == "capacitor":
             # Capacitor current equation: i = C dv/dt
@@ -372,10 +375,11 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
             # Voltage difference across the capacitor
             v_cap = v_node_1 - v_node_2
 
-            # Define the differential equation for capacitor current
-            d_v_cap_dt = sp.Symbol(f"dV_{comp_id}_dt")  # Symbol for dv/dt
-            helper_eqs_current.append(i_c - c_value * d_v_cap_dt)
-            helper_eqs_voltage.append(v_cap - sp.Symbol(f"V_{comp_id}"))  # Voltage across the capacitor
+            # Define the differential equation for capacitor current # don't add diff euqations here
+            # d_v_cap_dt = sp.Symbol(f"dV_{comp_id}_dt")  # Symbol for dv/dt
+
+            # helper_eqs.append(v_cap - sp.Symbol(f"V_{comp_id}"))  # Voltage across the capacitor
+
 
         elif comp_data["type"] == "voltage-source":
             # Voltage source equation: V = V_in
@@ -388,26 +392,64 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
 
             # Voltage difference across the voltage source
             v_source = sp.Symbol(f"V_in_{comp_id}")
-            helper_eqs_voltage.append(v_node_1 - v_node_2 - v_source)
+            helper_eqs.append(v_node_1 - v_node_2 - v_source)
 
-    logging.info("ℹ️ Helper equations current: %s", helper_eqs_current)
-    logging.info("ℹ️ Helper equations voltage: %s", helper_eqs_voltage)
+    logging.info("ℹ️ Helper equation: %s", helper_eqs)
+    logging.info("ℹ️ Unknown variables: %s", unknown_vars)
+    logging.info("ℹ️ Number of unknown variables: %d", len(unknown_vars))
+
 
     # Step 3: Solve for helper variables
-    solved_helpers_current = sp.solve(helper_eqs_current, helper_vars_current)
-    solved_helpers_voltage = sp.solve(helper_eqs_voltage, helper_vars_voltage) ### TODO don't solve voltages here
-    solved_helpers = {**solved_helpers_current, **solved_helpers_voltage}
+    # solved_helpers_current = sp.solve(helper_eqs, helper_vars_current)
+    # reduced_kcl = [eq.subs(solved_helpers_current) for eq in kcl_eqs]
+    # logging.info("ℹ️ Reduced KCL equations: %s", reduced_kcl)
+
+    # Combine all equations
+    all_eqs = helper_eqs + kcl_eqs
+    logging.info("ℹ️ Number of equations: %d", len(all_eqs))
+
+    solved_helpers = sp.solve(all_eqs, unknown_vars)
+    logging.info("ℹ️ Number of solutions: %d", len(solved_helpers))
     logging.info("ℹ️ Solved helper variables: %s", solved_helpers)
+
+    # Flatten to expressions (lhs - rhs = 0) for matrix form
+    # all_exprs = [eq.lhs - eq.rhs if isinstance(eq, sp.Equality) else eq for eq in all_eqs]
+
+    # # Use linear_eq_to_matrix to extract matrix form (A * x = b)
+    # A, b = sp.linear_eq_to_matrix(all_exprs, unknown_vars)
+    # logging.info("😇 Coefficient matrix A: %s", A)
+    # logging.info("😇 Constant vector b: %s", b)
+
+    # # Solve the linear system using linsolve (works for under/overdetermined systems)
+    # solution = sp.linsolve((A, b), unknown_vars)
+
+    # # linsolve returns a FiniteSet of solutions (possibly empty)
+    # if not solution:
+    #     raise ValueError("System is inconsistent and cannot be solved.")
+    # else:
+    #     # Convert to dictionary: {V_0: expr0, V_1: expr1, ...}
+    #     solved_helpers_voltage = dict(zip(helper_vars_voltage, list(solution)[0]))
+
+
+    # solved_helpers_voltage = sp.solve(all_voltage_eqs, helper_vars_voltage)
+
+    # logging.info("ℹ️ Solved helper variables current: %s", solved_helpers_current)
+    # logging.info("ℹ️ Solved helper variables voltage: %s", solved_helpers_voltage)
+
+
+    # solved_helpers_voltage = sp.solve(helper_eqs, helper_vars_voltage) ### TODO don't solve voltages here
+    # solved_helpers = {**solved_helpers_current, **solved_helpers_voltage}
+    # logging.info("ℹ️ Solved helper variables: %s", solved_helpers)
 
 
     # Convert state_vars and input_vars into equations of the form: expression - variable = 0 ### Todo: remove
-    state_eqs = [var - expr for var, expr in state_vars.items()]
-    input_eqs = [var - expr for var, expr in input_vars.items()]
-    logging.info("ℹ️ State equations: %s", state_eqs)
-    logging.info("ℹ️ Input equations: %s", input_eqs)
+    # state_eqs = [var - expr for var, expr in state_vars.items()]
+    # input_eqs = [var - expr for var, expr in input_vars.items()]
+    # logging.info("ℹ️ State equations: %s", state_eqs)
+    # logging.info("ℹ️ Input equations: %s", input_eqs)
 
-    # Solve for node voltages (e.g., V_1 and V_2)
-    node_voltage_subs = sp.solve(state_eqs + input_eqs, list(voltage_vars.values()))
+    # # Solve for node voltages (e.g., V_1 and V_2)
+    # node_voltage_subs = sp.solve(state_eqs + input_eqs, list(voltage_vars.values()))
 
 
     # Step 5: Substitute helper variables into KCL and KVL equations
@@ -415,8 +457,8 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     reduced_kvl = [eq.subs(solved_helpers) for eq in kvl_eqs]
 
     # Apply the substitutions to KCL and KVL equations
-    reduced_kcl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kcl_eqs]
-    reduced_kvl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kvl_eqs]
+    # reduced_kcl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kcl_eqs]
+    # reduced_kvl = [eq.subs(solved_helpers).subs(node_voltage_subs) for eq in kvl_eqs]
 
     # print("Solved Helpers:")
     # print(solved_helpers)
