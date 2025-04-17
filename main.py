@@ -8,7 +8,7 @@ from circuit_sim.utils import plot_results
 
 def main():
     # Load the JSON file
-    json_path = os.path.join(os.path.dirname(__file__), 'test_data', 'test_rrc_gnd.json')
+    json_path = os.path.join(os.path.dirname(__file__), 'test_data', 'test_rcrc_sn.json')
     with open(json_path, 'r') as file:
         circuit_json = json.load(file)
 

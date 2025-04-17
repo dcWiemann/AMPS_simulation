@@ -87,9 +87,15 @@ def write_kcl_equations(electrical_nodes, current_vars, circuit_components, grou
             supernode_id = f"supernode_{vs_id}"
             supernodes[supernode_id] = connected_nodes
 
+    
+    print("ℹ️ Supernodes detected:", supernodes)
+
+    # for supernode_id, nodes in supernodes.items():
+    #     print(f"  {supernode_id}: {nodes}")
+    
     # Step 2: Write KCL for normal electrical nodes (excluding ground, supernodes, and voltage-source-connected-to-ground nodes)
     for node_id, terminals in electrical_nodes.items():
-        print(f"Node {node_id} - Terminals: {terminals}")    
+        # print(f"Node {node_id} - Terminals: {terminals}")    
 
         if node_id == ground_node:
             # print(f"{node_id} - Ground node detected, skipping...")
