@@ -27,8 +27,9 @@ def extract_differential_equations(circuit_json):
     logging.info("✅ Voltage variables: %s", voltage_vars)
     logging.info("✅ Current variables: %s", current_vars)
 
-    state_vars, input_vars = extract_input_and_state_vars(circuit_components, voltage_vars, current_vars)
+    state_vars, state_derivatives, input_vars = extract_input_and_state_vars(circuit_components, voltage_vars, current_vars)
     logging.info("✅ State variables: %s", state_vars)
+    logging.info("✅ State derivatives: %s", state_derivatives)
     logging.info("✅ Input variables: %s", input_vars)
 
     # Step 5: Write KCL equations
