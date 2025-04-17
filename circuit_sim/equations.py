@@ -320,17 +320,25 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
     """
 
     # Step 1: Identify helper variables (present in voltage_vars or current_vars but not in state_vars or input_vars)
-    helper_vars = (
-    set(voltage_vars.values()).union(set(current_vars.values()))
-    - set(state_vars.keys())
-    - set(input_vars.keys())
+    helper_vars_current = (
+        set(current_vars.values())
+        - set(state_vars.keys())
+        - set(input_vars.keys())
     )
-    helper_vars.discard(0) # Remove zero if present
 
-    logging.info("ℹ️ Helper variables: %s", helper_vars)
+    helper_vars_voltage = (
+        set(voltage_vars.values())
+        - set(state_vars.keys())
+        - set(input_vars.keys())
+    )
+    helper_vars_voltage.discard(0) # Remove zero if present
+
+    logging.info("ℹ️ Helper variables current: %s", helper_vars_current)
+    logging.info("ℹ️ Helper variables voltage: %s", helper_vars_voltage)
 
     # Step 2: Generate equations for resistors and capacitors 
-    helper_eqs = []
+    helper_eqs_current = []
+    helper_eqs_voltage = []
     for comp_id, comp_data in circuit_components.items():
         if comp_data["type"] == "resistor":
             r_value = sp.Symbol(f"{comp_id}_value")  # Symbolic resistance value
@@ -345,7 +353,7 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
             v_node_2 = voltage_vars.get(node_2, f"V_{node_2}")
             
             # Ohm’s Law: (V1 - V2) = IR
-            helper_eqs.append((v_node_1 - v_node_2) - r_value * i_r)
+            helper_eqs_current.append((v_node_1 - v_node_2) - r_value * i_r)
 
         elif comp_data["type"] == "capacitor":
             # Capacitor current equation: i = C dv/dt
@@ -366,10 +374,14 @@ def solve_helper_variables(kcl_eqs, kvl_eqs, voltage_vars, current_vars, state_v
 
             # Define the differential equation for capacitor current
             d_v_cap_dt = sp.Symbol(f"dV_{comp_id}_dt")  # Symbol for dv/dt
-            helper_eqs.append(i_c - c_value * d_v_cap_dt)
+            helper_eqs_current.append(i_c - c_value * d_v_cap_dt)
+            helper_eqs_voltage.append(v_cap - sp.Symbol(f"V_{comp_id}"))  # Voltage across the capacitor
 
     # Step 3: Solve for helper variables
-    solved_helpers = sp.solve(helper_eqs, helper_vars)
+    solved_helpers_current = sp.solve(helper_eqs_current, helper_vars_current)
+    solved_helpers_voltage = sp.solve(helper_eqs_voltage, helper_vars_voltage)
+    solved_helpers = {**solved_helpers_current, **solved_helpers_voltage}
+    logging.info("ℹ️ Solved helper variables: %s", solved_helpers)
 
 
     # Convert state_vars and input_vars into equations of the form: expression - variable = 0
