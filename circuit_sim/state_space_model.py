@@ -74,7 +74,7 @@ def extract_differential_equations(circuit_json):
     logging.info("✅ Substituted state matrix A: %s", A_substituted)
     logging.info("✅ Substituted input matrix B: %s", B_substituted)
 
-    return A_substituted, B_substituted, state_vars
+    return A_substituted, B_substituted, state_vars, input_vars
 
 
 
@@ -105,10 +105,13 @@ def simulate_circuit(A, B, C, t_span, initial_conditions, input_function):
 
     # Define ODE system
     def state_space_ode(t, x):
-        return A_func @ x + B_func @ np.array([input_function(t)])  # dx/dt = Ax + Bu
+        u = input_function(t)
+        return (A_func @ x) + (B_func @ u)  # dx/dt = Ax + Bu
+
 
     # Solve ODE system
-    sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45", t_eval=t_eval)
+    # sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45", t_eval=t_eval) # Use t_eval for fixed intervals
+    sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45")
 
     # Compute output y = Cx
     y = C_func @ sol.y
