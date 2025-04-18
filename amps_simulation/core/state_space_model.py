@@ -27,12 +27,14 @@ def extract_differential_equations(circuit_json):
     logging.info("✅ Voltage variables: %s", voltage_vars)
     logging.info("✅ Current variables: %s", current_vars)
 
-    state_vars, input_vars = extract_input_and_state_vars(circuit_components, voltage_vars, current_vars)
+    state_vars, state_derivatives, input_vars = extract_input_and_state_vars(circuit_components, voltage_vars, current_vars)
     logging.info("✅ State variables: %s", state_vars)
+    logging.info("✅ State derivatives: %s", state_derivatives)
     logging.info("✅ Input variables: %s", input_vars)
 
     # Step 5: Write KCL equations
-    kcl_equations = write_kcl_equations(electrical_nodes, current_vars, circuit_components, ground_node)
+    kcl_equations, supernodes = write_kcl_equations(electrical_nodes, current_vars, circuit_components, ground_node)
+    logging.info("✅ Supernodes: %s", supernodes)
 
     # Step 6: Write KVL equations
     loops = find_loops(electrical_nodes, circuit_components)
@@ -51,17 +53,17 @@ def extract_differential_equations(circuit_json):
     # Step 7: Solve helper variables ### here
     # passive_eqs = write_passive_component_equations(components, connections, voltage_vars, current_vars)
 
-    reduced_kcl, reduced_kvl = solve_helper_variables(kcl_equations, kvl_equations, voltage_vars, current_vars, state_vars, input_vars, circuit_components)
-    logging.info("✅ Reduced KCL equations: %s", reduced_kcl)
-    logging.info("✅ Reduced KVL equations: %s", reduced_kvl)
-
+    solved_helpers = solve_helper_variables(kcl_equations, kvl_equations, voltage_vars, current_vars, state_vars, input_vars, circuit_components)
+    # logging.info("✅ Reduced KCL equations: %s", reduced_kcl)
+    # logging.info("✅ Reduced KVL equations: %s", reduced_kvl)
+    logging.info("✅ Solved helper variables: %s", solved_helpers)
 
     # Step 8: Solve for state derivatives
-    state_derivatives = solve_state_derivatives(reduced_kcl, reduced_kvl, state_vars)
-    logging.info("✅ State derivatives: %s", state_derivatives)
+    differential_equations = solve_state_derivatives(solved_helpers, state_derivatives)
+    logging.info("✅ State derivatives: %s", differential_equations)
 
     # Step 9: Extract state space matrices
-    A, B = extract_state_space_matrices(state_derivatives, state_vars, input_vars)
+    A, B = extract_state_space_matrices(differential_equations, state_vars, input_vars)
     logging.info("✅ Symbolic State matrix A: %s", A)
     logging.info("✅ Symbolic Input matrix B: %s", B)
 
@@ -72,7 +74,7 @@ def extract_differential_equations(circuit_json):
     logging.info("✅ Substituted state matrix A: %s", A_substituted)
     logging.info("✅ Substituted input matrix B: %s", B_substituted)
 
-    return A_substituted, B_substituted, state_vars
+    return A_substituted, B_substituted, state_vars, input_vars
 
 
 
@@ -103,10 +105,13 @@ def simulate_circuit(A, B, C, t_span, initial_conditions, input_function):
 
     # Define ODE system
     def state_space_ode(t, x):
-        return A_func @ x + B_func @ np.array([input_function(t)])  # dx/dt = Ax + Bu
+        u = input_function(t)
+        return (A_func @ x) + (B_func @ u)  # dx/dt = Ax + Bu
+
 
     # Solve ODE system
-    sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45", t_eval=t_eval)
+    # sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45", t_eval=t_eval) # Use t_eval for fixed intervals
+    sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45")
 
     # Compute output y = Cx
     y = C_func @ sol.y

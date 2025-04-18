@@ -8,7 +8,8 @@ setup(
         "numpy",
         "sympy",
         "scipy",
-        "matplotlib"
+        "matplotlib",
+        "json"
     ],
     python_requires=">=3.8",
 )
