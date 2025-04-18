@@ -6,13 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "amps_simulation"
 version = "0.1.0"
 description = "AMPS Circuit Simulation Package"
-authors = [{name = "Dorothea C. Wiemann, David Pogorzelski"}]
+authors = [{name = "Dorothea C. Wiemann"}, {name = "David Pogorzelski"}]
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
     "sympy",
-    "scipy"
+    "scipy",
+    "matplotlib"
 ]
 
 [project.optional-dependencies]

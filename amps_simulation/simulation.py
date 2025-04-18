@@ -1,6 +1,7 @@
 # main function to run simulation with test_data/test_rrc_gnd.json
 import numpy as np
 from amps_simulation.core.state_space_model import extract_differential_equations, simulate_circuit
+from amps_simulation.core.utils import plot_results
 import logging
 
 
@@ -18,8 +19,13 @@ logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 
+def run_simulation_from_file(file_path):
+    with open(file_path, 'r') as file:
+        circuit_json = json.load(file)
+    return run_simulation(circuit_json)
+
+
 def run_simulation(circuit_json_data):
-    # Load the JSON file
 
     # Extract state space matrices
     A, B, state_vars = extract_differential_equations(circuit_json_data)
@@ -41,9 +47,7 @@ def run_simulation(circuit_json_data):
     # Plot the results
     #plot_results(t, x, state_vars)
 
-    return {
-        'time': t.tolist(),
-        'states': x.tolist(),
-        'outputs': y.tolist(),
-        'state_variables': state_vars
-    }
+
+
+if __name__ == "__main__":
+    run_simulation_from_file('test_data/test_lcr.json')

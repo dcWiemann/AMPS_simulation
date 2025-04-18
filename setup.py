@@ -7,7 +7,8 @@ setup(
     install_requires=[
         "numpy",
         "sympy",
-        "scipy"
+        "scipy",
+        "matplotlib"
     ],
     python_requires=">=3.8",
 )
