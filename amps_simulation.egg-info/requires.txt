@@ -1,6 +1,0 @@
-numpy
-sympy
-scipy
-
-[test]
-pytest>=6.0
