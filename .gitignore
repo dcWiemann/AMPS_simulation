@@ -8,3 +8,5 @@ amps_simulation/core/__pycache__/
 dist/
 build/
 amps_simulation.egg-info/
+dist/**
+build/**
