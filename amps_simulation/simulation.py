@@ -1,10 +1,9 @@
 # main function to run simulation with test_data/test_rrc_gnd.json
-import json
-import os
 import numpy as np
-from circuit_sim.state_space_model import extract_differential_equations, simulate_circuit
-from circuit_sim.utils import plot_results
+from amps_simulation.core.state_space_model import extract_differential_equations, simulate_circuit
+from amps_simulation.core.utils import plot_results
 import logging
+import json
 
 
 logging.basicConfig(
@@ -21,14 +20,17 @@ logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 
-def main():
-    # Load the JSON file
-    json_path = os.path.join(os.path.dirname(__file__), 'test_data', 'test_2v3.json')
-    with open(json_path, 'r') as file:
+def run_simulation_from_file(file_path):
+    with open(file_path, 'r') as file:
         circuit_json = json.load(file)
+    return run_simulation(circuit_json)
 
+
+def run_simulation(circuit_json_data):
+
+    print(circuit_json_data)
     # Extract state space matrices
-    A, B, state_vars, input_vars = extract_differential_equations(circuit_json)
+    A, B, state_vars, input_vars = extract_differential_equations(circuit_json_data)
 
     # Define identity output matrix C (observing all state variables)
     C = np.eye(A.shape[0])  # Identity matrix of size (states x states)
@@ -55,4 +57,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_simulation_from_file('test_data/test_lcr.json')

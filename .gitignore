@@ -1,6 +1,12 @@
 .DS_Store
 archive/
-circuit_sim/__pycache__/
 todo/
 plecs/
 amps.log
+amps_simulation/__pycache__/
+amps_simulation/core/__pycache__/
+dist/
+build/
+amps_simulation.egg-info/
+dist/**
+build/**
