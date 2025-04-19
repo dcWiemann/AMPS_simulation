@@ -5,9 +5,11 @@ plecs/
 amps.log
 amps_simulation/__pycache__/
 amps_simulation/core/__pycache__/
+tests/__pycache__/
 dist/
 build/
 amps_simulation.egg-info/
 dist/**
 build/**
 .venv/**
+notes/
