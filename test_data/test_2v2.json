@@ -1,0 +1,882 @@
+{
+  "nodes": [
+    {
+      "id": "V4",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 620,
+        "y": 350
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Voltage Source",
+        "componentType": "voltage-source",
+        "value": 5
+      },
+      "increment": 4,
+      "abbreviation": "V"
+    },
+    {
+      "id": "R8",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 790,
+        "y": 260
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 0,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 80,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 1
+      },
+      "increment": 8,
+      "abbreviation": "R"
+    },
+    {
+      "id": "C4",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 990,
+        "y": 330
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 0,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 80,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.001
+      },
+      "increment": 4,
+      "abbreviation": "C"
+    },
+    {
+      "id": "R9",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 620,
+        "y": 180
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 0,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 80,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 1
+      },
+      "increment": 9,
+      "abbreviation": "R"
+    },
+    {
+      "id": "V5",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 620,
+        "y": 60
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Voltage Source",
+        "componentType": "voltage-source",
+        "value": 5
+      },
+      "increment": 5,
+      "abbreviation": "V"
+    },
+    {
+      "id": "L4",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 790,
+        "y": -10
+      },
+      "data": {
+        "svgPath": "/svg/inductor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 0,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 80,
+            "y": 40
+          }
+        ],
+        "label": "Inductor",
+        "componentType": "inductor",
+        "value": 0.001
+      },
+      "increment": 4,
+      "abbreviation": "L"
+    },
+    {
+      "id": "C5",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 990,
+        "y": 100
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 0,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 80,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.001
+      },
+      "increment": 5,
+      "abbreviation": "C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "vueflow__edge-C40-R81",
+      "type": "step",
+      "source": "C4",
+      "target": "R8",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {
+        "id": "vueflow__edge-C40-R81",
+        "type": "step",
+        "source": "C4",
+        "target": "R8",
+        "sourceHandle": "0",
+        "targetHandle": "1",
+        "data": {},
+        "events": {},
+        "label": "",
+        "style": {
+          "stroke": "currentColor",
+          "strokeWidth": 2
+        },
+        "sourceNode": {
+          "id": "C4",
+          "type": "electrical-component",
+          "dimensions": {
+            "width": 80,
+            "height": 80
+          },
+          "computedPosition": {
+            "x": 990,
+            "y": 330,
+            "z": 0
+          },
+          "handleBounds": {
+            "source": [
+              {
+                "id": "0",
+                "position": "top",
+                "nodeId": "C4",
+                "type": "source",
+                "x": 35.999973720440835,
+                "y": -3.999989219222887,
+                "width": 8,
+                "height": 8
+              }
+            ],
+            "target": [
+              {
+                "id": "1",
+                "position": "bottom",
+                "nodeId": "C4",
+                "type": "target",
+                "x": 35.999973720440835,
+                "y": 76.00000740753941,
+                "width": 8,
+                "height": 8
+              }
+            ]
+          },
+          "selected": false,
+          "dragging": false,
+          "resizing": false,
+          "initialized": false,
+          "isParent": false,
+          "position": {
+            "x": 990,
+            "y": 330
+          },
+          "data": {
+            "svgPath": "/svg/capacitor.svg",
+            "terminals": [
+              {
+                "id": "0",
+                "position": "top",
+                "x": 40,
+                "y": 0,
+                "type": "source"
+              },
+              {
+                "id": "1",
+                "position": "bottom",
+                "x": 40,
+                "y": 80,
+                "type": "target"
+              }
+            ],
+            "label": "Capacitor",
+            "componentType": "capacitor",
+            "value": 0.001
+          },
+          "events": {},
+          "increment": 4,
+          "abbreviation": "C"
+        },
+        "targetNode": {
+          "id": "R8",
+          "type": "electrical-component",
+          "dimensions": {
+            "width": 80,
+            "height": 80
+          },
+          "computedPosition": {
+            "x": 790,
+            "y": 260,
+            "z": 0
+          },
+          "handleBounds": {
+            "source": [
+              {
+                "id": "0",
+                "position": "left",
+                "nodeId": "R8",
+                "type": "source",
+                "x": -3.9999184717880327,
+                "y": 35.999973720440835,
+                "width": 8,
+                "height": 8
+              }
+            ],
+            "target": [
+              {
+                "id": "1",
+                "position": "right",
+                "nodeId": "R8",
+                "type": "target",
+                "x": 76.00000740753941,
+                "y": 35.999973720440835,
+                "width": 8,
+                "height": 8
+              }
+            ]
+          },
+          "selected": false,
+          "dragging": false,
+          "resizing": false,
+          "initialized": false,
+          "isParent": false,
+          "position": {
+            "x": 790,
+            "y": 260
+          },
+          "data": {
+            "svgPath": "/svg/resistor.svg",
+            "terminals": [
+              {
+                "id": "0",
+                "position": "left",
+                "x": 0,
+                "y": 40,
+                "type": "source"
+              },
+              {
+                "id": "1",
+                "position": "right",
+                "x": 80,
+                "y": 40,
+                "type": "target"
+              }
+            ],
+            "label": "Resistor",
+            "componentType": "resistor",
+            "value": 1
+          },
+          "events": {},
+          "increment": 8,
+          "abbreviation": "R"
+        },
+        "sourceX": 1029.9999737204407,
+        "sourceY": 326.00001078077713,
+        "targetX": 874.0000074075394,
+        "targetY": 299.99997372044083
+      },
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1029.9999737204407,
+      "sourceY": 326.00001078077713,
+      "targetX": 874.0000074075394,
+      "targetY": 299.99997372044083
+    },
+    {
+      "id": "vueflow__edge-V40-R80",
+      "type": "step",
+      "source": "V4",
+      "target": "R8",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {
+        "id": "vueflow__edge-V40-R80",
+        "type": "step",
+        "source": "V4",
+        "target": "R8",
+        "sourceHandle": "0",
+        "targetHandle": "0",
+        "data": {},
+        "events": {},
+        "label": "",
+        "style": {
+          "stroke": "currentColor",
+          "strokeWidth": 2
+        },
+        "sourceNode": {
+          "id": "V4",
+          "type": "electrical-component",
+          "dimensions": {
+            "width": 80,
+            "height": 80
+          },
+          "computedPosition": {
+            "x": 620,
+            "y": 350,
+            "z": 0
+          },
+          "handleBounds": {
+            "source": [
+              {
+                "id": "0",
+                "position": "top",
+                "nodeId": "V4",
+                "type": "source",
+                "x": 35.999973720440835,
+                "y": 0,
+                "width": 8,
+                "height": 8
+              }
+            ],
+            "target": [
+              {
+                "id": "1",
+                "position": "bottom",
+                "nodeId": "V4",
+                "type": "target",
+                "x": 35.999973720440835,
+                "y": 72.00001818831653,
+                "width": 8,
+                "height": 8
+              }
+            ]
+          },
+          "selected": false,
+          "dragging": false,
+          "resizing": false,
+          "initialized": false,
+          "isParent": false,
+          "position": {
+            "x": 620,
+            "y": 350
+          },
+          "data": {
+            "svgPath": "/svg/voltage-source.svg",
+            "terminals": [
+              {
+                "id": "0",
+                "position": "top",
+                "x": 40,
+                "y": 4,
+                "type": "source"
+              },
+              {
+                "id": "1",
+                "position": "bottom",
+                "x": 40,
+                "y": 76,
+                "type": "target"
+              }
+            ],
+            "label": "Voltage Source",
+            "componentType": "voltage-source",
+            "value": 5
+          },
+          "events": {},
+          "increment": 4,
+          "abbreviation": "V"
+        },
+        "targetNode": {
+          "id": "R8",
+          "type": "electrical-component",
+          "dimensions": {
+            "width": 80,
+            "height": 80
+          },
+          "computedPosition": {
+            "x": 790,
+            "y": 260,
+            "z": 0
+          },
+          "handleBounds": {
+            "source": [
+              {
+                "id": "0",
+                "position": "left",
+                "nodeId": "R8",
+                "type": "source",
+                "x": -3.9999184717880327,
+                "y": 35.999973720440835,
+                "width": 8,
+                "height": 8
+              }
+            ],
+            "target": [
+              {
+                "id": "1",
+                "position": "right",
+                "nodeId": "R8",
+                "type": "target",
+                "x": 76.00000740753941,
+                "y": 35.999973720440835,
+                "width": 8,
+                "height": 8
+              }
+            ]
+          },
+          "selected": false,
+          "dragging": false,
+          "resizing": false,
+          "initialized": false,
+          "isParent": false,
+          "position": {
+            "x": 790,
+            "y": 260
+          },
+          "data": {
+            "svgPath": "/svg/resistor.svg",
+            "terminals": [
+              {
+                "id": "0",
+                "position": "left",
+                "x": 0,
+                "y": 40,
+                "type": "source"
+              },
+              {
+                "id": "1",
+                "position": "right",
+                "x": 80,
+                "y": 40,
+                "type": "target"
+              }
+            ],
+            "label": "Resistor",
+            "componentType": "resistor",
+            "value": 1
+          },
+          "events": {},
+          "increment": 8,
+          "abbreviation": "R"
+        },
+        "sourceX": 659.9999737204408,
+        "sourceY": 350,
+        "targetX": 786.0000815282119,
+        "targetY": 299.99997372044083
+      },
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 659.9999737204408,
+      "sourceY": 350,
+      "targetX": 786.0000815282119,
+      "targetY": 299.99997372044083
+    },
+    {
+      "id": "vueflow__edge-C41-V41",
+      "type": "step",
+      "source": "C4",
+      "target": "V4",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {
+        "id": "vueflow__edge-C41-V41",
+        "type": "step",
+        "source": "C4",
+        "target": "V4",
+        "sourceHandle": "1",
+        "targetHandle": "1",
+        "data": {},
+        "events": {},
+        "label": "",
+        "style": {
+          "stroke": "currentColor",
+          "strokeWidth": 2
+        },
+        "sourceNode": {
+          "id": "C4",
+          "type": "electrical-component",
+          "dimensions": {
+            "width": 80,
+            "height": 80
+          },
+          "computedPosition": {
+            "x": 990,
+            "y": 330,
+            "z": 0
+          },
+          "handleBounds": {
+            "source": [
+              {
+                "id": "0",
+                "position": "top",
+                "nodeId": "C4",
+                "type": "source",
+                "x": 35.999973720440835,
+                "y": -3.999989219222887,
+                "width": 8,
+                "height": 8
+              }
+            ],
+            "target": [
+              {
+                "id": "1",
+                "position": "bottom",
+                "nodeId": "C4",
+                "type": "target",
+                "x": 35.999973720440835,
+                "y": 76.00000740753941,
+                "width": 8,
+                "height": 8
+              }
+            ]
+          },
+          "selected": false,
+          "dragging": false,
+          "resizing": false,
+          "initialized": false,
+          "isParent": false,
+          "position": {
+            "x": 990,
+            "y": 330
+          },
+          "data": {
+            "svgPath": "/svg/capacitor.svg",
+            "terminals": [
+              {
+                "id": "0",
+                "position": "top",
+                "x": 40,
+                "y": 0,
+                "type": "source"
+              },
+              {
+                "id": "1",
+                "position": "bottom",
+                "x": 40,
+                "y": 80,
+                "type": "target"
+              }
+            ],
+            "label": "Capacitor",
+            "componentType": "capacitor",
+            "value": 0.001
+          },
+          "events": {},
+          "increment": 4,
+          "abbreviation": "C"
+        },
+        "targetNode": {
+          "id": "V4",
+          "type": "electrical-component",
+          "dimensions": {
+            "width": 80,
+            "height": 80
+          },
+          "computedPosition": {
+            "x": 620,
+            "y": 350,
+            "z": 0
+          },
+          "handleBounds": {
+            "source": [
+              {
+                "id": "0",
+                "position": "top",
+                "nodeId": "V4",
+                "type": "source",
+                "x": 35.999973720440835,
+                "y": 0,
+                "width": 8,
+                "height": 8
+              }
+            ],
+            "target": [
+              {
+                "id": "1",
+                "position": "bottom",
+                "nodeId": "V4",
+                "type": "target",
+                "x": 35.999973720440835,
+                "y": 72.00001818831653,
+                "width": 8,
+                "height": 8
+              }
+            ]
+          },
+          "selected": false,
+          "dragging": false,
+          "resizing": false,
+          "initialized": false,
+          "isParent": false,
+          "position": {
+            "x": 620,
+            "y": 350
+          },
+          "data": {
+            "svgPath": "/svg/voltage-source.svg",
+            "terminals": [
+              {
+                "id": "0",
+                "position": "top",
+                "x": 40,
+                "y": 4,
+                "type": "source"
+              },
+              {
+                "id": "1",
+                "position": "bottom",
+                "x": 40,
+                "y": 76,
+                "type": "target"
+              }
+            ],
+            "label": "Voltage Source",
+            "componentType": "voltage-source",
+            "value": 5
+          },
+          "events": {},
+          "increment": 4,
+          "abbreviation": "V"
+        },
+        "sourceX": 1029.9999737204407,
+        "sourceY": 414.00000740753944,
+        "targetX": 659.9999737204408,
+        "targetY": 430.0000181883165
+      },
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1029.9999737204407,
+      "sourceY": 414.00000740753944,
+      "targetX": 659.9999737204408,
+      "targetY": 430.0000181883165
+    },
+    {
+      "id": "vueflow__edge-V40-R91",
+      "type": "step",
+      "source": "V4",
+      "target": "R9",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 659.9999737204408,
+      "sourceY": 350,
+      "targetX": 659.9999737204408,
+      "targetY": 263.999972033822
+    },
+    {
+      "id": "vueflow__edge-R90-V51",
+      "type": "step",
+      "source": "R9",
+      "target": "V5",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 659.9999737204408,
+      "sourceY": 176.0000107807771,
+      "targetX": 659.9999737204408,
+      "targetY": 140.00001818831652
+    },
+    {
+      "id": "vueflow__edge-L40-V50",
+      "type": "step",
+      "source": "L4",
+      "target": "V5",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 786.0000107807771,
+      "sourceY": 29.999991407299554,
+      "targetX": 659.9999737204408,
+      "targetY": 60
+    },
+    {
+      "id": "vueflow__edge-C50-L41",
+      "type": "step",
+      "source": "C5",
+      "target": "L4",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1030.0001152153106,
+      "sourceY": 95.99997540705968,
+      "targetX": 874.0000781549743,
+      "targetY": 29.999991407299554
+    },
+    {
+      "id": "vueflow__edge-C40-C51",
+      "type": "step",
+      "source": "C4",
+      "target": "C5",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1029.9999737204407,
+      "sourceY": 326.00001078077713,
+      "targetX": 1030.0001152153106,
+      "targetY": 184.0000074075394
+    }
+  ],
+  "position": [
+    261.16246412991416,
+    116.67030025119493
+  ],
+  "zoom": 0.8627189200129542,
+  "viewport": {
+    "x": 261.16246412991416,
+    "y": 116.67030025119493,
+    "zoom": 0.8627189200129542
+  }
+}
