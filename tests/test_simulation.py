@@ -1,7 +1,7 @@
 import pytest
 import json
 import os
-from amps_simulation.simulation import run_simulation
+from amps_simulation.run_simulation import run_simulation
 
 # Test data configuration
 TEST_DATA_DIR = "test_data"
