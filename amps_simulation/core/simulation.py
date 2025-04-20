@@ -2,6 +2,8 @@ import sympy as sp
 import logging
 from typing import Dict, Set, Tuple, List, Any
 from amps_simulation.core.electrical_model import ElectricalModel
+from scipy.integrate import solve_ivp
+import numpy as np
 
 class Simulation:
     """
@@ -169,7 +171,7 @@ class Simulation:
                     I_source = sp.Symbol(f"I_in_{comp_id}")  # Helper variable for current source
                     input_vars[I_source] = self.current_vars[comp_id]  # i_in_I = I_I
         
-        return state_vars, state_derivatives, input_vars 
+        return state_vars, state_derivatives, input_vars
 
     def extract_differential_equations(self, components):
         """
@@ -219,4 +221,57 @@ class Simulation:
             if value is not None:
                 subs_dict[sp.Symbol(f"{comp_id}_value")] = value  # Replace symbol with actual value
 
-        return expr.subs(subs_dict) 
+        return expr.subs(subs_dict)
+        
+    def create_input_function(self):
+        """
+        Creates a simple step input function for the simulation.
+        
+        Returns:
+            - input_function: A callable function that takes time t and returns input values
+        """
+        n_inputs = len(self.input_vars)
+        
+        ### TODO actual inputs
+        def step_input_function(t):
+            return np.array([5.0 if t >= 1.0 else 0.0 for _ in range(n_inputs)])
+        
+        return step_input_function
+        
+    def simulate_circuit(self, A, B, C, t_span, initial_conditions, input_function):
+        """
+        Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
+
+        Parameters:
+        - A: State matrix (numpy array after substitution).
+        - B: Input matrix (numpy array after substitution).
+        - C: Output matrix (numpy array).
+        - t_span: Tuple (t_start, t_end) defining the time range.
+        - initial_conditions: Initial state vector (same size as state variables).
+        - input_function: Function u(t) defining the input voltage/current.
+
+        Returns:
+        - t: Time points from simulation.
+        - x: State variable trajectories over time.
+        - y: Output trajectories over time.
+        """
+        # Convert A and B to numerical arrays (ensure float type)
+        A_func = np.array(A).astype(float)
+        B_func = np.array(B).astype(float)
+        C_func = np.array(C).astype(float)
+
+        # Define time points at fixed 0.1s intervals
+        t_eval = np.arange(t_span[0], t_span[1], 0.1)  # Time points at 0.1s resolution
+
+        # Define ODE system
+        def state_space_ode(t, x):
+            u = input_function(t)
+            return (A_func @ x) + (B_func @ u)  # dx/dt = Ax + Bu
+
+        # Solve ODE system
+        sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45")
+
+        # Compute output y = Cx
+        y = C_func @ sol.y
+
+        return sol.t, sol.y, y 

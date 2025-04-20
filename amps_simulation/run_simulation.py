@@ -1,6 +1,5 @@
 # main function to run simulation with test_data/test_rrc_gnd.json
 import numpy as np
-from amps_simulation.core.state_space_model import simulate_circuit
 from amps_simulation.core.utils import plot_results
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.simulation import Simulation
@@ -48,15 +47,12 @@ def run_simulation(circuit_json_data, test_mode=False):
     # Define simulation parameters
     t_span = (0, 10)  # Simulate from 0 to 10 seconds
     initial_conditions = np.zeros(A.shape[0])  # Zero initial state
-
-
-    ### TODO actual inputs
-    # Define step input function (5V at t >= 1s)
-    def step_input_function(t, n = len(input_vars.keys())):
-        return np.array([5.0 if t >= (i + 1) else 0.0 for i in range(n)])
     
-    # Solve the ODE system
-    t, x, y = simulate_circuit(A, B, C, t_span, initial_conditions, step_input_function)
+    # Create input function using the simulation's create_input_function method
+    input_function = simulation.create_input_function()
+    
+    # Solve the ODE system using the simulation's simulate_circuit method
+    t, x, y = simulation.simulate_circuit(A, B, C, t_span, initial_conditions, input_function)
     logging.info("✅ Time points: %s", t[0:10])  # Log first 10 time points
     logging.info("✅ Simulation completed.")
     
