@@ -2,6 +2,7 @@
 import numpy as np
 from amps_simulation.core.state_space_model import extract_differential_equations, simulate_circuit
 from amps_simulation.core.utils import plot_results
+from amps_simulation.core.parser import ParserJson
 import logging
 import json
 
@@ -27,8 +28,12 @@ def run_simulation_from_file(file_path, test_mode=False):
 
 
 def run_simulation(circuit_json_data, test_mode=False):
-
-    # print(circuit_json_data)
+    # Create a parser instance
+    parser = ParserJson()
+    
+    # Parse the circuit data
+    electrical_nodes, circuit_components = parser.parse(circuit_json_data)
+    
     # Extract state space matrices
     A, B, state_vars, input_vars = extract_differential_equations(circuit_json_data)
 
