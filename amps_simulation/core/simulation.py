@@ -1,6 +1,7 @@
 import sympy as sp
 import logging
 from typing import Dict, Set, Tuple, List, Any
+from amps_simulation.core.electrical_model import ElectricalModel
 
 class Simulation:
     """
@@ -169,3 +170,53 @@ class Simulation:
                     input_vars[I_source] = self.current_vars[comp_id]  # i_in_I = I_I
         
         return state_vars, state_derivatives, input_vars 
+
+    def extract_differential_equations(self, components):
+        """
+        Extract differential equations from the circuit and convert to state space form.
+        
+        Args:
+            components: List of circuit components from JSON.
+            
+        Returns:
+            Tuple containing:
+            - A_substituted: State matrix with numerical values
+            - B_substituted: Input matrix with numerical values
+            - state_vars: Dictionary of state variables
+            - input_vars: Dictionary of input variables
+        """
+        # Create ElectricalModel instance and build model
+        model = ElectricalModel(self.electrical_nodes, self.circuit_components, self.voltage_vars, 
+                              self.current_vars, self.state_vars, self.state_derivatives, 
+                              self.input_vars, self.ground_node)
+        A, B, solved_helpers, differential_equations = model.build_model()
+
+        # Substitute numerical values into A and B
+        A_substituted = self.substitute_component_values(A, components)
+        B_substituted = self.substitute_component_values(B, components)
+
+        logging.info("✅ Substituted state matrix A: %s", A_substituted)
+        logging.info("✅ Substituted input matrix B: %s", B_substituted)
+
+        return A_substituted, B_substituted, model.state_vars, model.input_vars
+        
+    def substitute_component_values(self, expr, components):
+        """
+        Substitutes numerical values for component parameters in the symbolic equation.
+        
+        Args:
+            expr: SymPy expression or matrix containing symbolic component parameters.
+            components: List of circuit components from JSON.
+            
+        Returns:
+            - expr_substituted: Expression with component values replaced.
+        """
+        subs_dict = {}
+
+        for component in components:
+            comp_id = component["id"]
+            value = component["data"].get("value")  # Get numerical value
+            if value is not None:
+                subs_dict[sp.Symbol(f"{comp_id}_value")] = value  # Replace symbol with actual value
+
+        return expr.subs(subs_dict) 
