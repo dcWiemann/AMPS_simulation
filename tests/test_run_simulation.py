@@ -6,7 +6,6 @@ from amps_simulation.run_simulation import run_simulation
 # Test data configuration
 TEST_DATA_DIR = "test_data"
 TEST_FILES = [
-    "test.json",          # Basic RC circuit
     "test_rc.json",       # RC circuit
     "test_rrc.json",      # RRC circuit
     "test_rlc.json",      # RLC circuit
