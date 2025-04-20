@@ -144,7 +144,7 @@ class ElectricalModel:
 
                 comp_data = self.circuit_components[comp_id]
                 comp_type = comp_data["type"]
-                value = sp.Symbol(f"{comp_id}_value") if comp_data["value"] is not None else None
+                value = sp.Symbol(f"{comp_id}_value") 
 
                 # Express the current depending on the component type
                 if comp_id in self.current_vars:
@@ -167,7 +167,7 @@ class ElectricalModel:
 
                         comp_data = self.circuit_components[comp_id]
                         comp_type = comp_data["type"]
-                        value = sp.Symbol(f"{comp_id}_value") if comp_data["value"] is not None else None
+                        value = sp.Symbol(f"{comp_id}_value") 
 
                         # Express current for each component type
                         if comp_id in self.current_vars:
@@ -267,7 +267,7 @@ class ElectricalModel:
                     continue  # No component directly connects these nodes
 
                 comp_type = component["type"]
-                value = sp.Symbol(f"{component_id}_value") if component["value"] is not None else None
+                value = sp.Symbol(f"{component_id}_value")  # Always use symbolic value
 
                 # Determine voltage drop direction based on terminal convention
                 v_a = self.voltage_vars.get(node_a, sp.Symbol(f"V_{node_a}"))
