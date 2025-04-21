@@ -2,7 +2,7 @@
 archive/
 todo/
 plecs/
-amps.log
+*.log
 amps_simulation/__pycache__/
 amps_simulation/core/__pycache__/
 tests/__pycache__/
