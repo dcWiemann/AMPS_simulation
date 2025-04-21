@@ -45,6 +45,7 @@ class Simulation:
         
         # Then extract state and input variables
         self.state_vars, self.state_derivatives, self.input_vars = self._extract_input_and_state_vars()
+        logging.info(f"✅ State variables: {self.state_vars}, ✅ Input variables: {self.input_vars}")
         
         return self
         
@@ -160,14 +161,14 @@ class Simulation:
         
         return current_vars
     
-    def _extract_input_and_state_vars(self) -> Tuple[Dict[sp.Symbol, sp.Expr], Dict[sp.Symbol, sp.Expr], Dict[sp.Symbol, sp.Expr]]:
+    def _extract_input_and_state_vars(self) -> Tuple[Dict[sp.Symbol, str], Dict[sp.Symbol, sp.Expr], Dict[sp.Symbol, str]]:
         """
         Extracts input and state variables, defining helper variables for clarity.
         
         Returns:
-            - state_vars: Dictionary of helper state variables and their equations
+            - state_vars: Dictionary of helper state variables and their component IDs
             - state_derivatives: Dictionary of state derivatives
-            - input_vars: Dictionary of helper input variables and their equations
+            - input_vars: Dictionary of helper input variables and their component IDs
         """
         state_vars = {}
         input_vars = {}
@@ -187,7 +188,7 @@ class Simulation:
                     v_C = sp.Symbol(f"V_{comp_id}")  # Helper variable for capacitor voltage
                     i_C = self.current_vars.get(comp_id)  # Current through the capacitor
                     C_value = sp.Symbol(f"{comp_id}_value")  # Capacitance value as a symbol
-                    state_vars[v_C] = v_a - v_b  # v_C = V_A - V_B
+                    state_vars[v_C] = comp_id  # Store component ID instead of expression
                     state_derivatives[sp.Derivative(v_C, 't')] = i_C/C_value  # dV/dt = i_C/C
             
             elif comp_type == "inductor":
@@ -200,24 +201,20 @@ class Simulation:
                     if comp_id in self.current_vars:
                         i_L = self.current_vars[comp_id]  # Current through the inductor
                         L_value = sp.Symbol(f"{comp_id}_value")  # Inductance value as a symbol
-                        state_vars[i_L] = self.current_vars[comp_id]  # I_L = I_L
+                        state_vars[i_L] = comp_id  # Store component ID instead of expression
                         state_derivatives[sp.Derivative(i_L, 't')] = (v_a - v_b)/L_value  # di/dt = (V_A - V_B)/L
             
             elif comp_type == "voltage-source":
                 # Voltage source input variable
                 if len(terminals) == 2:
-                    node_a, node_b = terminals.values()
-                    v_a = self.voltage_vars.get(node_a, sp.Symbol(f"V_{node_a}"))
-                    v_b = self.voltage_vars.get(node_b, sp.Symbol(f"V_{node_b}"))
-                    
                     V_source = sp.Symbol(f"V_in_{comp_id}")  # Helper variable for voltage source
-                    input_vars[V_source] = v_a - v_b  # v_in_V = V_A - V_B
+                    input_vars[V_source] = comp_id  # Store component ID instead of expression
             
             elif comp_type == "current-source":
                 # Current source input variable
                 if comp_id in self.current_vars:
                     I_source = sp.Symbol(f"I_in_{comp_id}")  # Helper variable for current source
-                    input_vars[I_source] = self.current_vars[comp_id]  # i_in_I = I_I
+                    input_vars[I_source] = comp_id  # Store component ID instead of expression
         
         return state_vars, state_derivatives, input_vars
 
@@ -273,18 +270,39 @@ class Simulation:
         
     def create_input_function(self):
         """
-        Creates a simple step input function for the simulation.
+        Creates a DC input function for the simulation that returns the values of the sources.
         
         Returns:
             - input_function: A callable function that takes time t and returns input values
         """
-        n_inputs = len(self.input_vars)
+        # Create a mapping from input variables to their source values
+        input_values = {}
         
-        ### TODO actual inputs
-        def step_input_function(t):
-            return np.array([5.0 if t >= 1.0 else 0.0 for _ in range(n_inputs)])
+        # Extract source values from circuit components
+        for input_var, comp_id in self.input_vars.items():
+            if comp_id in self.circuit_components:
+                comp_data = self.circuit_components[comp_id]
+                if "value" in comp_data:
+                    input_values[input_var] = comp_data["value"]
+                else:
+                    # Default to 0 if no value is specified
+                    input_values[input_var] = 0.0
+            else:
+                # Default to 0 if component not found
+                input_values[input_var] = 0.0
         
-        return step_input_function
+        # Create a list of input variables in a consistent order
+        input_vars_list = list(self.input_vars.keys())
+        
+        def DC_input_function(t):
+            # Return the source values for t >= 0
+            if t >= 0:
+                return np.array([input_values[var] for var in input_vars_list])
+            else:
+                # Return zeros for t < 0
+                return np.zeros(len(input_vars_list))
+        
+        return DC_input_function
         
     def simulate_circuit(self, A, B, C, t_span, initial_conditions, input_function):
         """
