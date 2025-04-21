@@ -34,31 +34,18 @@ def run_simulation(circuit_json_data, test_mode=False):
     # Parse the circuit data
     electrical_nodes, circuit_components = parser.parse(circuit_json_data)
     
-    # Create a simulation instance and assign variables
+    # Create a simulation instance
     simulation = Simulation(electrical_nodes, circuit_components)
-    voltage_vars, current_vars, state_vars, state_derivatives, input_vars, ground_node = simulation.assign_variables()
     
-    # Extract state space matrices with numerical values
-    A, B, state_vars, input_vars = simulation.extract_differential_equations(circuit_json_data["nodes"])
+    # Initialize the simulation (assign variables)
+    simulation.initialize()
     
-    # Define identity output matrix C (observing all state variables)
-    C = np.eye(A.shape[0])  # Identity matrix of size (states x states)
-    
-    # Define simulation parameters
-    t_span = (0, 10)  # Simulate from 0 to 10 seconds
-    initial_conditions = np.zeros(A.shape[0])  # Zero initial state
-    
-    # Create input function using the simulation's create_input_function method
-    input_function = simulation.create_input_function()
-    
-    # Solve the ODE system using the simulation's simulate_circuit method
-    t, x, y = simulation.simulate_circuit(A, B, C, t_span, initial_conditions, input_function)
-    logging.info("✅ Time points: %s", t[0:10])  # Log first 10 time points
-    logging.info("✅ Simulation completed.")
+    # Run the simulation
+    t, x, y = simulation.simulate()
     
     # Plot the results only if not in test mode
     if not test_mode:
-        plot_results(t, x, state_vars)
+        plot_results(t, x, simulation.state_vars)
     
     return t, x, y
 
