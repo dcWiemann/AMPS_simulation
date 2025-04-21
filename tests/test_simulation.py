@@ -1,17 +1,7 @@
 import json
-import logging
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.simulation import Simulation
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("test_simulation.log", mode='w'),
-        logging.StreamHandler()
-    ]
-)
 
 def test_simulation_class():
     # Load a test circuit
@@ -27,24 +17,39 @@ def test_simulation_class():
     # Create a simulation instance
     simulation = Simulation(electrical_nodes, circuit_components)
     
-    # Assign variables
-    voltage_vars, current_vars, state_vars, state_derivatives, input_vars, ground_node = simulation.assign_variables()
-    
-    # Print the results
-    print("Voltage variables:", voltage_vars)
-    print("Current variables:", current_vars)
-    print("State variables:", state_vars)
-    print("State derivatives:", state_derivatives)
-    print("Input variables:", input_vars)
-    print("Ground node:", ground_node)
+    # Test initialize method
+    simulation.initialize()
     
     # Verify that the simulation instance has the correct attributes
-    assert simulation.voltage_vars == voltage_vars
-    assert simulation.current_vars == current_vars
-    assert simulation.state_vars == state_vars
-    assert simulation.state_derivatives == state_derivatives
-    assert simulation.input_vars == input_vars
-    assert simulation.ground_node == ground_node
+    assert simulation.voltage_vars is not None
+    assert simulation.current_vars is not None
+    assert simulation.state_vars is not None
+    assert simulation.state_derivatives is not None
+    assert simulation.input_vars is not None
+    assert simulation.ground_node is not None
+    
+    # Test simulate method
+    t, x, y = simulation.simulate()
+    
+    # Verify simulation results
+    assert t is not None
+    assert x is not None
+    assert y is not None
+    assert len(t) > 0
+    assert x.shape[1] == len(t)  # x has shape (n_states, n_timepoints)
+    assert y.shape[1] == len(t)  # y has shape (n_outputs, n_timepoints)
+    
+    # Test method chaining
+    simulation2 = Simulation(electrical_nodes, circuit_components)
+    t2, x2, y2 = simulation2.initialize().simulate()
+    
+    # Verify chained method results
+    assert t2 is not None
+    assert x2 is not None
+    assert y2 is not None
+    assert len(t2) > 0
+    assert x2.shape[1] == len(t2)  # x2 has shape (n_states, n_timepoints)
+    assert y2.shape[1] == len(t2)  # y2 has shape (n_outputs, n_timepoints)
     
     print("All tests passed!")
 
