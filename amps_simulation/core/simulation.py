@@ -31,36 +31,84 @@ class Simulation:
         self.input_vars = {}
         self.ground_node = None
         
-    def assign_variables(self):
+    def initialize(self):
         """
-        Assign all necessary variables for simulation.
+        Initialize all variables needed for simulation.
+        This method should be called before running any simulation.
         
         Returns:
-            Tuple containing:
-            - voltage_vars: Dictionary of voltage variables
-            - current_vars: Dictionary of current variables
-            - state_vars: Dictionary of state variables
-            - state_derivatives: Dictionary of state derivatives
-            - input_vars: Dictionary of input variables
-            - ground_node: The ground node ID
+            self: Returns self for method chaining
         """
-        # Assign voltage variables
+        # First assign voltage and current variables
         self.voltage_vars, self.ground_node = self._assign_voltage_variables()
-        logging.info("✅ Voltage variables: %s", self.voltage_vars)
-        logging.info("✅ Ground node: %s", self.ground_node)
-        
-        # Assign current variables
         self.current_vars = self._assign_current_variables()
-        logging.info("✅ Current variables: %s", self.current_vars)
         
-        # Extract input and state variables
+        # Then extract state and input variables
         self.state_vars, self.state_derivatives, self.input_vars = self._extract_input_and_state_vars()
-        logging.info("✅ State variables: %s", self.state_vars)
-        logging.info("✅ State derivatives: %s", self.state_derivatives)
-        logging.info("✅ Input variables: %s", self.input_vars)
         
-        return (self.voltage_vars, self.current_vars, self.state_vars, 
-                self.state_derivatives, self.input_vars, self.ground_node)
+        return self
+        
+    def simulate(self, t_span=(0, 10)):
+        """
+        Run a simulation of the circuit using the already assigned variables and matrices.
+        This method assumes that the simulation instance has already been initialized
+        with electrical nodes, circuit components, and all necessary variables.
+        
+        Args:
+            t_span: Tuple (t_start, t_end) defining the time range
+            
+        Returns:
+            - t: Time points from simulation
+            - x: State variable trajectories over time
+            - y: Output trajectories over time
+        """
+        # Ensure variables are initialized
+        if not self.state_vars:
+            self.initialize()
+            
+        # Step 1: Create electrical model and extract matrices
+        model = ElectricalModel(
+            self.electrical_nodes, 
+            self.circuit_components, 
+            self.voltage_vars, 
+            self.current_vars, 
+            self.state_vars, 
+            self.state_derivatives, 
+            self.input_vars, 
+            self.ground_node
+        )
+        
+        # Build the model to get symbolic matrices
+        A_symbolic, B_symbolic, solved_helpers, differential_equations = model.build_model()
+        
+        # Step 2: Substitute component values in A and B matrices
+        # We need to extract component values from circuit_components
+        component_values = []
+        for comp_id, comp_data in self.circuit_components.items():
+            if "value" in comp_data:
+                component_values.append({
+                    "id": comp_id,
+                    "data": {"value": comp_data["value"]}
+                })
+        
+        A = self.substitute_component_values(A_symbolic, component_values)
+        B = self.substitute_component_values(B_symbolic, component_values)
+        
+        # Define identity output matrix C (observing all state variables)
+        C = np.eye(A.shape[0])  # Identity matrix of size (states x states)
+        
+        # Define initial conditions
+        initial_conditions = np.zeros(A.shape[0])  # Zero initial state
+        
+        # Create input function
+        input_function = self.create_input_function()
+        
+        # Run simulation
+        t, x, y = self.simulate_circuit(A, B, C, t_span, initial_conditions, input_function)
+        logging.info("✅ Time points: %s", t[0:10])  # Log first 10 time points
+        logging.info("✅ Simulation completed.")
+        
+        return t, x, y
     
     def _assign_voltage_variables(self) -> Tuple[Dict[int, sp.Symbol], int]:
         """
