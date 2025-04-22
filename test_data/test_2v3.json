@@ -28,7 +28,7 @@
         ],
         "label": "Voltage Source",
         "componentType": "voltage-source",
-        "value": 5
+        "value": 10
       },
       "increment": 4,
       "abbreviation": "V"
@@ -160,7 +160,7 @@
         ],
         "label": "Voltage Source",
         "componentType": "voltage-source",
-        "value": 5
+        "value": 4
       },
       "increment": 5,
       "abbreviation": "V"

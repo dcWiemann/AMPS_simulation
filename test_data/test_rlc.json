@@ -28,7 +28,7 @@
         ],
         "label": "Voltage Source",
         "componentType": "voltage-source",
-        "value": 5
+        "value": 3
       }
     },
     {
