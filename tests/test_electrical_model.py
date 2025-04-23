@@ -57,17 +57,14 @@ def test_electrical_model_init(mock_rlc_circuit):
 def test_electrical_model_build(mock_rlc_circuit):
     """Test building the electrical model."""
     model = ElectricalModel(**mock_rlc_circuit)
-    A, B, solved_helpers, differential_equations = model.build_model()
+    solved_helpers, differential_equations = model.build_model()
     
     # Basic validation
-    assert isinstance(A, sp.Matrix), "A should be a SymPy Matrix"
-    assert isinstance(B, sp.Matrix), "B should be a SymPy Matrix"
     assert isinstance(solved_helpers, dict), "solved_helpers should be a dictionary"
     assert isinstance(differential_equations, dict), "differential_equations should be a dictionary"
     
     # For RLC circuit:
-    assert A.shape == (2, 2), "A should be 2x2 for RLC circuit"
-    assert B.shape == (2, 1), "B should be 2x1 for RLC circuit"
+    assert len(differential_equations) == 2, "Should have 2 state variables for RLC circuit"
 
 @pytest.mark.parametrize("test_file", TEST_FILES)
 def test_electrical_model_with_real_circuits(test_file):
@@ -93,13 +90,11 @@ def test_electrical_model_with_real_circuits(test_file):
         ground_node=simulation.ground_node
     )
     
-    A, B, solved_helpers, differential_equations = model.build_model()
+    solved_helpers, differential_equations = model.build_model()
     
     # Validate outputs
-    assert isinstance(A, sp.Matrix), f"A should be a SymPy Matrix for {test_file}"
-    assert isinstance(B, sp.Matrix), f"B should be a SymPy Matrix for {test_file}"
-    assert A.shape[0] == len(model.state_vars), f"A dimensions should match state_vars count for {test_file}"
-    assert B.shape[1] == len(model.input_vars), f"B columns should match input_vars count for {test_file}"
+    assert isinstance(solved_helpers, dict), f"solved_helpers should be a dictionary for {test_file}"
+    assert isinstance(differential_equations, dict), f"differential_equations should be a dictionary for {test_file}"
 
 def test_electrical_model_specific_rlc_circuit():
     """Test specific properties of the RLC circuit model."""
@@ -124,10 +119,9 @@ def test_electrical_model_specific_rlc_circuit():
         ground_node=simulation.ground_node
     )
     
-    A, B, solved_helpers, differential_equations = model.build_model()
+    solved_helpers, differential_equations = model.build_model()
     
     # Specific RLC circuit tests
     assert len(model.state_vars) == 2, "RLC circuit should have two state variables"
     assert len(model.input_vars) == 1, "RLC circuit should have one input variable"
-    assert A.shape == (2, 2), "A should be 2x2 for RLC circuit"
-    assert B.shape == (2, 1), "B should be 2x1 for RLC circuit" 
+    assert len(differential_equations) == 2, "Should have 2 state variables for RLC circuit" 
