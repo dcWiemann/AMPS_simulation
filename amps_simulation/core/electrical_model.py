@@ -115,13 +115,22 @@ class ElectricalModel:
         
         logging.info("Supernodes detected: %s", supernodes)
         
-        # Step 2: Write KCL for normal electrical nodes (excluding ground, supernodes, and voltage-source-connected-to-ground nodes)
+        # Step 2: Merge supernodes that share common nodes
+        supernodes = self._merge_supernodes(supernodes)
+        logging.info("Merged supernodes: %s", supernodes)
+        
+        # Step 3: Remove supernodes connected to grounded voltage sources
+        supernodes, removed_nodes = self._remove_grounded_supernodes(supernodes, voltage_sources)
+        logging.info("Supernodes after removing grounded ones: %s", supernodes)
+        logging.info("Nodes from removed supernodes: %s", removed_nodes)
+        
+        # Step 4: Write KCL for normal electrical nodes (excluding ground, supernodes, and voltage-source-connected-to-ground nodes)
         for node_id, terminals in self.electrical_nodes.items():
             if node_id == self.ground_node:
                 continue  # Ignore ground node
 
-            # Skip nodes that belong to a supernode
-            if any(node_id in nodes for nodes in supernodes.values()):
+            # Skip nodes that belong to a supernode (either valid or removed)
+            if any(node_id in nodes for nodes in supernodes.values()) or node_id in removed_nodes:
                 continue
 
             # Skip nodes connected to a voltage source where the other terminal is grounded
@@ -155,7 +164,7 @@ class ElectricalModel:
 
             kcl_equations.append(equation)
 
-        # Step 3: Write KCL for supernodes
+        # Step 5: Write KCL for supernodes
         for supernode_id, nodes in supernodes.items():
             equation = 0  # Initialize symbolic equation
             logging.info("ℹ️ Processing supernode %s with nodes %s", supernode_id, nodes)
@@ -419,3 +428,108 @@ class ElectricalModel:
         B = dx_dt_sol.jacobian(input_vars)  # Partial derivatives of dx/dt w.r.t. input variables
 
         return A, B 
+
+    def _merge_supernodes(self, supernodes: Dict[str, Set[int]]) -> Dict[str, Set[int]]:
+        """
+        Merges supernodes that share common nodes into a single supernode.
+        
+        Args:
+            supernodes: Dictionary mapping supernode IDs to sets of nodes
+            
+        Returns:
+            Dict[str, Set[int]]: Updated supernodes dictionary with merged supernodes
+        """
+        # Create a mapping of nodes to their supernodes
+        node_to_supernodes = defaultdict(list)
+        for sn_id, nodes in supernodes.items():
+            for node in nodes:
+                node_to_supernodes[node].append(sn_id)
+        
+        # Find nodes that appear in multiple supernodes
+        duplicate_nodes = {node: sn_ids for node, sn_ids in node_to_supernodes.items() 
+                         if len(sn_ids) > 1}
+        
+        if not duplicate_nodes:
+            return supernodes  # No merging needed
+            
+        # Create a mapping of supernodes to their connected supernodes
+        supernode_groups = []
+        processed = set()
+        
+        for node, sn_ids in duplicate_nodes.items():
+            if any(sn_id in processed for sn_id in sn_ids):
+                continue
+                
+            # Find all supernodes connected through shared nodes
+            group = set(sn_ids)
+            to_process = set(sn_ids)
+            
+            while to_process:
+                current = to_process.pop()
+                processed.add(current)
+                
+                # Find all nodes in current supernode
+                nodes_in_current = supernodes[current]
+                
+                # For each node, find other supernodes it belongs to
+                for node in nodes_in_current:
+                    for other_sn in node_to_supernodes[node]:
+                        if other_sn not in processed and other_sn not in group:
+                            group.add(other_sn)
+                            to_process.add(other_sn)
+                            
+            if len(group) > 1:
+                supernode_groups.append(group)
+        
+        # Create new merged supernodes
+        merged_supernodes = {}
+        used_supernodes = set()
+        
+        # First add non-merged supernodes
+        for sn_id, nodes in supernodes.items():
+            if sn_id not in processed:
+                merged_supernodes[sn_id] = nodes
+                used_supernodes.add(sn_id)
+        
+        # Then add merged supernodes
+        for i, group in enumerate(supernode_groups):
+            new_sn_id = "_".join(sorted(group))
+            merged_nodes = set()
+            for sn_id in group:
+                merged_nodes.update(supernodes[sn_id])
+                used_supernodes.add(sn_id)
+            merged_supernodes[new_sn_id] = merged_nodes
+        
+        return merged_supernodes 
+
+    def _remove_grounded_supernodes(self, supernodes: Dict[str, Set[int]], voltage_sources: Dict[str, Dict]) -> Tuple[Dict[str, Set[int]], Set[int]]:
+        """
+        Removes supernodes that are connected to grounded voltage sources.
+        
+        Args:
+            supernodes: Dictionary mapping supernode IDs to sets of nodes
+            voltage_sources: Dictionary of all voltage sources in the circuit
+            
+        Returns:
+            Tuple[Dict[str, Set[int]], Set[int]]: 
+                - Updated supernodes dictionary with grounded supernodes removed
+                - Set of nodes that belonged to removed supernodes
+        """
+        # Create a set of nodes connected to grounded voltage sources
+        grounded_nodes = set()
+        for vs_id, vs in voltage_sources.items():
+            connected_nodes = set(vs["terminals"].values())
+            if self.ground_node in connected_nodes:
+                # Add the non-ground node connected to this voltage source
+                grounded_nodes.update(connected_nodes - {self.ground_node})
+        
+        # Remove supernodes that contain any grounded nodes
+        valid_supernodes = {}
+        removed_nodes = set()
+        for sn_id, nodes in supernodes.items():
+            if not any(node in grounded_nodes for node in nodes):
+                valid_supernodes[sn_id] = nodes
+            else:
+                removed_nodes.update(nodes)
+                
+        return valid_supernodes, removed_nodes 
