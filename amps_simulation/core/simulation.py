@@ -109,7 +109,7 @@ class Simulation:
         input_function = self.create_input_function()
         
         # Run simulation
-        t, x, y = self.simulate_circuit(A, B, C, t_span, initial_conditions, input_function)
+        t, x, y = self.run_solver(A, B, C, t_span, initial_conditions, input_function)
         logging.info("✅ Time points: %s", t[0:10])  # Log first 10 time points
         logging.info("✅ Simulation completed.")
         
@@ -274,15 +274,7 @@ class Simulation:
                               self.input_vars, self.ground_node)
         solved_helpers, differential_equations = model.build_model()
         return model
-        # A, B = self.extract_state_space_matrices(differential_equations)
 
-        # # Substitute numerical values into A and B
-        # A_substituted = self.substitute_component_values(A, components)
-        # B_substituted = self.substitute_component_values(B, components)
-        # logging.info("✅ Substituted state matrix A: %s", A_substituted)
-        # logging.info("✅ Substituted input matrix B: %s", B_substituted)
-
-        # return A_substituted, B_substituted, model.state_vars, model.input_vars
 
     def extract_state_space_matrices(self, differential_equations) -> Tuple[sp.Matrix, sp.Matrix]:
         """
@@ -362,7 +354,7 @@ class Simulation:
         
         return DC_input_function
         
-    def simulate_circuit(self, A, B, C, t_span, initial_conditions, input_function):
+    def run_solver(self, A, B, C, t_span, initial_conditions, input_function):
         """
         Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
 
