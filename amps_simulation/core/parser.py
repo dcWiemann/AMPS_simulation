@@ -6,7 +6,7 @@ class CircuitParser(ABC):
     """Abstract base class for circuit parsers."""
     
     @abstractmethod
-    def parse(self, circuit_data: Any) -> Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict]]:
+    def parse(self, circuit_data: Any) -> Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict[str, Any]]]:
         """
         Parse circuit data into internal graph structure.
         
@@ -14,7 +14,7 @@ class CircuitParser(ABC):
             circuit_data: Circuit description in the format supported by this parser
             
         Returns:
-            Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict]]: 
+            Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict[str, Any]]]: 
                 (electrical_nodes, circuit_components)
                 - electrical_nodes: { electrical_node_id: set((component_id, terminal_id), ...) }
                 - circuit_components: { component_id: { "type": str, "value": float, "terminals": {terminal_id: electrical_node} } }
@@ -25,7 +25,7 @@ class CircuitParser(ABC):
 class ParserJson(CircuitParser):
     """Parser for JSON circuit descriptions."""
     
-    def parse(self, circuit_json: Dict[str, Any]) -> Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict]]:
+    def parse(self, circuit_json: Dict[str, Any]) -> Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict[str, Any]]]:
         """
         Parse JSON circuit description into internal graph structure.
         
@@ -33,7 +33,7 @@ class ParserJson(CircuitParser):
             circuit_json: Dictionary containing circuit description with 'nodes' and 'edges'
             
         Returns:
-            Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict]]: 
+            Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict[str, Any]]]: 
                 (electrical_nodes, circuit_components)
         """
         # Extract components and connections
