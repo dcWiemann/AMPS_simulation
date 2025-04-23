@@ -12,5 +12,6 @@ amps_simulation.egg-info/
 dist/**
 build/**
 .venv/**
+.envrc
 notes/
 .cursorrules
