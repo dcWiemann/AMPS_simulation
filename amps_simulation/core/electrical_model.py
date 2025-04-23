@@ -84,11 +84,11 @@ class ElectricalModel:
         logging.info("✅ State derivatives: %s", self.differential_equations)
         
         # Step 6: Extract state space matrices
-        self.A, self.B = self.extract_state_space_matrices()
+        # self.A, self.B = self.extract_state_space_matrices()
         logging.info("✅ Symbolic State matrix A: %s", self.A)
         logging.info("✅ Symbolic Input matrix B: %s", self.B)
         
-        return self.A, self.B, self.solved_helpers, self.differential_equations
+        return self.solved_helpers, self.differential_equations
     
     def write_kcl_equations(self) -> Tuple[List[sp.Expr], Dict[str, Set[int]]]:
         """
@@ -408,26 +408,7 @@ class ElectricalModel:
 
         return differential_equations
     
-    def extract_state_space_matrices(self) -> Tuple[sp.Matrix, sp.Matrix]:
-        """
-        Converts the state derivative dictionary into matrix form and computes Jacobians for A and B.
-        
-        Returns:
-            - A: State matrix (Jacobian of dx/dt w.r.t. state variables).
-            - B: Input matrix (Jacobian of dx/dt w.r.t. input variables).
-        """
-        # Convert dictionaries to lists of variables
-        state_vars = list(self.state_vars.keys())  
-        input_vars = list(self.input_vars.keys())  
-
-        # Convert to matrix form
-        dx_dt_sol = sp.Matrix(list(self.differential_equations.values()))
-
-        # Compute Jacobians
-        A = dx_dt_sol.jacobian(state_vars)  # Partial derivatives of dx/dt w.r.t. state variables
-        B = dx_dt_sol.jacobian(input_vars)  # Partial derivatives of dx/dt w.r.t. input variables
-
-        return A, B 
+ 
 
     def _merge_supernodes(self, supernodes: Dict[str, Set[int]]) -> Dict[str, Set[int]]:
         """

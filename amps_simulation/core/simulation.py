@@ -24,6 +24,7 @@ class Simulation:
         """
         self.electrical_nodes = electrical_nodes
         self.circuit_components = circuit_components
+        self.power_switches = []
         self.voltage_vars = {}
         self.current_vars = {}
         self.state_vars = {}
@@ -45,7 +46,9 @@ class Simulation:
         
         # Then extract state and input variables
         self.state_vars, self.state_derivatives, self.input_vars = self._extract_input_and_state_vars()
+        self.power_switches = self._extract_power_switches()
         logging.info(f"✅ State variables: {self.state_vars}, ✅ Input variables: {self.input_vars}")
+        logging.info(f"✅ Power switches: {self.power_switches}")
         
         return self
         
@@ -64,36 +67,37 @@ class Simulation:
             - y: Output trajectories over time
         """
         # Ensure variables are initialized
-        if not self.state_vars:
+        if not self.voltage_vars:
             self.initialize()
             
-        # Step 1: Create electrical model and extract matrices
-        model = ElectricalModel(
-            self.electrical_nodes, 
-            self.circuit_components, 
-            self.voltage_vars, 
-            self.current_vars, 
-            self.state_vars, 
-            self.state_derivatives, 
-            self.input_vars, 
-            self.ground_node
-        )
+        # # Step 1: Create electrical model and extract matrices
+        # model = ElectricalModel(
+        #     self.electrical_nodes, 
+        #     self.circuit_components, 
+        #     self.voltage_vars, 
+        #     self.current_vars, 
+        #     self.state_vars, 
+        #     self.state_derivatives, 
+        #     self.input_vars, 
+        #     self.ground_node
+        # )
         
-        # Build the model to get symbolic matrices
-        A_symbolic, B_symbolic, solved_helpers, differential_equations = model.build_model()
+        # # Build the model to get symbolic matrices
+        # solved_helpers, differential_equations = model.build_model()
         
+        model = self.create_model()
+
         # Step 2: Substitute component values in A and B matrices
         # We need to extract component values from circuit_components
-        component_values = []
-        for comp_id, comp_data in self.circuit_components.items():
-            if "value" in comp_data:
-                component_values.append({
-                    "id": comp_id,
-                    "data": {"value": comp_data["value"]}
-                })
-        
+        component_values = self._get_component_values()
+        A_symbolic, B_symbolic = self.extract_state_space_matrices(model.differential_equations)
+        logging.info("👾 Symbolic State matrix A: %s", A_symbolic)
+        logging.info("👾 Symbolic Input matrix B: %s", B_symbolic)
+
         A = self.substitute_component_values(A_symbolic, component_values)
         B = self.substitute_component_values(B_symbolic, component_values)
+        logging.info("👾 Substituted state matrix A: %s", A)
+        logging.info("👾 Substituted input matrix B: %s", B)
         
         # Define identity output matrix C (observing all state variables)
         C = np.eye(A.shape[0])  # Identity matrix of size (states x states)
@@ -111,6 +115,23 @@ class Simulation:
         
         return t, x, y
     
+
+    def _get_component_values(self) -> List[Dict[str, Any]]:
+        """
+        Get component values from circuit components.
+
+        Returns:
+            - component_values: List of dictionaries containing component ID and value
+        """
+        component_values = []
+        for comp_id, comp_data in self.circuit_components.items():
+            if "value" in comp_data:
+                component_values.append({
+                    "id": comp_id,
+                    "data": {"value": comp_data["value"]}
+                })
+        return component_values
+
     def _assign_voltage_variables(self) -> Tuple[Dict[int, sp.Symbol], int]:
         """
         Assigns voltage variables to electrical nodes.
@@ -217,8 +238,23 @@ class Simulation:
                     input_vars[I_source] = comp_id  # Store component ID instead of expression
         
         return state_vars, state_derivatives, input_vars
+    
 
-    def extract_differential_equations(self, components):
+    def _extract_power_switches(self) -> List[str]:
+        """
+        Extracts power switches from the circuit components.
+        
+        Returns:
+            List[str]: A list containing the IDs of all power switches in the circuit
+        """
+        self.power_switches = [
+            comp_id for comp_id, comp_data in self.circuit_components.items()
+            if comp_data["type"] == "switch"
+        ]
+        return self.power_switches
+    
+
+    def create_model(self):
         """
         Extract differential equations from the circuit and convert to state space form.
         
@@ -236,17 +272,39 @@ class Simulation:
         model = ElectricalModel(self.electrical_nodes, self.circuit_components, self.voltage_vars, 
                               self.current_vars, self.state_vars, self.state_derivatives, 
                               self.input_vars, self.ground_node)
-        A, B, solved_helpers, differential_equations = model.build_model()
+        solved_helpers, differential_equations = model.build_model()
+        return model
+        # A, B = self.extract_state_space_matrices(differential_equations)
 
-        # Substitute numerical values into A and B
-        A_substituted = self.substitute_component_values(A, components)
-        B_substituted = self.substitute_component_values(B, components)
+        # # Substitute numerical values into A and B
+        # A_substituted = self.substitute_component_values(A, components)
+        # B_substituted = self.substitute_component_values(B, components)
+        # logging.info("✅ Substituted state matrix A: %s", A_substituted)
+        # logging.info("✅ Substituted input matrix B: %s", B_substituted)
 
-        logging.info("✅ Substituted state matrix A: %s", A_substituted)
-        logging.info("✅ Substituted input matrix B: %s", B_substituted)
+        # return A_substituted, B_substituted, model.state_vars, model.input_vars
 
-        return A_substituted, B_substituted, model.state_vars, model.input_vars
+    def extract_state_space_matrices(self, differential_equations) -> Tuple[sp.Matrix, sp.Matrix]:
+        """
+        Converts the state derivative dictionary into matrix form and computes Jacobians for A and B.
         
+        Returns:
+            - A: State matrix (Jacobian of dx/dt w.r.t. state variables).
+            - B: Input matrix (Jacobian of dx/dt w.r.t. input variables).
+        """
+        # Convert dictionaries to lists of variables
+        state_vars = list(self.state_vars.keys())  
+        input_vars = list(self.input_vars.keys())  
+
+        # Convert to matrix form
+        dx_dt_sol = sp.Matrix(list(differential_equations.values()))
+
+        # Compute Jacobians
+        A = dx_dt_sol.jacobian(state_vars)  # Partial derivatives of dx/dt w.r.t. state variables
+        B = dx_dt_sol.jacobian(input_vars)  # Partial derivatives of dx/dt w.r.t. input variables
+
+        return A, B
+
     def substitute_component_values(self, expr, components):
         """
         Substitutes numerical values for component parameters in the symbolic equation.
