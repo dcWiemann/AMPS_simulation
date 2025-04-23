@@ -69,26 +69,18 @@ class Simulation:
         # Ensure variables are initialized
         if not self.voltage_vars:
             self.initialize()
-            
+        
+        control_signals = self._get_control_signals()
+        logging.info("👾 Control signals: %s", control_signals)
+        for control_signal in control_signals:
+            logging.info("👾 Control signal at t=3: %s", control_signal(3))
+
         # # Step 1: Create electrical model and extract matrices
-        # model = ElectricalModel(
-        #     self.electrical_nodes, 
-        #     self.circuit_components, 
-        #     self.voltage_vars, 
-        #     self.current_vars, 
-        #     self.state_vars, 
-        #     self.state_derivatives, 
-        #     self.input_vars, 
-        #     self.ground_node
-        # )
-        
-        # # Build the model to get symbolic matrices
-        # solved_helpers, differential_equations = model.build_model()
-        
-        model = self.create_model()
+        number_of_piecewise_linear_models, switch_positions = self._get_switch_positions()
+        logging.info("👾 Number of piecewise linear models: %s", number_of_piecewise_linear_models)
+        logging.info("👾 Switch positions: %s", switch_positions)
 
         # Step 2: Substitute component values in A and B matrices
-        # We need to extract component values from circuit_components
         component_values = self._get_component_values()
         A_symbolic, B_symbolic = self.extract_state_space_matrices(model.differential_equations)
         logging.info("👾 Symbolic State matrix A: %s", A_symbolic)
@@ -253,6 +245,38 @@ class Simulation:
         ]
         return self.power_switches
     
+    def _get_control_signals(self):
+        """
+        Get control signals from the circuit components.
+        
+        Returns:
+            control_signals: list of functions of time
+        """
+        control_signals = []
+        # switch times: {switch_id: [times]}
+        switch_times = {}
+        for switch_id in self.power_switches:
+            switch_times[switch_id] = self.circuit_components[switch_id]["value"]
+        for switch_id in self.power_switches:
+            def control_signal(t):
+                if t <= switch_times[switch_id]:
+                    return 0 ### TODO: get initial switch position
+                else:
+                    return 1
+            control_signals.append(control_signal)
+        return control_signals
+    
+    def _get_switch_positions(self):
+        """
+        Get the switch positions from the circuit components.
+
+        Returns:
+            number_of_piecewise_linear_models: int
+            switch_positions: list of bitstrings
+        """
+        number_of_piecewise_linear_models = 2**len(self.power_switches)
+        switch_positions = [bin(i)[2:].zfill(len(self.power_switches)) for i in range(number_of_piecewise_linear_models)]
+        return number_of_piecewise_linear_models, switch_positions
 
     def create_model(self):
         """
@@ -297,6 +321,7 @@ class Simulation:
 
         return A, B
 
+
     def substitute_component_values(self, expr, components):
         """
         Substitutes numerical values for component parameters in the symbolic equation.
@@ -318,6 +343,7 @@ class Simulation:
 
         return expr.subs(subs_dict)
         
+
     def create_input_function(self):
         """
         Creates a DC input function for the simulation that returns the values of the sources.
@@ -354,6 +380,7 @@ class Simulation:
         
         return DC_input_function
         
+
     def run_solver(self, A, B, C, t_span, initial_conditions, input_function):
         """
         Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
