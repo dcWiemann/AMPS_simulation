@@ -34,6 +34,39 @@
       "abbreviation": "V"
     },
     {
+      "id": "C4",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 990,
+        "y": 330
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 0,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 80,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.2
+      },
+      "increment": 4,
+      "abbreviation": "C"
+    },
+    {
       "id": "V5",
       "type": "electrical-component",
       "initialized": false,
@@ -65,6 +98,38 @@
       },
       "increment": 5,
       "abbreviation": "V"
+    },
+    {
+      "id": "L4",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 790,
+        "y": -10
+      },
+      "data": {
+        "svgPath": "/svg/inductor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 0,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 80,
+            "y": 40
+          }
+        ],
+        "label": "Inductor",
+        "componentType": "inductor",
+        "value": 0.01
+      },
+      "increment": 4,
+      "abbreviation": "L"
     },
     {
       "id": "C5",
@@ -137,7 +202,7 @@
       "type": "electrical-component",
       "initialized": false,
       "position": {
-        "x": 1060,
+        "x": 620,
         "y": 540
       },
       "data": {
@@ -157,42 +222,63 @@
       },
       "increment": 2,
       "abbreviation": "GND"
-    },
-    {
-      "id": "R11",
-      "type": "electrical-component",
-      "initialized": false,
-      "position": {
-        "x": 800,
-        "y": 10
-      },
-      "data": {
-        "svgPath": "/svg/resistor.svg",
-        "terminals": [
-          {
-            "id": "0",
-            "position": "left",
-            "x": 0,
-            "y": 40,
-            "type": "source"
-          },
-          {
-            "id": "1",
-            "position": "right",
-            "x": 80,
-            "y": 40,
-            "type": "target"
-          }
-        ],
-        "label": "Resistor",
-        "componentType": "resistor",
-        "value": 1
-      },
-      "increment": 11,
-      "abbreviation": "R"
     }
   ],
   "edges": [
+    {
+      "id": "vueflow__edge-L40-V50",
+      "type": "step",
+      "source": "L4",
+      "target": "V5",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 786,
+      "sourceY": 30,
+      "targetX": 660,
+      "targetY": 110
+    },
+    {
+      "id": "vueflow__edge-C50-L41",
+      "type": "step",
+      "source": "C5",
+      "target": "L4",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1030,
+      "sourceY": 96,
+      "targetX": 874,
+      "targetY": 30
+    },
+    {
+      "id": "vueflow__edge-C40-C51",
+      "type": "step",
+      "source": "C4",
+      "target": "C5",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1030,
+      "sourceY": 326,
+      "targetX": 1030,
+      "targetY": 184
+    },
     {
       "id": "vueflow__edge-R100-V41",
       "type": "step",
@@ -206,10 +292,28 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 796.0000815282119,
-      "sourceY": 480.0000444678757,
-      "targetX": 659.9999737204408,
-      "targetY": 360.0000181883165
+      "sourceX": 796,
+      "sourceY": 480,
+      "targetX": 660,
+      "targetY": 360
+    },
+    {
+      "id": "vueflow__edge-C41-R101",
+      "type": "step",
+      "source": "C4",
+      "target": "R10",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1030,
+      "sourceY": 414,
+      "targetX": 884,
+      "targetY": 480
     },
     {
       "id": "vueflow__edge-V40-V51",
@@ -224,34 +328,16 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 659.9999737204408,
+      "sourceX": 660,
       "sourceY": 280,
-      "targetX": 659.9999737204408,
-      "targetY": 190.00001818831652
+      "targetX": 660,
+      "targetY": 190
     },
     {
-      "id": "vueflow__edge-C50-R111",
+      "id": "vueflow__edge-R100-GND20",
       "type": "step",
-      "source": "C5",
-      "target": "R11",
-      "sourceHandle": "0",
-      "targetHandle": "1",
-      "data": {},
-      "label": "",
-      "style": {
-        "stroke": "currentColor",
-        "strokeWidth": 2
-      },
-      "sourceX": 1030.0001152153106,
-      "sourceY": 95.99997540705968,
-      "targetX": 884.0000074075394,
-      "targetY": 49.999973720440835
-    },
-    {
-      "id": "vueflow__edge-R110-V50",
-      "type": "step",
-      "source": "R11",
-      "target": "V5",
+      "source": "R10",
+      "target": "GND2",
       "sourceHandle": "0",
       "targetHandle": "0",
       "data": {},
@@ -260,56 +346,20 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 796.0000107807771,
-      "sourceY": 49.999973720440835,
-      "targetX": 659.9999737204408,
-      "targetY": 110
-    },
-    {
-      "id": "vueflow__edge-C51-R101",
-      "type": "step",
-      "source": "C5",
-      "target": "R10",
-      "sourceHandle": "1",
-      "targetHandle": "1",
-      "data": {},
-      "label": "",
-      "style": {
-        "stroke": "currentColor",
-        "strokeWidth": 2
-      },
-      "sourceX": 1030.0001152153106,
-      "sourceY": 184.0000074075394,
-      "targetX": 884.0000074075394,
-      "targetY": 480.0000444678757
-    },
-    {
-      "id": "vueflow__edge-GND20-C51",
-      "type": "step",
-      "source": "GND2",
-      "target": "C5",
-      "sourceHandle": "0",
-      "targetHandle": "1",
-      "data": {},
-      "label": "",
-      "style": {
-        "stroke": "currentColor",
-        "strokeWidth": 2
-      },
-      "sourceX": 1099.9999737204407,
-      "sourceY": 548.0000491858806,
-      "targetX": 1030.0001152153106,
-      "targetY": 184.0000074075394
+      "sourceX": 796,
+      "sourceY": 480,
+      "targetX": 660,
+      "targetY": 548
     }
   ],
   "position": [
-    261.16246412991416,
-    116.67030025119493
+    450.4398051403857,
+    122.0616258533899
   ],
-  "zoom": 0.8627189200129542,
+  "zoom": 0.9599043103832305,
   "viewport": {
-    "x": 261.16246412991416,
-    "y": 116.67030025119493,
-    "zoom": 0.8627189200129542
+    "x": 450.4398051403857,
+    "y": 122.0616258533899,
+    "zoom": 0.9599043103832305
   }
 }
