@@ -108,7 +108,7 @@ class Simulation:
         input_function = self.create_input_function()
         
         # Run simulation
-        t, x, y = self.run_solver(A, B, C, t_span, initial_conditions, input_function, control_signals)
+        t, x, y = self.run_solver(A, B, C, t_span, initial_conditions, input_function, control_signals, switch_positions_models)
         logging.info("✅ Time points: %s", t[0:10])  # Log first 10 time points
         logging.info("✅ Simulation completed.")
         
@@ -394,7 +394,37 @@ class Simulation:
         return DC_input_function
         
 
-    def run_solver(self, A, B, C, t_span, initial_conditions, input_function, control_signals):
+    def _get_model_functions(self, switch_positions_models, component_values, input_function):
+        """
+        Create state space model functions for each switch position.
+        
+        Args:
+            switch_positions_models: Dictionary mapping switch positions to their models
+            component_values: List of component values for substitution
+            input_function: Function that returns input values at time t
+            
+        Returns:
+            Dictionary mapping switch positions to their state space model functions
+        """
+        model_functions = {}
+        for switch_position, model in switch_positions_models.items():
+            # Extract state space matrices for this model
+            A_symbolic, B_symbolic = self.extract_state_space_matrices(model.differential_equations)
+            A_model = np.array(self.substitute_component_values(A_symbolic, component_values)).astype(float)
+            B_model = np.array(self.substitute_component_values(B_symbolic, component_values)).astype(float)
+            
+            # Create state space ODE function for this model
+            def create_model_function(A, B):
+                def model_function(t, x):
+                    u = input_function(t)
+                    return (A @ x) + (B @ u)
+                return model_function
+            
+            model_functions[switch_position] = create_model_function(A_model, B_model)
+            
+        return model_functions
+
+    def run_solver(self, A, B, C, t_span, initial_conditions, input_function, control_signals, switch_positions_models):
         """
         Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
 
@@ -405,6 +435,8 @@ class Simulation:
         - t_span: Tuple (t_start, t_end) defining the time range.
         - initial_conditions: Initial state vector (same size as state variables).
         - input_function: Function u(t) defining the input voltage/current.
+        - control_signals: List of control signal functions for switches
+        - switch_positions_models: Dictionary mapping switch positions to their models
 
         Returns:
         - t: Time points from simulation.
@@ -419,10 +451,11 @@ class Simulation:
         # Define time points at fixed 0.1s intervals
         t_eval = np.arange(t_span[0], t_span[1], 0.1)  # Time points at 0.1s resolution
 
-        # Define ODE system
-        def state_space_ode(t, x):
-            u = input_function(t)
-            return (A_func @ x) + (B_func @ u)  # dx/dt = Ax + Bu
+        # Get component values for substitution
+        component_values = self._get_component_values()
+        
+        # Get model functions for each switch position
+        model_functions = self._get_model_functions(switch_positions_models, component_values, input_function)
 
         # Define event functions for each switch
         switch_events = []
