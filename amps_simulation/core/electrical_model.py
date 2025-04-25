@@ -68,29 +68,29 @@ class ElectricalModel:
         """
         # Step 1: Write KCL equations
         self.kcl_equations, self.supernodes = self.write_kcl_equations()
-        logging.info("✅ Supernodes: %s", self.supernodes)
+        logging.debug("✅ Supernodes: %s", self.supernodes)
         
         # Step 2: Find loops
-        self.loops = self.find_loops()
+        # self.loops = self.find_loops()
         
         # Step 3: Write KVL equations
-        self.kvl_equations = self.write_kvl_equations()
+        # self.kvl_equations = self.write_kvl_equations()
         
-        logging.info("✅ KCL equations: %s", self.kcl_equations)
-        logging.info("✅ KVL equations: %s", self.kvl_equations)
+        logging.debug("✅ KCL equations: %s", self.kcl_equations)
+        # logging.debug("✅ KVL equations: %s", self.kvl_equations)
         
         # Step 4: Solve helper variables
         self.solved_helpers = self.solve_helper_variables()
-        logging.info("✅ Solved helper variables: %s", self.solved_helpers)
+        logging.debug("✅ Solved helper variables: %s", self.solved_helpers)
         
         # Step 5: Solve for state derivatives
         self.differential_equations = self.solve_state_derivatives()
-        logging.info("✅ State derivatives: %s", self.differential_equations)
+        logging.debug("✅ State derivatives: %s", self.differential_equations)
         
         # Step 6: Extract state space matrices
         # self.A, self.B = self.extract_state_space_matrices()
-        # logging.info("✅ Symbolic State matrix A: %s", self.A)
-        # logging.info("✅ Symbolic Input matrix B: %s", self.B)
+        # logging.debug("✅ Symbolic State matrix A: %s", self.A)
+        # logging.debug("✅ Symbolic Input matrix B: %s", self.B)
         
         return self.solved_helpers, self.differential_equations
     
@@ -117,16 +117,16 @@ class ElectricalModel:
             if self.ground_node not in connected_nodes:
                 supernodes[vs_id] = connected_nodes
         
-        logging.info("Supernodes detected: %s", supernodes)
+        logging.debug("Supernodes detected: %s", supernodes)
         
         # Step 2: Merge supernodes that share common nodes
         supernodes = self._merge_supernodes(supernodes)
-        logging.info("Merged supernodes: %s", supernodes)
+        logging.debug("Merged supernodes: %s", supernodes)
         
         # Step 3: Remove supernodes connected to grounded voltage sources
         supernodes, removed_nodes = self._remove_grounded_supernodes(supernodes, voltage_sources)
-        logging.info("Supernodes after removing grounded ones: %s", supernodes)
-        logging.info("Nodes from removed supernodes: %s", removed_nodes)
+        logging.debug("Supernodes after removing grounded ones: %s", supernodes)
+        logging.debug("Nodes from removed supernodes: %s", removed_nodes)
         
         # Step 4: Write KCL for normal electrical nodes (excluding ground, supernodes, and voltage-source-connected-to-ground nodes)
         for node_id, terminals in self.electrical_nodes.items():
@@ -171,7 +171,7 @@ class ElectricalModel:
         # Step 5: Write KCL for supernodes
         for supernode_id, nodes in supernodes.items():
             equation = 0  # Initialize symbolic equation
-            logging.info("ℹ️ Processing supernode %s with nodes %s", supernode_id, nodes)
+            logging.debug("ℹ️ Processing supernode %s with nodes %s", supernode_id, nodes)
             for node in nodes:
                 if node in self.electrical_nodes:
                     for comp_id, terminal_id in self.electrical_nodes[node]:
@@ -185,9 +185,9 @@ class ElectricalModel:
                         # Express current for each component type
                         if comp_id in self.current_vars:
                             equation += self.current_vars[comp_id]
-                            logging.info("ℹ️ Current variable %s added to equation: %s", self.current_vars[comp_id], equation)
+                            logging.debug("ℹ️ Current variable %s added to equation: %s", self.current_vars[comp_id], equation)
 
-            logging.info("ℹ️ Supernode equation: %s = 0", equation)
+            logging.debug("ℹ️ Supernode equation: %s = 0", equation)
             kcl_equations.append(equation)  # Store symbolic equation
 
         return kcl_equations, supernodes
@@ -333,8 +333,8 @@ class ElectricalModel:
         unknown_vars_current = set(helper_vars_current) - set(self.state_vars.keys()) - set(self.input_vars.keys())
         unknown_vars = unknown_vars_voltage.union(unknown_vars_current)
 
-        logging.info("ℹ️ Helper variables current: %s", helper_vars_current)
-        logging.info("ℹ️ Helper variables voltage: %s", helper_vars_voltage)
+        logging.debug("ℹ️ Helper variables current: %s", helper_vars_current)
+        logging.debug("ℹ️ Helper variables voltage: %s", helper_vars_voltage)
 
         # Step 2: Generate equations for resistors and capacitors 
         helper_eqs = []
@@ -411,17 +411,17 @@ class ElectricalModel:
                     # Default to OFF state
                     helper_eqs.append(i_switch)
 
-        logging.info("ℹ️ Helper equation: %s", helper_eqs)
-        logging.info("ℹ️ Unknown variables: %s", unknown_vars)
-        logging.info("ℹ️ Number of unknown variables: %d", len(unknown_vars))
+        logging.debug("ℹ️ Helper equation: %s", helper_eqs)
+        logging.debug("ℹ️ Unknown variables: %s", unknown_vars)
+        logging.debug("ℹ️ Number of unknown variables: %d", len(unknown_vars))
 
         # Combine all equations
         all_eqs = helper_eqs + self.kcl_equations
-        logging.info("ℹ️ Number of equations: %d", len(all_eqs))
+        logging.debug("ℹ️ Number of equations: %d", len(all_eqs))
 
         solved_helpers = sp.solve(all_eqs, unknown_vars)
-        logging.info("ℹ️ Number of solutions: %d", len(solved_helpers))
-        logging.info("ℹ️ Solved helper variables: %s", solved_helpers)
+        logging.debug("ℹ️ Number of solutions: %d", len(solved_helpers))
+        logging.debug("ℹ️ Solved helper variables: %s", solved_helpers)
 
         return solved_helpers
     

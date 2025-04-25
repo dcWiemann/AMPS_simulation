@@ -60,7 +60,7 @@ class Simulation:
         
         Args:
             t_span: Tuple (t_start, t_end) defining the time range
-            
+        
         Returns:
             - t: Time points from simulation
             - x: State variable trajectories over time
@@ -73,7 +73,7 @@ class Simulation:
         control_signals = self._get_control_signals()
         logging.info("👾 Control signals: %s", control_signals)
         for control_signal in control_signals:
-            logging.info("👾 Control signal at t=3: %s", control_signal(3))
+            logging.info("👾 Control signal at t=1: %s", control_signal(2))
 
         # # Step 1: Create electrical model and extract matrices
         number_of_piecewise_linear_models, possible_switch_positions = self._get_switch_positions()
@@ -108,7 +108,7 @@ class Simulation:
         input_function = self.create_input_function()
         
         # Run simulation
-        t, x, y = self.run_solver(A, B, C, t_span, initial_conditions, input_function)
+        t, x, y = self.run_solver(A, B, C, t_span, initial_conditions, input_function, control_signals)
         logging.info("✅ Time points: %s", t[0:10])  # Log first 10 time points
         logging.info("✅ Simulation completed.")
         
@@ -264,13 +264,19 @@ class Simulation:
         switch_times = {}
         for switch_id in self.power_switches:
             switch_times[switch_id] = self.circuit_components[switch_id]["value"]
-        for switch_id in self.power_switches:
+        logging.info("👾 Switch times: %s", switch_times)
+        
+        def create_control_signal(switch_id, switch_time):
             def control_signal(t):
-                if t <= switch_times[switch_id]:
-                    return 0 ### TODO: get initial switch position
+                if t < switch_time:
+                    return 0  # Switch is OFF
                 else:
-                    return 1
-            control_signals.append(control_signal)
+                    return 1  # Switch is ON
+            return control_signal
+            
+        for switch_id in self.power_switches:
+            control_signals.append(create_control_signal(switch_id, switch_times[switch_id]))
+            
         return control_signals
     
     def _get_switch_positions(self):
@@ -388,7 +394,7 @@ class Simulation:
         return DC_input_function
         
 
-    def run_solver(self, A, B, C, t_span, initial_conditions, input_function):
+    def run_solver(self, A, B, C, t_span, initial_conditions, input_function, control_signals):
         """
         Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
 
@@ -418,8 +424,24 @@ class Simulation:
             u = input_function(t)
             return (A_func @ x) + (B_func @ u)  # dx/dt = Ax + Bu
 
+        # Define event functions for each switch
+        switch_events = []
+        for i, control_signal in enumerate(control_signals):
+            def create_switch_event(switch_time):
+                def switch_event(t, x):
+                    return t - switch_time
+                switch_event.terminal = True
+                switch_event.direction = 0  # Detect both positive and negative crossings
+                return switch_event
+            
+            # Get the switch time from the circuit components
+            switch_id = self.power_switches[i]
+            switch_time = self.circuit_components[switch_id]["value"]
+            switch_events.append(create_switch_event(switch_time))
+
         # Solve ODE system
-        sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45")
+        sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45",
+                       events=switch_events)
 
         # Compute output y = Cx
         y = C_func @ sol.y
