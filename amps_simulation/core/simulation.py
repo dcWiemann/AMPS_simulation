@@ -76,9 +76,16 @@ class Simulation:
             logging.info("👾 Control signal at t=3: %s", control_signal(3))
 
         # # Step 1: Create electrical model and extract matrices
-        number_of_piecewise_linear_models, switch_positions = self._get_switch_positions()
+        number_of_piecewise_linear_models, possible_switch_positions = self._get_switch_positions()
         logging.info("👾 Number of piecewise linear models: %s", number_of_piecewise_linear_models)
-        logging.info("👾 Switch positions: %s", switch_positions)
+        logging.info("👾 Possible switch positions: %s", possible_switch_positions)
+        switch_positions_models = {}
+        for i in range(number_of_piecewise_linear_models):
+            switch_position = possible_switch_positions[i]
+            model = self.create_model(switch_position)
+            # create a hashmap of switch positions and models
+            switch_positions_models[switch_position] = model
+            logging.info("🎒 Model %s: %s", i, model)
 
         # Step 2: Substitute component values in A and B matrices
         component_values = self._get_component_values()
@@ -278,7 +285,7 @@ class Simulation:
         switch_positions = [bin(i)[2:].zfill(len(self.power_switches)) for i in range(number_of_piecewise_linear_models)]
         return number_of_piecewise_linear_models, switch_positions
 
-    def create_model(self):
+    def create_model(self, switch_position):
         """
         Extract differential equations from the circuit and convert to state space form.
         
@@ -295,7 +302,7 @@ class Simulation:
         # Create ElectricalModel instance and build model
         model = ElectricalModel(self.electrical_nodes, self.circuit_components, self.voltage_vars, 
                               self.current_vars, self.state_vars, self.state_derivatives, 
-                              self.input_vars, self.ground_node)
+                              self.input_vars, self.ground_node, self.power_switches, switch_position)
         solved_helpers, differential_equations = model.build_model()
         return model
 

@@ -18,7 +18,9 @@ class ElectricalModel:
                  state_vars: Dict[sp.Symbol, sp.Expr],
                  state_derivatives: Dict[sp.Symbol, sp.Expr],
                  input_vars: Dict[sp.Symbol, sp.Expr],
-                 ground_node: int):
+                 ground_node: int,
+                 switches: List[str],
+                 switch_position: str):
         """
         Initialize the ElectricalModel class.
         
@@ -40,6 +42,8 @@ class ElectricalModel:
         self.state_derivatives = state_derivatives
         self.input_vars = input_vars
         self.ground_node = ground_node
+        self.switches = switches
+        self.switch_position = switch_position
         
         # Initialize other attributes
         self.kcl_equations = []
@@ -85,8 +89,8 @@ class ElectricalModel:
         
         # Step 6: Extract state space matrices
         # self.A, self.B = self.extract_state_space_matrices()
-        logging.info("✅ Symbolic State matrix A: %s", self.A)
-        logging.info("✅ Symbolic Input matrix B: %s", self.B)
+        # logging.info("✅ Symbolic State matrix A: %s", self.A)
+        # logging.info("✅ Symbolic Input matrix B: %s", self.B)
         
         return self.solved_helpers, self.differential_equations
     
@@ -382,6 +386,31 @@ class ElectricalModel:
                 v_source = sp.Symbol(f"V_in_{comp_id}")
                 helper_eqs.append(v_node_1 - v_node_2 - v_source)
 
+            elif comp_data["type"] == "switch":
+                # Switch equation based on position
+                terminals = comp_data["terminals"]
+                node_1 = terminals["0"]
+                node_2 = terminals["1"]
+                
+                v_node_1 = self.voltage_vars.get(node_1, f"V_{node_1}")
+                v_node_2 = self.voltage_vars.get(node_2, f"V_{node_2}")
+                i_switch = self.current_vars[comp_id]
+
+                # Find the index of this switch in the switches list
+                try:
+                    switch_index = self.switches.index(comp_id)
+                    # Get the position (0 or 1) from the position string
+                    switch_pos = int(self.switch_position[switch_index])
+                    
+                    if switch_pos == 1:  # Switch is ON - voltage is 0
+                        helper_eqs.append(v_node_1 - v_node_2)  # V1 - V2 = 0
+                    else:  # Switch is OFF - current is 0
+                        helper_eqs.append(i_switch)  # I = 0
+                except ValueError:
+                    logging.warning(f"⚠ Switch {comp_id} not found in switches list")
+                    # Default to OFF state
+                    helper_eqs.append(i_switch)
+
         logging.info("ℹ️ Helper equation: %s", helper_eqs)
         logging.info("ℹ️ Unknown variables: %s", unknown_vars)
         logging.info("ℹ️ Number of unknown variables: %d", len(unknown_vars))
@@ -406,8 +435,7 @@ class ElectricalModel:
         # Substitute solved helper variables into the state_derivatives
         differential_equations = {var: expr.subs(self.solved_helpers) for var, expr in self.state_derivatives.items()}
 
-        return differential_equations
-    
+        return differential_equations    
  
 
     def _merge_supernodes(self, supernodes: Dict[str, Set[int]]) -> Dict[str, Set[int]]:
