@@ -472,11 +472,38 @@ class Simulation:
             switch_time = self.circuit_components[switch_id]["value"]
             switch_events.append(create_switch_event(switch_time))
 
+        # initial_switch_positions = '0' * len(self.power_switches)
+        # current_switch_positions = initial_switch_positions
         # Solve ODE system
-        sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45",
+        # sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45",
+                    #    events=switch_events)
+        sol_all = []
+        t = t_span[0]
+        while t < t_span[1]:
+            current_switch_positions = ''.join(str(int(signal(t))) for signal in control_signals)
+            logging.info("🥳 Current switch positions: %s", current_switch_positions)
+            selected_model = model_functions[current_switch_positions]
+            logging.info("🥳 Selected model: %s", selected_model)
+            sol = solve_ivp(selected_model, t_span, initial_conditions, method="RK45",
                        events=switch_events)
-
+            sol_all.append(sol)
+            t = sol.t[-1]
+            initial_conditions = sol.y[:, -1]
+            # Add a small offset to time to avoid re-triggering the same event
+            t_span = (t + 1e-6, t_span[1])
+            logging.info("🥳 Time: %s", t)
+            logging.info("🥳 Initial conditions: %s", initial_conditions)
+            logging.info("🥳 t_span: %s", t_span)
+            
+        # Combine results from all solver runs
+        if not sol_all:
+            return np.array([]), np.array([[]]), np.array([[]])
+        
+        # Combine time points and states from all solver runs
+        t_combined = np.concatenate([sol.t for sol in sol_all])
+        x_combined = np.hstack([sol.y for sol in sol_all])
+        
         # Compute output y = Cx
-        y = C_func @ sol.y
+        y_combined = C_func @ x_combined
 
-        return sol.t, sol.y, y 
+        return t_combined, x_combined, y_combined 
