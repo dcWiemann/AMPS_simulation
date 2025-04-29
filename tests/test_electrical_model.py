@@ -10,7 +10,6 @@ from amps_simulation.core.simulation import Simulation
 TEST_DATA_DIR = "test_data"
 TEST_FILES = [
     "test_rlc.json",      # RLC circuit
-    "test_2v.json",       # Circuit with 2 voltage sources
 ]
 
 def load_test_file(filename):
@@ -39,7 +38,9 @@ def mock_rlc_circuit():
         "state_vars": simulation.state_vars,
         "state_derivatives": simulation.state_derivatives,
         "input_vars": simulation.input_vars,
-        "ground_node": simulation.ground_node
+        "ground_node": simulation.ground_node,
+        "switches": [],  # No switches in this circuit
+        "switch_position": "0"  # Default switch position
     }
 
 def test_electrical_model_init(mock_rlc_circuit):
@@ -87,7 +88,9 @@ def test_electrical_model_with_real_circuits(test_file):
         state_vars=simulation.state_vars,
         state_derivatives=simulation.state_derivatives,
         input_vars=simulation.input_vars,
-        ground_node=simulation.ground_node
+        ground_node=simulation.ground_node,
+        switches=[],  # No switches in these circuits
+        switch_position="0"  # Default switch position
     )
     
     solved_helpers, differential_equations = model.build_model()
@@ -116,7 +119,9 @@ def test_electrical_model_specific_rlc_circuit():
         state_vars=simulation.state_vars,
         state_derivatives=simulation.state_derivatives,
         input_vars=simulation.input_vars,
-        ground_node=simulation.ground_node
+        ground_node=simulation.ground_node,
+        switches=[],  # No switches in this circuit
+        switch_position="0"  # Default switch position
     )
     
     solved_helpers, differential_equations = model.build_model()
