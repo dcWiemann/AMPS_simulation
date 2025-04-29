@@ -14,7 +14,10 @@ def plot_results(t, x, state_vars):
 
     # Plot each state variable
     for i, state in enumerate(state_vars):
-        plt.plot(t, x[i], label=f"${sp.latex(state)}$")
+        if i < len(x):  # Check if we have data for this state
+            plt.plot(t, x[i], label=f"${sp.latex(state)}$")
+        else:
+            print(f"Warning: No data available for state variable {state}")
 
     plt.xlabel("Time (s)")
     plt.ylabel("State Variables")
