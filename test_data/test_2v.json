@@ -5,8 +5,8 @@
       "type": "electrical-component",
       "initialized": false,
       "position": {
-        "x": 580,
-        "y": 380
+        "x": 540,
+        "y": 390
       },
       "data": {
         "svgPath": "/svg/voltage-source.svg",
@@ -28,7 +28,7 @@
         ],
         "label": "Voltage Source",
         "componentType": "voltage-source",
-        "value": 5
+        "value": 10
       },
       "increment": 2,
       "abbreviation": "V"
@@ -38,8 +38,8 @@
       "type": "electrical-component",
       "initialized": false,
       "position": {
-        "x": 700,
-        "y": 280
+        "x": 680,
+        "y": 300
       },
       "data": {
         "svgPath": "/svg/inductor.svg",
@@ -71,7 +71,7 @@
       "initialized": false,
       "position": {
         "x": 910,
-        "y": 280
+        "y": 300
       },
       "data": {
         "svgPath": "/svg/inductor.svg",
@@ -92,7 +92,7 @@
         ],
         "label": "Inductor",
         "componentType": "inductor",
-        "value": 0.001
+        "value": 0.002
       },
       "increment": 3,
       "abbreviation": "L"
@@ -202,7 +202,7 @@
       "initialized": false,
       "position": {
         "x": 1120,
-        "y": 400
+        "y": 420
       },
       "data": {
         "svgPath": "/svg/capacitor.svg",
@@ -224,7 +224,7 @@
         ],
         "label": "Capacitor",
         "componentType": "capacitor",
-        "value": 0.001
+        "value": 0.002
       },
       "increment": 3,
       "abbreviation": "C"
@@ -257,7 +257,7 @@
         ],
         "label": "Resistor",
         "componentType": "resistor",
-        "value": 1
+        "value": 2
       },
       "increment": 4,
       "abbreviation": "R"
@@ -290,35 +290,36 @@
         ],
         "label": "Resistor",
         "componentType": "resistor",
-        "value": 1
+        "value": 3
       },
       "increment": 5,
       "abbreviation": "R"
     },
     {
-      "id": "GND1",
+      "id": "GND2",
       "type": "electrical-component",
       "initialized": false,
       "position": {
-        "x": 920,
-        "y": 610
+        "x": 850,
+        "y": 600
       },
       "data": {
+        "label": "Ground",
         "svgPath": "/svg/ground.svg",
         "terminals": [
           {
             "id": "0",
             "position": "top",
             "x": 40,
-            "y": 12,
+            "y": 14,
             "type": "target"
           }
         ],
-        "label": "Ground",
         "componentType": "ground",
-        "value": 0
+        "value": 0,
+        "rotation": 0
       },
-      "increment": 1,
+      "increment": 3,
       "abbreviation": "GND"
     }
   ],
@@ -336,10 +337,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 905.9999993380359,
-      "sourceY": 320.0000680168086,
-      "targetX": 784.0001780683359,
-      "targetY": 320.0000887031859
+      "sourceX": 906,
+      "sourceY": 340,
+      "targetX": 764,
+      "targetY": 340
     },
     {
       "id": "vueflow__edge-L20-V20",
@@ -354,10 +355,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 695.9999993380359,
-      "sourceY": 320.0000887031859,
-      "targetX": 620.000088703186,
-      "targetY": 380
+      "sourceX": 676,
+      "sourceY": 340,
+      "targetX": 580,
+      "targetY": 390
     },
     {
       "id": "vueflow__edge-L30-V31",
@@ -372,10 +373,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 905.9999993380359,
-      "sourceY": 320.0000680168086,
-      "targetX": 840.000088703186,
-      "targetY": 240.0001567199945
+      "sourceX": 906,
+      "sourceY": 340,
+      "targetX": 840,
+      "targetY": 240
     },
     {
       "id": "vueflow__edge-R30-V30",
@@ -390,9 +391,9 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 935.9999993380359,
-      "sourceY": 130.0000680168086,
-      "targetX": 840.000088703186,
+      "sourceX": 936,
+      "sourceY": 130,
+      "targetX": 840,
       "targetY": 160
     },
     {
@@ -408,28 +409,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 1160.0000887031858,
-      "sourceY": 175.9999786516586,
-      "targetX": 1024.000178068336,
-      "targetY": 130.0000680168086
-    },
-    {
-      "id": "vueflow__edge-C30-C21",
-      "type": "step",
-      "source": "C3",
-      "target": "C2",
-      "sourceHandle": "0",
-      "targetHandle": "1",
-      "data": {},
-      "label": "",
-      "style": {
-        "stroke": "currentColor",
-        "strokeWidth": 2
-      },
-      "sourceX": 1160.0000887031858,
-      "sourceY": 395.99999933803593,
-      "targetX": 1160.0000887031858,
-      "targetY": 264.00015738195856
+      "sourceX": 1160,
+      "sourceY": 176,
+      "targetX": 1024,
+      "targetY": 130
     },
     {
       "id": "vueflow__edge-L31-C21",
@@ -444,10 +427,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 994.0001780683359,
-      "sourceY": 320.0000680168086,
-      "targetX": 1160.0000887031858,
-      "targetY": 264.00015738195856
+      "sourceX": 994,
+      "sourceY": 340,
+      "targetX": 1160,
+      "targetY": 264
     },
     {
       "id": "vueflow__edge-R40-V21",
@@ -462,10 +445,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 695.9999993380359,
-      "sourceY": 530.000088703186,
-      "targetX": 620.000088703186,
-      "targetY": 460.0001567199945
+      "sourceX": 696,
+      "sourceY": 530,
+      "targetX": 580,
+      "targetY": 470
     },
     {
       "id": "vueflow__edge-C31-R51",
@@ -480,10 +463,10 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 1160.0000887031858,
-      "sourceY": 484.0001780683359,
-      "targetX": 1114.0001969597936,
-      "targetY": 530.0000609373426
+      "sourceX": 1160,
+      "sourceY": 504,
+      "targetX": 1114,
+      "targetY": 530
     },
     {
       "id": "vueflow__edge-R50-R41",
@@ -498,17 +481,35 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 1026.0000367019159,
-      "sourceY": 530.0000609373426,
-      "targetX": 784.0001780683359,
-      "targetY": 530.000088703186
+      "sourceX": 1026,
+      "sourceY": 530,
+      "targetX": 784,
+      "targetY": 530
     },
     {
-      "id": "vueflow__edge-R50-GND10",
+      "id": "vueflow__edge-C30-C21",
       "type": "step",
-      "source": "R5",
-      "target": "GND1",
+      "source": "C3",
+      "target": "C2",
       "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 1160,
+      "sourceY": 416,
+      "targetX": 1160,
+      "targetY": 264
+    },
+    {
+      "id": "vueflow__edge-R41-GND20",
+      "type": "step",
+      "source": "R4",
+      "target": "GND2",
+      "sourceHandle": "1",
       "targetHandle": "0",
       "data": {},
       "label": "",
@@ -516,20 +517,20 @@
         "stroke": "currentColor",
         "strokeWidth": 2
       },
-      "sourceX": 1026.0000367019159,
-      "sourceY": 530.0000609373426,
-      "targetX": 960.0000050438305,
-      "targetY": 618.0000383831926
+      "sourceX": 784,
+      "sourceY": 530,
+      "targetX": 890,
+      "targetY": 610
     }
   ],
   "position": [
-    21.963972161635866,
-    4.7667876410343695
+    121.67847751249337,
+    54.411846916290244
   ],
-  "zoom": 1.091992161749315,
+  "zoom": 0.8356452381145009,
   "viewport": {
-    "x": 21.963972161635866,
-    "y": 4.7667876410343695,
-    "zoom": 1.091992161749315
+    "x": 121.67847751249337,
+    "y": 54.411846916290244,
+    "zoom": 0.8356452381145009
   }
 }
