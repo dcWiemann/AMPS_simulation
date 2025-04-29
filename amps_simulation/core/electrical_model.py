@@ -184,7 +184,10 @@ class ElectricalModel:
 
                         # Express current for each component type
                         if comp_id in self.current_vars:
-                            equation += self.current_vars[comp_id]
+                            if terminal_id == "0":  # Convention: Current entering the node is positive
+                                equation += self.current_vars[comp_id]
+                            elif terminal_id == "1":  # Current leaving the node is negative
+                                equation -= self.current_vars[comp_id]
                             logging.debug("ℹ️ Current variable %s added to equation: %s", self.current_vars[comp_id], equation)
 
             logging.debug("ℹ️ Supernode equation: %s = 0", equation)
