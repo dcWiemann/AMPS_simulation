@@ -424,6 +424,29 @@ class Simulation:
             
         return model_functions
 
+    def _get_switch_events(self):
+        """
+        Creates event functions for each switch in the circuit.
+        
+        Returns:
+            List of event functions that detect when a switch changes state
+        """
+        switch_events = []
+        
+        for i, switch_id in enumerate(self.power_switches):
+            def create_switch_event(switch_time):
+                def switch_event(t, x):
+                    return t - switch_time
+                switch_event.terminal = True
+                switch_event.direction = 0  # Detect both positive and negative crossings
+                return switch_event
+            
+            # Get the switch time from the circuit components
+            switch_time = self.circuit_components[switch_id]["value"]
+            switch_events.append(create_switch_event(switch_time))
+            
+        return switch_events
+
     def run_solver(self, A, B, C, t_span, initial_conditions, input_function, control_signals, switch_positions_models):
         """
         Numerically solves the ODE system dx/dt = Ax + Bu using solve_ivp.
@@ -448,6 +471,12 @@ class Simulation:
         B_func = np.array(B).astype(float)
         C_func = np.array(C).astype(float)
 
+        # Compute and display eigenvalues
+        eigenvalues = np.linalg.eigvals(A_func)
+        logging.info("🔍 Eigenvalues of A: %s", eigenvalues)
+        logging.info("🔍 Real parts of eigenvalues: %s", np.real(eigenvalues))
+        logging.info("🔍 Imaginary parts of eigenvalues: %s", np.imag(eigenvalues))
+
         # Define time points at fixed 0.1s intervals
         t_eval = np.arange(t_span[0], t_span[1], 0.1)  # Time points at 0.1s resolution
 
@@ -457,35 +486,38 @@ class Simulation:
         # Get model functions for each switch position
         model_functions = self._get_model_functions(switch_positions_models, component_values, input_function)
 
-        # Define event functions for each switch
-        switch_events = []
-        for i, control_signal in enumerate(control_signals):
-            def create_switch_event(switch_time):
-                def switch_event(t, x):
-                    return t - switch_time
-                switch_event.terminal = True
-                switch_event.direction = 0  # Detect both positive and negative crossings
-                return switch_event
-            
-            # Get the switch time from the circuit components
-            switch_id = self.power_switches[i]
-            switch_time = self.circuit_components[switch_id]["value"]
-            switch_events.append(create_switch_event(switch_time))
+        # Get switch events
+        switch_events = self._get_switch_events()
 
-        # initial_switch_positions = '0' * len(self.power_switches)
-        # current_switch_positions = initial_switch_positions
-        # Solve ODE system
-        # sol = solve_ivp(state_space_ode, t_span, initial_conditions, method="RK45",
-                    #    events=switch_events)
         sol_all = []
         t = t_span[0]
         while t < t_span[1]:
-            current_switch_positions = ''.join(str(int(signal(t))) for signal in control_signals)
+            if not control_signals:
+                current_switch_positions = '0'  # Default switch position when no control signals
+            else:
+                current_switch_positions = ''.join(str(int(signal(t))) for signal in control_signals)
             logging.info("🥳 Current switch positions: %s", current_switch_positions)
             selected_model = model_functions[current_switch_positions]
             logging.info("🥳 Selected model: %s", selected_model)
             sol = solve_ivp(selected_model, t_span, initial_conditions, method="RK45",
                        events=switch_events)
+            
+            # Check why the solver stopped
+            if sol.status == -1:
+                logging.warning("⚠️ Solver failed to reach the end time. This might indicate an unstable system.")
+                if len(sol.t) > 0:  # If we have any results, add them
+                    sol_all.append(sol)
+                break
+            elif sol.status == 1:
+                logging.info("✅ Solver stopped due to a switch event")
+            elif sol.status == 0:
+                logging.info("✅ Solver completed successfully")
+            else:
+                logging.warning(f"⚠️ Solver stopped with unknown status: {sol.status}")
+                if len(sol.t) > 0:  # If we have any results, add them
+                    sol_all.append(sol)
+                break
+                
             sol_all.append(sol)
             t = sol.t[-1]
             initial_conditions = sol.y[:, -1]
@@ -497,7 +529,7 @@ class Simulation:
             
         # Combine results from all solver runs
         if not sol_all:
-            return np.array([]), np.array([[]]), np.array([[]])
+            return np.array([0.0]), np.array([[0.0] * len(initial_conditions)]), np.array([[0.0] * len(initial_conditions)])
         
         # Combine time points and states from all solver runs
         t_combined = np.concatenate([sol.t for sol in sol_all])
