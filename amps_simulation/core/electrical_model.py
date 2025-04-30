@@ -72,6 +72,7 @@ class ElectricalModel:
         logging.info("🔌 Building electrical model with switches: %s and positions: %s", self.switches, self.switch_position)
         # Step 0: Check model for errors
         self.check_model_for_errors()
+        logging.debug("⚠ Model errors: %s", self.errors)
 
         # Step 1: Write KCL equations
         self.kcl_equations, self.supernodes = self.write_kcl_equations()
@@ -560,6 +561,73 @@ class ElectricalModel:
         """
         Checks the model for errors and raises an exception if any are found.
         """
-        # Check for shorted voltage sources
-        # Find all loops that contain a voltage source
+        self._check_shorted_voltage_sources()
+        return self.errors
+    
+
+    def _check_shorted_voltage_sources(self):
+        """
+        Checks for voltage source short circuits and appends any errors to self.errors.
+        """
+        # Step 1: Find all voltage sources
+        voltage_sources = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
+                          if comp["type"] == "voltage-source"}
         
+        # Step 2: Check for voltage sources directly connected to the same node
+        for vs_id, vs in voltage_sources.items():
+            terminals = vs["terminals"]
+            if len(set(terminals.values())) < 2:  # Both terminals connected to same node
+                self.errors.append(f"Voltage source {vs_id} is short-circuited: both terminals are connected to the same node")
+        
+        # Step 3: Find all loops that contain voltage sources
+        self.loops = self.find_loops()
+        voltage_source_loops = []
+        
+        for loop in self.loops:
+            # Check if any voltage source is in this loop
+            for i in range(len(loop)):
+                node_a = loop[i]
+                node_b = loop[(i + 1) % len(loop)]
+                
+                # Find component connecting these nodes
+                for comp_id, comp in self.circuit_components.items():
+                    if set(comp["terminals"].values()) == {node_a, node_b}:
+                        if comp["type"] == "voltage-source":
+                            voltage_source_loops.append(loop)
+                            break
+        
+        # Step 4: Check for short circuits in voltage source loops
+        for loop in voltage_source_loops:
+            # Check if all switches in the loop are ON (position = 1)
+            all_switches_on = True
+            for i in range(len(loop)):
+                node_a = loop[i]
+                node_b = loop[(i + 1) % len(loop)]
+                
+                # Find component connecting these nodes
+                for comp_id, comp in self.circuit_components.items():
+                    if set(comp["terminals"].values()) == {node_a, node_b}:
+                        if comp["type"] == "switch":
+                            try:
+                                switch_index = self.switches.index(comp_id)
+                                if self.switch_position[switch_index] != 1:  # Switch is OFF
+                                    all_switches_on = False
+                                    break
+                            except ValueError:
+                                logging.warning(f"Switch {comp_id} not found in switches tuple")
+                                all_switches_on = False
+                                break
+            
+            if all_switches_on:
+                # Find the voltage source in this loop
+                for i in range(len(loop)):
+                    node_a = loop[i]
+                    node_b = loop[(i + 1) % len(loop)]
+                    
+                    for comp_id, comp in self.circuit_components.items():
+                        if set(comp["terminals"].values()) == {node_a, node_b}:
+                            if comp["type"] == "voltage-source":
+                                self.errors.append(f"Voltage source {comp_id} is short-circuited by switches in loop {loop}")        
+
+
+    
