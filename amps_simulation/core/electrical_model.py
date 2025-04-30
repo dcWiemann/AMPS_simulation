@@ -19,8 +19,8 @@ class ElectricalModel:
                  state_derivatives: Dict[sp.Symbol, sp.Expr],
                  input_vars: Dict[sp.Symbol, sp.Expr],
                  ground_node: int,
-                 switches: List[str],
-                 switch_position: str):
+                 switches: Tuple[str, ...],
+                 switch_position: Tuple[int, ...]):
         """
         Initialize the ElectricalModel class.
         
@@ -33,6 +33,8 @@ class ElectricalModel:
             state_derivatives: { state_variable: derivative_expression }
             input_vars: { input_variable: expression }
             ground_node: The ground node ID
+            switches: Tuple of switch component IDs
+            switch_position: Tuple of integers (0=OFF, 1=ON) representing the position of each switch
         """
         self.electrical_nodes = electrical_nodes
         self.circuit_components = circuit_components
@@ -54,6 +56,7 @@ class ElectricalModel:
         self.differential_equations = {}
         self.A = None
         self.B = None
+        self.errors = []
         
     def build_model(self):
         """
@@ -66,6 +69,10 @@ class ElectricalModel:
             - solved_helpers: Dictionary of solved helper variables
             - differential_equations: Dictionary of state derivatives
         """
+        logging.info("🔌 Building electrical model with switches: %s and positions: %s", self.switches, self.switch_position)
+        # Step 0: Check model for errors
+        self.check_model_for_errors()
+
         # Step 1: Write KCL equations
         self.kcl_equations, self.supernodes = self.write_kcl_equations()
         logging.debug("✅ Supernodes: %s", self.supernodes)
@@ -399,18 +406,20 @@ class ElectricalModel:
                 v_node_2 = self.voltage_vars.get(node_2, f"V_{node_2}")
                 i_switch = self.current_vars[comp_id]
 
-                # Find the index of this switch in the switches list
+                # Find the index of this switch in the switches tuple
                 try:
                     switch_index = self.switches.index(comp_id)
-                    # Get the position (0 or 1) from the position string
-                    switch_pos = int(self.switch_position[switch_index])
+                    logging.info("🔌 Processing switch %s at index %d with position %d", 
+                              comp_id, switch_index, self.switch_position[switch_index])
+                    # Get the position (0 or 1) from the position tuple
+                    switch_pos = self.switch_position[switch_index]
                     
                     if switch_pos == 1:  # Switch is ON - voltage is 0
                         helper_eqs.append(v_node_1 - v_node_2)  # V1 - V2 = 0
                     else:  # Switch is OFF - current is 0
                         helper_eqs.append(i_switch)  # I = 0
                 except ValueError:
-                    logging.warning(f"⚠ Switch {comp_id} not found in switches list")
+                    logging.warning("⚠ Switch %s not found in switches tuple %s", comp_id, self.switches)
                     # Default to OFF state
                     helper_eqs.append(i_switch)
 
@@ -545,3 +554,12 @@ class ElectricalModel:
                 removed_nodes.update(nodes)
                 
         return valid_supernodes, removed_nodes 
+    
+
+    def check_model_for_errors(self):
+        """
+        Checks the model for errors and raises an exception if any are found.
+        """
+        # Check for shorted voltage sources
+        # Find all loops that contain a voltage source
+        
