@@ -24,7 +24,7 @@ class Simulation:
         """
         self.electrical_nodes = electrical_nodes
         self.circuit_components = circuit_components
-        self.power_switches = []
+        self.power_switches = ()  # Empty tuple instead of empty list
         self.voltage_vars = {}
         self.current_vars = {}
         self.state_vars = {}
@@ -72,16 +72,20 @@ class Simulation:
         
         control_signals = self._get_control_signals()
         logging.info("👾 Control signals: %s", control_signals)
-        for control_signal in control_signals:
-            logging.info("👾 Control signal at t=1: %s", control_signal(2))
+        for i, control_signal in enumerate(control_signals):
+            logging.info("👾 Control signal %d at t=1: %s", i, control_signal(1))
 
-        # # Step 1: Create electrical model and extract matrices
+        # Step 1: Create electrical model and extract matrices
         number_of_piecewise_linear_models, possible_switch_positions = self._get_switch_positions()
         logging.info("👾 Number of piecewise linear models: %s", number_of_piecewise_linear_models)
         logging.info("👾 Possible switch positions: %s", possible_switch_positions)
+        logging.info("👾 Power switches: %s", self.power_switches)
+        
         switch_positions_models = {}
         for i in range(number_of_piecewise_linear_models):
+            logging.info("🎒 Iteration: %s", i)
             switch_position = possible_switch_positions[i]
+            logging.info("🎒 Switch position: %s", switch_position)
             model = self.create_model(switch_position)
             # create a hashmap of switch positions and models
             switch_positions_models[switch_position] = model
@@ -239,17 +243,17 @@ class Simulation:
         return state_vars, state_derivatives, input_vars
     
 
-    def _extract_power_switches(self) -> List[str]:
+    def _extract_power_switches(self) -> Tuple[str, ...]:
         """
         Extracts power switches from the circuit components.
         
         Returns:
-            List[str]: A list containing the IDs of all power switches in the circuit
+            Tuple[str, ...]: A tuple containing the IDs of all power switches in the circuit
         """
-        self.power_switches = [
+        self.power_switches = tuple(
             comp_id for comp_id, comp_data in self.circuit_components.items()
             if comp_data["type"] == "switch"
-        ]
+        )
         return self.power_switches
     
     def _get_control_signals(self):
@@ -260,7 +264,7 @@ class Simulation:
             control_signals: list of functions of time
         """
         control_signals = []
-        # switch times: {switch_id: [times]}
+        # switch times: {switch_id: switch_time}
         switch_times = {}
         for switch_id in self.power_switches:
             switch_times[switch_id] = self.circuit_components[switch_id]["value"]
@@ -274,8 +278,11 @@ class Simulation:
                     return 1  # Switch is ON
             return control_signal
             
-        for switch_id in self.power_switches:
-            control_signals.append(create_control_signal(switch_id, switch_times[switch_id]))
+        # Convert to tuple of control signals to match power_switches tuple
+        control_signals = tuple(
+            create_control_signal(switch_id, switch_times[switch_id]) 
+            for switch_id in self.power_switches
+        )
             
         return control_signals
     
@@ -285,10 +292,16 @@ class Simulation:
 
         Returns:
             number_of_piecewise_linear_models: int
-            switch_positions: list of bitstrings
+            switch_positions: list of tuples representing switch states (0=OFF, 1=ON)
         """
         number_of_piecewise_linear_models = 2**len(self.power_switches)
-        switch_positions = [bin(i)[2:].zfill(len(self.power_switches)) for i in range(number_of_piecewise_linear_models)]
+        # Create tuples of 0s and 1s instead of bitstrings
+        switch_positions = []
+        for i in range(number_of_piecewise_linear_models):
+            # Convert integer to binary representation, then to tuple of integers
+            binary = bin(i)[2:].zfill(len(self.power_switches))
+            position_tuple = tuple(int(bit) for bit in binary)
+            switch_positions.append(position_tuple)
         return number_of_piecewise_linear_models, switch_positions
 
     def create_model(self, switch_position):
@@ -296,14 +309,10 @@ class Simulation:
         Extract differential equations from the circuit and convert to state space form.
         
         Args:
-            components: List of circuit components from JSON.
+            switch_position: Tuple of integers (0=OFF, 1=ON) representing the position of each switch
             
         Returns:
-            Tuple containing:
-            - A_substituted: State matrix with numerical values
-            - B_substituted: Input matrix with numerical values
-            - state_vars: Dictionary of state variables
-            - input_vars: Dictionary of input variables
+            An ElectricalModel instance with the model built for the given switch positions
         """
         # Create ElectricalModel instance and build model
         model = ElectricalModel(self.electrical_nodes, self.circuit_components, self.voltage_vars, 
@@ -399,7 +408,7 @@ class Simulation:
         Create state space model functions for each switch position.
         
         Args:
-            switch_positions_models: Dictionary mapping switch positions to their models
+            switch_positions_models: Dictionary mapping switch positions (as tuples) to their models
             component_values: List of component values for substitution
             input_function: Function that returns input values at time t
             
@@ -429,7 +438,7 @@ class Simulation:
         Creates event functions for each switch in the circuit.
         
         Returns:
-            List of event functions that detect when a switch changes state
+            Tuple of event functions that detect when a switch changes state
         """
         switch_events = []
         
@@ -445,7 +454,7 @@ class Simulation:
             switch_time = self.circuit_components[switch_id]["value"]
             switch_events.append(create_switch_event(switch_time))
             
-        return switch_events
+        return tuple(switch_events)  # Return as tuple
 
     def run_solver(self, A, B, C, t_span, initial_conditions, input_function, control_signals, switch_positions_models):
         """
@@ -458,8 +467,8 @@ class Simulation:
         - t_span: Tuple (t_start, t_end) defining the time range.
         - initial_conditions: Initial state vector (same size as state variables).
         - input_function: Function u(t) defining the input voltage/current.
-        - control_signals: List of control signal functions for switches
-        - switch_positions_models: Dictionary mapping switch positions to their models
+        - control_signals: Tuple of control signal functions for switches
+        - switch_positions_models: Dictionary mapping switch positions (as tuples) to their models
 
         Returns:
         - t: Time points from simulation.
@@ -485,7 +494,7 @@ class Simulation:
         
         # Get model functions for each switch position
         model_functions = self._get_model_functions(switch_positions_models, component_values, input_function)
-
+        logging.info("👾 Model functions: %s", model_functions)
         # Get switch events
         switch_events = self._get_switch_events()
 
@@ -493,9 +502,10 @@ class Simulation:
         t = t_span[0]
         while t < t_span[1]:
             if not control_signals:
-                current_switch_positions = '0'  # Default switch position when no control signals
+                current_switch_positions = (0,)  # Default switch position when no control signals
             else:
-                current_switch_positions = ''.join(str(int(signal(t))) for signal in control_signals)
+                # Create tuple of switch positions at current time t
+                current_switch_positions = tuple(int(signal(t)) for signal in control_signals)
             logging.info("🥳 Current switch positions: %s", current_switch_positions)
             selected_model = model_functions[current_switch_positions]
             logging.info("🥳 Selected model: %s", selected_model)
