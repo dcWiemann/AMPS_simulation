@@ -72,7 +72,7 @@ class ElectricalModel:
         logging.info("🔌 Building electrical model with switches: %s and positions: %s", self.switches, self.switch_position)
         # Step 0: Check model for errors
         self.check_model_for_errors()
-        logging.debug("⚠ Model errors: %s", self.errors)
+        logging.debug("❌ Model errors: %s", self.errors)
 
         # Step 1: Write KCL equations
         self.kcl_equations, self.supernodes = self.write_kcl_equations()
@@ -557,77 +557,285 @@ class ElectricalModel:
         return valid_supernodes, removed_nodes 
     
 
+    def _are_components_parallel(self, comp1_id: str, comp1_data: Dict, comp2_id: str, comp2_data: Dict) -> bool:
+        """
+        Checks if two components are connected in parallel (i.e., share the same pair of nodes
+        or are connected through a path of ON switches).
+        
+        Args:
+            comp1_id: ID of the first component
+            comp1_data: Data dictionary of the first component
+            comp2_id: ID of the second component
+            comp2_data: Data dictionary of the second component
+            
+        Returns:
+            bool: True if the components are connected in parallel, False otherwise
+        """
+        # Get the node pairs for each component
+        comp1_nodes = tuple(sorted(comp1_data["terminals"].values()))
+        comp2_nodes = tuple(sorted(comp2_data["terminals"].values()))
+        
+        # First check if they share the same pair of nodes
+        if comp1_nodes == comp2_nodes:
+            return True
+            
+        # If not directly parallel, check for paths through ON switches
+        # Find all loops that contain either component
+        self.loops = self.find_loops()
+        
+        # For each loop, check if both components are in it and connected through ON switches
+        for loop in self.loops:
+            # Find both components' nodes in this loop
+            comp1_loop_nodes = None
+            comp2_loop_nodes = None
+            
+            for i in range(len(loop)):
+                node_a = loop[i]
+                node_b = loop[(i + 1) % len(loop)]
+                
+                # Find components connecting these nodes
+                for other_comp_id, other_comp in self.circuit_components.items():
+                    terminal_nodes = tuple(sorted(other_comp["terminals"].values()))
+                    if terminal_nodes == tuple(sorted((node_a, node_b))):
+                        if other_comp_id == comp1_id:
+                            comp1_loop_nodes = (node_a, node_b)
+                        elif other_comp_id == comp2_id:
+                            comp2_loop_nodes = (node_a, node_b)
+                            
+            if not comp1_loop_nodes or not comp2_loop_nodes:
+                continue  # One or both components not in this loop
+                
+            # Find all ON switches in this loop
+            switches_in_loop = []
+            for i in range(len(loop)):
+                node_a = loop[i]
+                node_b = loop[(i + 1) % len(loop)]
+                
+                for other_comp_id, other_comp in self.circuit_components.items():
+                    if other_comp["type"] == "switch":
+                        terminal_nodes = tuple(sorted(other_comp["terminals"].values()))
+                        if terminal_nodes == tuple(sorted((node_a, node_b))):
+                            try:
+                                switch_index = self.switches.index(other_comp_id)
+                                if self.switch_position[switch_index] == 1:  # Switch is ON
+                                    switches_in_loop.append((other_comp_id, node_a, node_b))
+                            except ValueError:
+                                logging.warning(f"Switch {other_comp_id} not found in switches tuple")
+                                
+            # Create a graph of nodes connected by ON switches
+            switch_graph = defaultdict(set)
+            for _, sw_node_a, sw_node_b in switches_in_loop:
+                switch_graph[sw_node_a].add(sw_node_b)
+                switch_graph[sw_node_b].add(sw_node_a)
+                
+            # Check if there's a path between any of the component terminals through ON switches
+            visited = set()
+            def dfs(node, target):
+                if node == target:
+                    return True
+                visited.add(node)
+                for next_node in switch_graph[node]:
+                    if next_node not in visited:
+                        if dfs(next_node, target):
+                            return True
+                return False
+                
+            # Check all combinations of component terminals
+            for comp1_node in comp1_loop_nodes:
+                for comp2_node in comp2_loop_nodes:
+                    if dfs(comp1_node, comp2_node):
+                        return True
+                        
+        return False
+
+    def _check_parallel_voltage_sources(self):
+        """
+        Checks for voltage sources connected in parallel and appends any errors to self.errors.
+        """
+        # Find all voltage sources
+        voltage_sources = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
+                          if comp["type"] == "voltage-source"}
+        
+        # Check each pair of voltage sources
+        vs_ids = list(voltage_sources.keys())
+        for i in range(len(vs_ids)):
+            for j in range(i + 1, len(vs_ids)):
+                comp1_id = vs_ids[i]
+                comp2_id = vs_ids[j]
+                
+                if self._are_components_parallel(comp1_id, voltage_sources[comp1_id], 
+                                               comp2_id, voltage_sources[comp2_id]):
+                    self.errors.append(f"Voltage sources {comp1_id} and {comp2_id} are connected in parallel")
+                    logging.debug("❌ Found parallel voltage sources: %s and %s", comp1_id, comp2_id)
+
+    def _check_parallel_voltage_source_capacitor(self):
+        """
+        Checks for voltage sources connected in parallel with capacitors and appends any errors to self.errors.
+        """
+        # Find all voltage sources and capacitors
+        voltage_sources = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
+                          if comp["type"] == "voltage-source"}
+        capacitors = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
+                     if comp["type"] == "capacitor"}
+        
+        # Check each voltage source against each capacitor
+        for vs_id, vs_data in voltage_sources.items():
+            for cap_id, cap_data in capacitors.items():
+                if self._are_components_parallel(vs_id, vs_data, cap_id, cap_data):
+                    self.errors.append(f"Voltage source {vs_id} is connected in parallel with capacitor {cap_id}")
+                    logging.debug("❌ Found voltage source %s in parallel with capacitor %s", vs_id, cap_id)
+                    return  # Return after finding first parallel connection
+
+    def _check_parallel_capacitors(self):
+        """
+        Checks for capacitors connected in parallel and logs them for debugging purposes.
+        Does not append errors to self.errors as parallel capacitors are handled differently.
+        """
+        # Find all capacitors
+        capacitors = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
+                     if comp["type"] == "capacitor"}
+        
+        # Check each pair of capacitors
+        cap_ids = list(capacitors.keys())
+        for i in range(len(cap_ids)):
+            for j in range(i + 1, len(cap_ids)):
+                comp1_id = cap_ids[i]
+                comp2_id = cap_ids[j]
+                
+                if self._are_components_parallel(comp1_id, capacitors[comp1_id], 
+                                               comp2_id, capacitors[comp2_id]):
+                    logging.debug("ℹ️ Found parallel capacitors: %s and %s", comp1_id, comp2_id)
+
     def check_model_for_errors(self):
         """
         Checks the model for errors and raises an exception if any are found.
         """
-        self._check_shorted_voltage_sources()
+        self._check_short_circuit_voltage_sources()
+        self._check_short_circuit_capacitors()
+        self._check_parallel_voltage_sources()
+        self._check_parallel_voltage_source_capacitor()
+        self._check_parallel_capacitors()
         return self.errors
-    
 
-    def _check_shorted_voltage_sources(self):
+    def _check_short_circuit_voltage_sources(self):
         """
         Checks for voltage source short circuits and appends any errors to self.errors.
         """
-        # Step 1: Find all voltage sources
+        # Find all voltage sources
         voltage_sources = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
                           if comp["type"] == "voltage-source"}
         
-        # Step 2: Check for voltage sources directly connected to the same node
-        for vs_id, vs in voltage_sources.items():
-            terminals = vs["terminals"]
-            if len(set(terminals.values())) < 2:  # Both terminals connected to same node
-                self.errors.append(f"Voltage source {vs_id} is short-circuited: both terminals are connected to the same node")
+        logging.debug("🔍 Checking voltage sources: %s", voltage_sources)
         
-        # Step 3: Find all loops that contain voltage sources
-        self.loops = self.find_loops()
-        voltage_source_loops = []
+        # Check all voltage sources for short circuits
+        for comp_id, comp_data in voltage_sources.items():
+            is_short, reason = self._is_component_short_circuited(comp_id, comp_data)
+            if is_short:
+                self.errors.append(f"Voltage source {comp_id} is short-circuited: {reason}")
+                logging.debug("❌ Found short circuit for voltage source %s: %s", comp_id, reason)
+
+    def _check_short_circuit_capacitors(self):
+        """
+        Checks for capacitor short circuits and appends any errors to self.errors.
+        """
+        # Find all capacitors
+        capacitors = {comp_id: comp for comp_id, comp in self.circuit_components.items() 
+                     if comp["type"] == "capacitor"}
         
-        for loop in self.loops:
-            # Check if any voltage source is in this loop
-            for i in range(len(loop)):
-                node_a = loop[i]
-                node_b = loop[(i + 1) % len(loop)]
-                
-                # Find component connecting these nodes
-                for comp_id, comp in self.circuit_components.items():
-                    if set(comp["terminals"].values()) == {node_a, node_b}:
-                        if comp["type"] == "voltage-source":
-                            voltage_source_loops.append(loop)
-                            break
+        logging.debug("🔍 Checking capacitors: %s", capacitors)
         
-        # Step 4: Check for short circuits in voltage source loops
-        for loop in voltage_source_loops:
-            # Check if all switches in the loop are ON (position = 1)
-            all_switches_on = True
-            for i in range(len(loop)):
-                node_a = loop[i]
-                node_b = loop[(i + 1) % len(loop)]
-                
-                # Find component connecting these nodes
-                for comp_id, comp in self.circuit_components.items():
-                    if set(comp["terminals"].values()) == {node_a, node_b}:
-                        if comp["type"] == "switch":
-                            try:
-                                switch_index = self.switches.index(comp_id)
-                                if self.switch_position[switch_index] != 1:  # Switch is OFF
-                                    all_switches_on = False
-                                    break
-                            except ValueError:
-                                logging.warning(f"Switch {comp_id} not found in switches tuple")
-                                all_switches_on = False
-                                break
+        # Check all capacitors for short circuits
+        for comp_id, comp_data in capacitors.items():
+            is_short, reason = self._is_component_short_circuited(comp_id, comp_data)
+            if is_short:
+                self.errors.append(f"Capacitor {comp_id} is short-circuited: {reason}")
+                logging.debug("❌ Found short circuit for capacitor %s: %s", comp_id, reason)
+
+    def _is_component_short_circuited(self, comp_id: str, comp_data: Dict) -> Tuple[bool, str]:
+        """
+        Checks if a component is short-circuited either by having both terminals connected to the same node
+        or by having a path of ON switches between its terminals.
+        
+        Args:
+            comp_id: The ID of the component to check
+            comp_data: The component data dictionary
             
-            if all_switches_on:
-                # Find the voltage source in this loop
-                for i in range(len(loop)):
-                    node_a = loop[i]
-                    node_b = loop[(i + 1) % len(loop)]
+        Returns:
+            Tuple[bool, str]: 
+                - True if the component is short-circuited, False otherwise
+                - A string describing the type of short circuit if one exists
+        """
+        # Check if both terminals are connected to the same node
+        terminals = comp_data["terminals"]
+        connected_nodes = set(terminals.values())
+        if len(connected_nodes) < 2:
+            return True, "both terminals connected to the same node"
+            
+        # Find all loops that contain this component
+        self.loops = self.find_loops()
+        
+        # For each loop containing this component, check for paths of ON switches
+        for loop in self.loops:
+            # Find the component's nodes in this loop
+            component_nodes = None
+            for i in range(len(loop)):
+                node_a = loop[i]
+                node_b = loop[(i + 1) % len(loop)]
+                
+                # Find component connecting these nodes
+                for other_comp_id, other_comp in self.circuit_components.items():
+                    terminal_nodes = tuple(sorted(other_comp["terminals"].values()))
+                    if terminal_nodes == tuple(sorted((node_a, node_b))):
+                        if other_comp_id == comp_id:
+                            component_nodes = (node_a, node_b)
+                            break
+                if component_nodes:
+                    break
                     
-                    for comp_id, comp in self.circuit_components.items():
-                        if set(comp["terminals"].values()) == {node_a, node_b}:
-                            if comp["type"] == "voltage-source":
-                                self.errors.append(f"Voltage source {comp_id} is short-circuited by switches in loop {loop}")        
+            if not component_nodes:
+                continue
+                
+            # Find all ON switches in this loop
+            switches_in_loop = []
+            for i in range(len(loop)):
+                node_a = loop[i]
+                node_b = loop[(i + 1) % len(loop)]
+                
+                for other_comp_id, other_comp in self.circuit_components.items():
+                    if other_comp["type"] == "switch":
+                        terminal_nodes = tuple(sorted(other_comp["terminals"].values()))
+                        if terminal_nodes == tuple(sorted((node_a, node_b))):
+                            try:
+                                switch_index = self.switches.index(other_comp_id)
+                                if self.switch_position[switch_index] == 1:  # Switch is ON
+                                    switches_in_loop.append((other_comp_id, node_a, node_b))
+                            except ValueError:
+                                logging.warning(f"Switch {other_comp_id} not found in switches tuple")
+                                
+            # Create a graph of nodes connected by ON switches
+            switch_graph = defaultdict(set)
+            for _, sw_node_a, sw_node_b in switches_in_loop:
+                switch_graph[sw_node_a].add(sw_node_b)
+                switch_graph[sw_node_b].add(sw_node_a)
+                
+            # Check if there's a path between component terminals through ON switches
+            visited = set()
+            def dfs(node, target):
+                if node == target:
+                    return True
+                visited.add(node)
+                for next_node in switch_graph[node]:
+                    if next_node not in visited:
+                        if dfs(next_node, target):
+                            return True
+                return False
+                
+            # If there's a path between the component terminals through ON switches,
+            # we have a short circuit
+            if dfs(component_nodes[0], component_nodes[1]):
+                return True, f"path of ON switches in loop {loop}"
+                
+        return False, ""
 
 
     
