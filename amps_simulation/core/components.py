@@ -16,7 +16,6 @@ class Resistor(Component):
 class Capacitor(Component):
     """Capacitor component."""
     capacitance: float = Field(..., description="Capacitance value in farads", ge=0)
-    V_max: Optional[float] = Field(None, description="Maximum voltage rating in volts")
 
 class Inductor(Component):
     """Inductor component."""
@@ -25,22 +24,20 @@ class Inductor(Component):
 
 class PowerSwitch(Component):
     """Power switch component."""
-    R_on: Optional[float] = Field(..., description="On-state resistance in ohms", ge=0)
-    R_off: Optional[float] = Field(..., description="Off-state resistance in ohms", ge=0)
-    V_max: Optional[float] = Field(..., description="Maximum blocking voltage rating in volts", gt=0)
-    I_max: Optional[float] = Field(..., description="Maximum current rating in amperes", gt=0)
+    pass
 
 class Diode(Component):
     """Diode component."""
-    V_th: Optional[float] = Field(..., description="Forward voltage drop in volts", ge=0)
-    V_rb: Optional[float] = Field(..., description="Reverse breakdown voltage in volts", lt=0)
+    pass
 
 class VoltageSource(Component):
     """Voltage source component."""
     voltage: float = Field(..., description="Voltage value in volts")
-    R_s: Optional[float] = Field(0, description="Series resistance in ohms", ge=0)
 
 class CurrentSource(Component):
     """Current source component."""
     current: float = Field(..., description="Current value in amperes")
-    R_p: Optional[float] = Field(float('inf'), description="Parallel resistance in ohms", gt=0) 
+
+class Ground(Component):
+    """Ground component."""
+    pass
