@@ -1,7 +1,7 @@
 # main function to run simulation with test_data/test_rrc_gnd.json
 import numpy as np
 from amps_simulation.core.utils import plot_results
-from amps_simulation.core.parser import ParserJson
+from amps_simulation.core.parser import ParserJson_todict
 from amps_simulation.core.simulation import Simulation
 import logging
 import json
@@ -29,7 +29,7 @@ def run_simulation_from_file(file_path, test_mode=False):
 
 def run_simulation(circuit_json_data, test_mode=False):
     # Create a parser instance
-    parser = ParserJson()
+    parser = ParserJson_todict()
     
     # Parse the circuit data
     electrical_nodes, circuit_components = parser.parse(circuit_json_data)

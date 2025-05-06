@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Any, Set, List
 
-class CircuitParser(ABC):
+class CircuitParser_todict(ABC):
     """Abstract base class for circuit parsers."""
     
     @abstractmethod
@@ -22,7 +22,7 @@ class CircuitParser(ABC):
         pass
 
 
-class ParserJson(CircuitParser):
+class ParserJson_todict(CircuitParser_todict):
     """Parser for JSON circuit descriptions."""
     
     def parse(self, circuit_json: Dict[str, Any]) -> Tuple[Dict[int, Set[Tuple[str, str]]], Dict[str, Dict[str, Any]]]:

@@ -3,8 +3,8 @@
 # Import from electrical_model.py
 from .electrical_model import ElectricalModel
 
-# Import from parser.py
-from .parser import CircuitParser, ParserJson
+# Import from parser_networkx.py
+from .parser_networkx import CircuitParser, ParserJson
 
 # Import from simulation.py
 from .simulation import Simulation
