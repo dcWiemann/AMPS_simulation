@@ -7,6 +7,11 @@ from amps_simulation.core.components import (
     VoltageSource, Ground
 )
 
+def load_test_file(filename: str) -> dict:
+    """Load a test circuit file from the test_data directory."""
+    with open(f"test_data/{filename}", "r") as f:
+        return json.load(f)
+
 def print_graph(graph, title="Graph Structure"):
     """Helper function to print graph structure."""
     print(f"\n=== {title} ===")
@@ -76,3 +81,66 @@ def test_parser_json_creates_correct_graph():
     switch_edges = [(u, v) for u, v, d in graph.edges(data=True) 
                    if isinstance(d["component"], PowerSwitch)]
     assert len(switch_edges) == 1  # One switch 
+
+
+def test_parser_networkx_all_components() -> None:
+    """
+    Test ParserJson from parser_networkx.py with a circuit containing all supported components.
+    
+    Given:
+        - A circuit description in JSON format containing all supported components
+        - The circuit contains voltage source, resistor, inductor, capacitor, ground, and switch
+        
+    When:
+        - The circuit is parsed by ParserJson
+        
+    Then:
+        - All components are correctly created with their proper types and values
+        - The graph structure is properly initialized
+        
+    Raises:
+        AssertionError: If any validation check fails
+        Exception: If parsing fails
+    """
+    # Load test circuit
+    circuit_data = load_test_file("parser_all_components.json")
+    
+    # Create parser instance
+    parser = ParserJson()
+    
+    # Parse circuit data
+    graph = parser.parse(circuit_data)
+    print_graph(graph, "All Components Test")
+    
+    # Get the created components
+    components = parser.circuit_components
+    
+    # Verify we have the expected number of components
+    assert len(components) == 6, "Should have 6 components (V2, S2, R7, C4, L2, GND1)"
+    
+    # Verify each component type and value
+    component_map = {
+        "V2": ("voltage-source", 5),
+        "S2": ("powerswitch", 0),
+        "R7": ("resistor", 1),
+        "C4": ("capacitor", 0.001),
+        "L2": ("inductor", 0.001),
+        "GND1": ("ground", 0)
+    }
+    
+    for comp_id, (expected_type, expected_value) in component_map.items():
+        # Find the component in the list
+        component = next((c for c in components if c.comp_id == comp_id), None)
+        assert component is not None, f"Component {comp_id} not found"
+        
+        # Verify component type
+        assert component.__class__.__name__.lower() == expected_type.replace("-", ""), \
+            f"Component {comp_id} has wrong type"
+        
+        # Verify component value
+        if hasattr(component, "value"):
+            assert component.value == expected_value, \
+                f"Component {comp_id} has wrong value"
+    
+    # Verify graph is initialized
+    assert isinstance(graph, nx.MultiDiGraph), "Parser should return a directed graph"
