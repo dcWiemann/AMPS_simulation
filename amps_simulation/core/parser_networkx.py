@@ -98,6 +98,7 @@ class ParserJson(CircuitParser):
         In this graph:
         - Nodes represent electrical junctions (points where components connect)
         - Edges represent components, with direction from terminal 0 to terminal 1
+        - All ground nodes are merged into a single node
         
         Args:
             connections: List of connection dictionaries from JSON edges
@@ -106,6 +107,7 @@ class ParserJson(CircuitParser):
         # Create a mapping of component-terminal pairs to electrical nodes
         node_mapping = {}  # Maps (comp_id, terminal) to electrical node number
         next_node_number = 1
+        ground_node = None  # Node number for merged ground nodes
         
         # First pass: identify all electrical nodes by finding connected terminals
         for conn in connections:
@@ -139,7 +141,7 @@ class ParserJson(CircuitParser):
                 node_mapping[target_key] = next_node_number
                 next_node_number += 1
         
-        # Second pass: create nodes for unconnected terminals
+        # Second pass: create nodes for unconnected terminals and identify ground nodes
         for comp in self.circuit_components:
             comp_id = comp.comp_id
             
@@ -165,10 +167,31 @@ class ParserJson(CircuitParser):
                 if not is_connected:
                     node_mapping[key] = next_node_number
                     next_node_number += 1
+                
+                # If this is a ground component, mark its node
+                if isinstance(comp, Ground):
+                    if ground_node is None:
+                        ground_node = node_mapping[key]
+                    else:
+                        # Merge this ground node with the first ground node
+                        old_node = node_mapping[key]
+                        for k, v in list(node_mapping.items()):
+                            if v == old_node:
+                                node_mapping[k] = ground_node
+        
+        # Renumber nodes to ensure sequential numbering
+        used_numbers = sorted(set(node_mapping.values()))
+        number_map = {old: i + 1 for i, old in enumerate(used_numbers)}
+        for key, value in node_mapping.items():
+            node_mapping[key] = number_map[value]
         
         # Third pass: create the graph with components as edges
         for comp in self.circuit_components:
             comp_id = comp.comp_id
+            
+            # Skip ground components as they don't create edges
+            if isinstance(comp, Ground):
+                continue
             
             # Get the terminals and their corresponding electrical nodes
             terminals = {}
@@ -195,10 +218,4 @@ class ParserJson(CircuitParser):
                     target_node,
                     component=comp
                 )
-            
-            # For components with one terminal (like ground), just add the node
-            elif len(terminals) == 1:
-                node = str(list(terminals.values())[0])
-                if not self.graph.has_node(node):
-                    self.graph.add_node(node, type="electrical_node")
         
