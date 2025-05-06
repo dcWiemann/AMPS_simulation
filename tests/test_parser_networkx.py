@@ -38,24 +38,25 @@ def test_parser_json_creates_correct_graph():
         print(f"  {conn['source']}:{conn['sourceHandle']} -> {conn['target']}:{conn['targetHandle']}")
     
     # Check that we have the correct number of nodes (electrical junctions)
-    # We expect 5 electrical junctions:
+    # We expect 6 electrical junctions:
     # 1. V2 top/S2 left
     # 2. S2 right/R7 left
     # 3. R7 right/C4 top/L2 left
-    # 4. V2 bottom/C4 bottom/GND1
+    # 4. V2 bottom/C4 bottom/GND1/GND2 (merged ground node)
     # 5. L2 right
-    assert len(graph.nodes) == 5
+    # 6. R8/C5 connection point
+    assert len(graph.nodes) == 6
     
     # Check node attributes
     for node in graph.nodes:
         assert graph.nodes[node]["type"] == "electrical_node"
         # Verify nodes are numbered sequentially
         assert node.isdigit()
-        assert 1 <= int(node) <= 5
+        assert 1 <= int(node) <= 6
     
     # Check that we have the correct number of edges (components)
-    # We expect 5 edges (one for each two-terminal component)
-    assert len(graph.edges) == 5
+    # We expect 7 edges (one for each two-terminal component)
+    assert len(graph.edges) == 7
     
     # Check that all nodes are connected (no isolated nodes)
     assert nx.is_connected(graph.to_undirected())
@@ -68,11 +69,11 @@ def test_parser_json_creates_correct_graph():
     
     resistor_edges = [(u, v) for u, v, d in graph.edges(data=True) 
                      if isinstance(d["component"], Resistor)]
-    assert len(resistor_edges) == 1  # One resistor
+    assert len(resistor_edges) == 2  # Two resistors (R7, R8)
     
     capacitor_edges = [(u, v) for u, v, d in graph.edges(data=True) 
                       if isinstance(d["component"], Capacitor)]
-    assert len(capacitor_edges) == 1  # One capacitor
+    assert len(capacitor_edges) == 2  # Two capacitors (C4, C5)
     
     inductor_edges = [(u, v) for u, v, d in graph.edges(data=True) 
                      if isinstance(d["component"], Inductor)]
@@ -80,7 +81,7 @@ def test_parser_json_creates_correct_graph():
     
     switch_edges = [(u, v) for u, v, d in graph.edges(data=True) 
                    if isinstance(d["component"], PowerSwitch)]
-    assert len(switch_edges) == 1  # One switch 
+    assert len(switch_edges) == 1  # One switch
 
 
 def test_parser_networkx_all_components() -> None:
