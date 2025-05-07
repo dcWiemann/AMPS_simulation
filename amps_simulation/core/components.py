@@ -82,6 +82,7 @@ class ElecJunction(BaseModel):
     """Electrical junction component."""
     junction_id: int = Field(..., description="Unique identifier for the junction")
     _registry: ClassVar[Dict[int, 'ElecJunction']] = {}
+    is_ground: bool = Field(False, description="Whether the junction is a ground")
 
     @field_validator('junction_id')
     @classmethod
@@ -102,6 +103,9 @@ class ElecJunction(BaseModel):
 
     @computed_field
     @property
-    def voltage_var(self) -> str:
-        """Returns the voltage variable name for this junction."""
+    def voltage_var(self) -> Optional[str]:
+        """Returns the voltage variable name for this junction.
+        Returns None if the junction is a ground node."""
+        if self.is_ground:
+            return None
         return f"V_{self.junction_id}"

@@ -175,13 +175,14 @@ class ParserJson(CircuitParser):
 
         return node_mapping, next_node_number, ground_node
 
-    def _create_junctions(self, node_mapping: Dict[Tuple[str, str], int]) -> Dict[int, ElecJunction]:
+    def _create_junctions(self, node_mapping: Dict[Tuple[str, str], int], ground_node: Optional[int]) -> Dict[int, ElecJunction]:
         """
         Create ElecJunction objects for each unique electrical node.
 
         Args:
             node_mapping (Dict[Tuple[str, str], int]): A dictionary mapping
                 (component ID, terminal) pairs to node numbers.
+            ground_node (Optional[int]): The node number of the ground node, if any.
 
         Returns:
             Dict[int, ElecJunction]: A dictionary mapping node numbers to their
@@ -192,7 +193,14 @@ class ParserJson(CircuitParser):
         for key, value in node_mapping.items():
             node_mapping[key] = number_map[value]
 
-        junctions = {node_number: ElecJunction(junction_id=node_number) for node_number in number_map.values()}
+        # Update ground_node to new numbering if it exists
+        if ground_node is not None:
+            ground_node = number_map[ground_node]
+
+        junctions = {}
+        for node_number in number_map.values():
+            is_ground = (node_number == ground_node) if ground_node is not None else False
+            junctions[node_number] = ElecJunction(junction_id=node_number, is_ground=is_ground)
         return junctions
 
     def _add_nodes_and_edges(self, node_mapping: Dict[Tuple[str, str], int], junctions: Dict[int, ElecJunction]) -> None:
@@ -250,6 +258,6 @@ class ParserJson(CircuitParser):
             components (list): A list of component dictionaries from JSON nodes.
         """
         node_mapping, next_node_number, ground_node = self._identify_electrical_nodes(connections)
-        junctions = self._create_junctions(node_mapping)
+        junctions = self._create_junctions(node_mapping, ground_node)
         self._add_nodes_and_edges(node_mapping, junctions)
         
