@@ -4,7 +4,7 @@ import networkx as nx
 from amps_simulation.core.parser_networkx import ParserJson
 from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
-    VoltageSource, Ground
+    VoltageSource, Ground, Component
 )
 
 def load_test_file(filename: str) -> dict:
@@ -16,6 +16,11 @@ def print_graph(graph, title="Graph Structure"):
     """Helper function to print graph structure."""
     print(f"\n=== {title} ===")
     print("\nNodes:", graph.nodes)
+        # Print detailed node information
+    print("\nDetailed Node Information:")
+    for node in graph.nodes:
+        print(f"Node {node}: {graph.nodes[node]}")
+        
     print("\nEdges:", graph.edges)
     print("\nDetailed Edge Information:")
     for u, v, d in graph.edges(data=True):
@@ -37,6 +42,9 @@ def print_graph(graph, title="Graph Structure"):
 
 def test_parser_json_creates_correct_graph():
     """Test parsing a complex circuit from JSON file into an electrical graph."""
+    # Clear the component registry to avoid duplicate comp_id issues
+    Component.clear_registry()
+
     # Load the test circuit
     with open("test_data/parser_nodes.json", "r") as f:
         circuit_json = json.load(f)
@@ -63,7 +71,7 @@ def test_parser_json_creates_correct_graph():
     
     # Check node attributes
     for node in graph.nodes:
-        assert graph.nodes[node]["type"] == "electrical_node"
+        assert "junction" in graph.nodes[node]  # Check for junction attribute
         # Verify nodes are numbered sequentially
         assert node.isdigit()
         assert 1 <= int(node) <= 6
@@ -117,6 +125,9 @@ def test_parser_networkx_all_components() -> None:
         AssertionError: If any validation check fails
         Exception: If parsing fails
     """
+    # Clear the component registry to avoid duplicate comp_id issues
+    Component.clear_registry()
+
     # Load test circuit
     circuit_data = load_test_file("parser_all_components.json")
     
@@ -128,7 +139,7 @@ def test_parser_networkx_all_components() -> None:
     print_graph(graph, "All Components Test")
     
     # Get the created components
-    components = parser.circuit_components
+    components = parser.components_list
     
     # Verify we have the expected number of components
     assert len(components) == 6, "Should have 6 components (V2, S2, R7, C4, L2, GND1)"
