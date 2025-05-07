@@ -509,7 +509,7 @@ class Simulation:
             logging.info("🥳 Current switch positions: %s", current_switch_positions)
             selected_model = model_functions[current_switch_positions]
             logging.info("🥳 Selected model: %s", selected_model)
-            sol = solve_ivp(selected_model, t_span, initial_conditions, method="RK45",
+            sol = solve_ivp(selected_model, t_span, initial_conditions, method="Radau",
                        events=switch_events)
             
             # Check why the solver stopped
