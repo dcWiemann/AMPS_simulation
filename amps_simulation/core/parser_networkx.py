@@ -43,6 +43,10 @@ class ParserJson(CircuitParser):
         Returns:
             nx.Graph: A NetworkX graph representing the circuit
         """
+        # Clear registries to avoid duplicate ID issues
+        Component.clear_registry()
+        ElecJunction.clear_registry()
+
         # Extract components and connections
         components = circuit_json["nodes"]
         connections = circuit_json["edges"]
@@ -92,6 +96,10 @@ class ParserJson(CircuitParser):
             component_list.append(cls(**kwargs))
         return component_list
 
+    def _get_component(self, comp_id: str) -> Optional[Component]:
+        """Get a component by its ID using the Component registry."""
+        return Component.get_component(comp_id)
+
     def _identify_electrical_nodes(self, connections: list) -> Tuple[Dict[Tuple[str, str], int], int, Optional[int]]:
         """
         Identify and map electrical nodes based on the given connections.
@@ -114,22 +122,37 @@ class ParserJson(CircuitParser):
         next_node_number = 1
         ground_node = None
 
+        # First pass: identify ground nodes and their connections
         for conn in connections:
             source_comp_id = conn["source"]
             target_comp_id = conn["target"]
-            source_terminal = conn.get("sourceHandle")
-            target_terminal = conn.get("targetHandle")
+            
+            # If either component is a ground, use the ground node number
+            if any(isinstance(self._get_component(comp_id), Ground) 
+                   for comp_id in [source_comp_id, target_comp_id]):
+                if ground_node is None:
+                    ground_node = next_node_number
+                    next_node_number += 1
+                
+                source_key = (source_comp_id, conn.get("sourceHandle"))
+                target_key = (target_comp_id, conn.get("targetHandle"))
+                node_mapping[source_key] = ground_node
+                node_mapping[target_key] = ground_node
+                continue
 
-            source_key = (source_comp_id, source_terminal)
-            target_key = (target_comp_id, target_terminal)
-
+            # Regular node handling for non-ground connections
+            source_key = (source_comp_id, conn.get("sourceHandle"))
+            target_key = (target_comp_id, conn.get("targetHandle"))
+            
             if source_key in node_mapping and target_key in node_mapping:
                 source_node = node_mapping[source_key]
                 target_node = node_mapping[target_key]
                 if source_node != target_node:
+                    # Merge nodes, preferring non-ground nodes
+                    merge_to = source_node if source_node != ground_node else target_node
                     for key, node in list(node_mapping.items()):
-                        if node == target_node:
-                            node_mapping[key] = source_node
+                        if node == (target_node if merge_to == source_node else source_node):
+                            node_mapping[key] = merge_to
             elif source_key in node_mapping:
                 node_mapping[target_key] = node_mapping[source_key]
             elif target_key in node_mapping:
@@ -138,6 +161,17 @@ class ParserJson(CircuitParser):
                 node_mapping[source_key] = next_node_number
                 node_mapping[target_key] = next_node_number
                 next_node_number += 1
+
+        # Create nodes for unconnected terminals (excluding ground)
+        for comp in self.components_list:
+            if not isinstance(comp, Ground):
+                comp_id = comp.comp_id
+                terminals = {"0", "1"}
+                for terminal in terminals:
+                    key = (comp_id, terminal)
+                    if key not in node_mapping:
+                        node_mapping[key] = next_node_number
+                        next_node_number += 1
 
         return node_mapping, next_node_number, ground_node
 
