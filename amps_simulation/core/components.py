@@ -42,10 +42,7 @@ class Component(BaseModel, ABC):
         """Returns the voltage variable name for this component."""
         return f"v_{self.comp_id}"
     
-    class Config:
-        frozen = True  # Make components immutable
-
-    # Update to use ConfigDict
+    # Use ConfigDict for configuration
     model_config = ConfigDict(frozen=True)
 
 class Resistor(Component):
