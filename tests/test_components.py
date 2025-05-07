@@ -1,5 +1,5 @@
 import pytest
-from amps_simulation.core.components import Resistor, Component
+from amps_simulation.core.components import Resistor, Component, ElecJunction
 
 def test_component_variable_names():
     """Test that component variable names are correctly generated."""
@@ -56,4 +56,28 @@ def test_component_id_starts_with_letter():
         Resistor(comp_id="1R", resistance=400.0)
     
     with pytest.raises(ValueError, match=r"String should match pattern '\^\[A-Za-z\]\..*'"):
-        Resistor(comp_id="_R1", resistance=500.0) 
+        Resistor(comp_id="_R1", resistance=500.0)
+
+def test_elec_junction_voltage_var():
+    """Test that ElecJunction voltage variable names are correctly generated."""
+    # Create a test junction
+    junction = ElecJunction(junction_id=1)
+    
+    # Test voltage variable name
+    assert junction.voltage_var == "V_1"
+    
+    # Test with a different junction ID
+    junction2 = ElecJunction(junction_id=2)
+    assert junction2.voltage_var == "V_2"
+
+def test_unique_junction_ids():
+    """Test that duplicate junction IDs are not allowed."""
+    # Clear the registry before testing
+    ElecJunction.clear_registry()
+    
+    # Create first junction
+    ElecJunction(junction_id=1)
+    
+    # Attempt to create second junction with same ID
+    with pytest.raises(ValueError, match="Junction ID '1' is already in use"):
+        ElecJunction(junction_id=1) 
