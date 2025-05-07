@@ -1,10 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, Tuple, List, Optional
 import networkx as nx
 from .components import (
     Component, Resistor, Capacitor, Inductor,
-    PowerSwitch, Diode, VoltageSource, CurrentSource, Ground
+    PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction
 )
 
 class CircuitParser(ABC):
@@ -30,7 +30,7 @@ class ParserJson(CircuitParser):
     def __init__(self):
         """Initialize the parser with an empty directed graph."""
         self.graph = nx.MultiDiGraph()
-        self.circuit_components = {}
+        self.components_list = []
 
     
     def parse(self, circuit_json: Dict[str, Any]) -> nx.Graph:
@@ -47,7 +47,7 @@ class ParserJson(CircuitParser):
         components = circuit_json["nodes"]
         connections = circuit_json["edges"]
         
-        self.circuit_components = self._create_circuit_components(components)
+        self.components_list = self._create_circuit_components(components)
         self._create_electrical_graph(connections, components)
         
         return self.graph
@@ -92,42 +92,41 @@ class ParserJson(CircuitParser):
             component_list.append(cls(**kwargs))
         return component_list
 
-    def _create_electrical_graph(self, connections: list, components: list) -> None:
+    def _identify_electrical_nodes(self, connections: list) -> Tuple[Dict[Tuple[str, str], int], int, Optional[int]]:
         """
-        Create an electrical graph from the circuit connections.
-        In this graph:
-        - Nodes represent electrical junctions (points where components connect)
-        - Edges represent components, with direction from terminal 0 to terminal 1
-        - All ground nodes are merged into a single node
-        
+        Identify and map electrical nodes based on the given connections.
+
+        This function processes the connections between components to determine
+        which terminals are electrically connected, assigning a unique node number
+        to each distinct electrical junction. It also handles merging of ground nodes.
+
         Args:
-            connections: List of connection dictionaries from JSON edges
-            components: List of component dictionaries from JSON nodes
+            connections (list): A list of connection dictionaries, each specifying
+                the source and target components and their respective terminals.
+
+        Returns:
+            Tuple[Dict[Tuple[str, str], int], int, Optional[int]]: A tuple containing:
+                - A dictionary mapping (component ID, terminal) pairs to node numbers.
+                - The next available node number for new nodes.
+                - The node number for the merged ground node, if any.
         """
-        # Create a mapping of component-terminal pairs to electrical nodes
-        node_mapping = {}  # Maps (comp_id, terminal) to electrical node number
+        node_mapping = {}
         next_node_number = 1
-        ground_node = None  # Node number for merged ground nodes
-        
-        # First pass: identify all electrical nodes by finding connected terminals
+        ground_node = None
+
         for conn in connections:
             source_comp_id = conn["source"]
             target_comp_id = conn["target"]
             source_terminal = conn.get("sourceHandle")
             target_terminal = conn.get("targetHandle")
-            
-            # Get the keys for both terminals
+
             source_key = (source_comp_id, source_terminal)
             target_key = (target_comp_id, target_terminal)
-            
-            # If either terminal is already mapped, use that node number
-            # This ensures connected terminals share the same node
+
             if source_key in node_mapping and target_key in node_mapping:
-                # If both terminals are mapped but to different nodes, merge them
                 source_node = node_mapping[source_key]
                 target_node = node_mapping[target_key]
                 if source_node != target_node:
-                    # Update all references to target_node to use source_node
                     for key, node in list(node_mapping.items()):
                         if node == target_node:
                             node_mapping[key] = source_node
@@ -136,86 +135,87 @@ class ParserJson(CircuitParser):
             elif target_key in node_mapping:
                 node_mapping[source_key] = node_mapping[target_key]
             else:
-                # If neither terminal is mapped, create a new node
                 node_mapping[source_key] = next_node_number
                 node_mapping[target_key] = next_node_number
                 next_node_number += 1
-        
-        # Second pass: create nodes for unconnected terminals and identify ground nodes
-        for comp in self.circuit_components:
-            comp_id = comp.comp_id
-            
-            # Find all connections for this component
-            comp_connections = [c for c in connections 
-                              if c["source"] == comp_id or c["target"] == comp_id]
-            
-            # Get all terminals for this component
-            terminals = {"0", "1"} if not isinstance(comp, Ground) else {"0"}
-            
-            # For each terminal, if it's not connected, create a new node
-            for terminal in terminals:
-                key = (comp_id, terminal)
-                # Check if this terminal appears in any connection
-                is_connected = False
-                for conn in comp_connections:
-                    if (conn["source"] == comp_id and conn["sourceHandle"] == terminal) or \
-                       (conn["target"] == comp_id and conn["targetHandle"] == terminal):
-                        is_connected = True
-                        break
-                
-                # If terminal is not connected, create a new node
-                if not is_connected:
-                    node_mapping[key] = next_node_number
-                    next_node_number += 1
-                
-                # If this is a ground component, mark its node
-                if isinstance(comp, Ground):
-                    if ground_node is None:
-                        ground_node = node_mapping[key]
-                    else:
-                        # Merge this ground node with the first ground node
-                        old_node = node_mapping[key]
-                        for k, v in list(node_mapping.items()):
-                            if v == old_node:
-                                node_mapping[k] = ground_node
-        
-        # Renumber nodes to ensure sequential numbering
+
+        return node_mapping, next_node_number, ground_node
+
+    def _create_junctions(self, node_mapping: Dict[Tuple[str, str], int]) -> Dict[int, ElecJunction]:
+        """
+        Create ElecJunction objects for each unique electrical node.
+
+        Args:
+            node_mapping (Dict[Tuple[str, str], int]): A dictionary mapping
+                (component ID, terminal) pairs to node numbers.
+
+        Returns:
+            Dict[int, ElecJunction]: A dictionary mapping node numbers to their
+            corresponding ElecJunction objects.
+        """
         used_numbers = sorted(set(node_mapping.values()))
         number_map = {old: i + 1 for i, old in enumerate(used_numbers)}
         for key, value in node_mapping.items():
             node_mapping[key] = number_map[value]
-        
-        # Third pass: create the graph with components as edges
-        for comp in self.circuit_components:
+
+        junctions = {node_number: ElecJunction(junction_id=node_number) for node_number in number_map.values()}
+        return junctions
+
+    def _add_nodes_and_edges(self, node_mapping: Dict[Tuple[str, str], int], junctions: Dict[int, ElecJunction]) -> None:
+        """
+        Add nodes and edges to the graph using the identified nodes and junctions.
+
+        This function iterates over the circuit components, adding nodes to the
+        graph for each junction and creating edges between nodes to represent
+        the components. Ground components are skipped as they do not form edges.
+
+        Args:
+            junctions (Dict[int, ElecJunction]): A dictionary mapping node numbers
+                to ElecJunction objects, representing the electrical junctions.
+        """
+        for comp in self.components_list:
             comp_id = comp.comp_id
-            
-            # Skip ground components as they don't create edges
+
             if isinstance(comp, Ground):
                 continue
-            
-            # Get the terminals and their corresponding electrical nodes
+
             terminals = {}
             for terminal in ("0", "1"):
                 key = (comp_id, terminal)
                 if key in node_mapping:
                     terminals[terminal] = node_mapping[key]
-            
-            # Create edges for each component
-            # For components with two terminals, create an edge from terminal 0 to terminal 1
+
             if "0" in terminals and "1" in terminals:
                 source_node = str(terminals["0"])
                 target_node = str(terminals["1"])
-                
-                # Add nodes if they don't exist
+
                 if not self.graph.has_node(source_node):
-                    self.graph.add_node(source_node, type="electrical_node")
+                    elec_junction = junctions[int(source_node)]
+                    self.graph.add_node(source_node, junction=elec_junction)
                 if not self.graph.has_node(target_node):
-                    self.graph.add_node(target_node, type="electrical_node")
-                
-                # Add edge with component information
+                    elec_junction = junctions[int(target_node)]
+                    self.graph.add_node(target_node, junction=elec_junction)
+
                 self.graph.add_edge(
                     source_node,
                     target_node,
                     component=comp
                 )
+
+    def _create_electrical_graph(self, connections: list, components: list) -> None:
+        """
+        Create an electrical graph from the circuit connections and components.
+
+        This function orchestrates the process of building a graph representation
+        of the circuit by identifying electrical nodes, creating junctions, and
+        adding nodes and edges to the graph. It ensures that all components and
+        their connections are accurately represented in the graph structure.
+
+        Args:
+            connections (list): A list of connection dictionaries from JSON edges.
+            components (list): A list of component dictionaries from JSON nodes.
+        """
+        node_mapping, next_node_number, ground_node = self._identify_electrical_nodes(connections)
+        junctions = self._create_junctions(node_mapping)
+        self._add_nodes_and_edges(node_mapping, junctions)
         
