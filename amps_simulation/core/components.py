@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
-    comp_id: str = Field(..., description="Unique identifier for the component")
+    comp_id: str = Field(..., description="Unique identifier for the component", pattern=r"^[A-Za-z].*")
     _registry: ClassVar[Dict[str, 'Component']] = {}
     
     @field_validator('comp_id')
