@@ -16,10 +16,24 @@ def print_graph(graph, title="Graph Structure"):
     """Helper function to print graph structure."""
     print(f"\n=== {title} ===")
     print("\nNodes:", graph.nodes)
-    print("\nEdges:")
+    print("\nEdges:", graph.edges)
+    print("\nDetailed Edge Information:")
     for u, v, d in graph.edges(data=True):
         comp = d["component"]
-        print(f"  {u} -> {v}: {comp.__class__.__name__} (id: {comp.comp_id})")
+        print(f"\n  {u} -> {v}:")
+        print(f"    Component Type: {comp.__class__.__name__}")
+        print(f"    Component ID: {comp.comp_id}")
+        # Print component-specific attributes
+        if hasattr(comp, "resistance"):
+            print(f"    Resistance: {comp.resistance}")
+        if hasattr(comp, "capacitance"):
+            print(f"    Capacitance: {comp.capacitance}")
+        if hasattr(comp, "inductance"):
+            print(f"    Inductance: {comp.inductance}")
+        if hasattr(comp, "voltage"):
+            print(f"    Voltage: {comp.voltage}")
+        if hasattr(comp, "current"):
+            print(f"    Current: {comp.current}")
 
 def test_parser_json_creates_correct_graph():
     """Test parsing a complex circuit from JSON file into an electrical graph."""
