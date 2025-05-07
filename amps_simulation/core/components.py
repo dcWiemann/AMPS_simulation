@@ -1,10 +1,44 @@
 from abc import ABC
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Optional, ClassVar, Dict
+from pydantic import BaseModel, Field, computed_field, validator
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
     comp_id: str = Field(..., description="Unique identifier for the component")
+    _registry: ClassVar[Dict[str, 'Component']] = {}
+    
+    @validator('comp_id')
+    def validate_unique_comp_id(cls, v: str) -> str:
+        """Validate that the component ID is unique."""
+        if v in cls._registry:
+            raise ValueError(f"Component ID '{v}' is already in use")
+        return v
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        self._registry[self.comp_id] = self
+    
+    @classmethod
+    def clear_registry(cls) -> None:
+        """Clear the component registry."""
+        cls._registry.clear()
+    
+    @classmethod
+    def get_component(cls, comp_id: str) -> Optional['Component']:
+        """Get a component by its ID."""
+        return cls._registry.get(comp_id)
+    
+    @computed_field
+    @property
+    def current_var(self) -> str:
+        """Returns the current variable name for this component."""
+        return f"i_{self.comp_id}"
+    
+    @computed_field
+    @property
+    def voltage_var(self) -> str:
+        """Returns the voltage variable name for this component."""
+        return f"v_{self.comp_id}"
     
     class Config:
         frozen = True  # Make components immutable
