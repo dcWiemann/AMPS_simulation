@@ -1,13 +1,14 @@
 from abc import ABC
 from typing import Optional, ClassVar, Dict
-from pydantic import BaseModel, Field, computed_field, validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
     comp_id: str = Field(..., description="Unique identifier for the component")
     _registry: ClassVar[Dict[str, 'Component']] = {}
     
-    @validator('comp_id')
+    @field_validator('comp_id')
+    @classmethod
     def validate_unique_comp_id(cls, v: str) -> str:
         """Validate that the component ID is unique."""
         if v in cls._registry:
