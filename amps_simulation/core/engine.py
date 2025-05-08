@@ -28,10 +28,8 @@ class Engine:
         self.state_derivatives = {}  # Dictionary of state derivatives
         self.input_vars = {}  # Dictionary of input variables
         self.power_switches = ()  # Tuple of power switches
-        
-        # Initialize voltage and current variables
-        self.voltage_vars = {}  # Dictionary of voltage variables
-        self.current_vars = {}  # Dictionary of current variables
+        self.switch_control_signals = None  # Function to get switch control signals
+        self.switch_events = None  # List of switch events
         
         # Ground node reference
         self.ground_node = None
@@ -49,15 +47,17 @@ class Engine:
                 self.components_list.append(component)
         
         # Set up all necessary variables
-        self._set_state_vars()
-        self._set_input_vars()
-        self._set_power_switches()
+        self._get_state_vars()
+        self._get_input_vars()
+        self._get_power_switches()
+        self.switch_control_signals = self._get_switch_control_signals()
+        self.switch_events = self._get_switch_events()
         
         logging.info(f"✅ State variables: {self.state_vars}")
         logging.info(f"✅ Input variables: {self.input_vars}")
         logging.info(f"✅ Power switches: {self.power_switches}")
 
-    def _set_state_vars(self) -> None:
+    def _get_state_vars(self) -> None:
         """
         Set state variables for capacitors and inductors and their derivatives.
         
@@ -94,7 +94,7 @@ class Engine:
                 # Create and store derivative equation: di/dt = v/L
                 self.state_derivatives[sp.Derivative(i_L, 't')] = v_L/L_value
 
-    def _set_input_vars(self) -> None:
+    def _get_input_vars(self) -> None:
         """
         Set input variables for voltage and current sources.
         
@@ -113,7 +113,7 @@ class Engine:
                 I_source = sp.Symbol(component.current_var)
                 self.input_vars[I_source] = component.comp_id
 
-    def _set_power_switches(self) -> None:
+    def _get_power_switches(self) -> None:
         """
         Extract power switches from the circuit components.
         
@@ -155,3 +155,28 @@ class Engine:
                         for switch_id in self.power_switches)
             
         return switch_control_signals
+
+    def _get_switch_events(self):
+        """
+        Creates event functions for each switch in the circuit.
+        
+        Returns:
+            List[callable]: A list of event functions that return 0 when a switch changes state.
+        """
+        # Get switch times from components
+        switch_times = {}
+        for comp in self.components_list:
+            if isinstance(comp, PowerSwitch):
+                switch_times[comp.comp_id] = comp.switch_time
+
+        def create_event_function(switch_time):
+            def event(t, x):
+                return t - switch_time
+            event.terminal = True  # Stop the integration when the event occurs
+            event.direction = 0  # Detect both positive and negative crossings
+            return event
+
+        # Create a list of event functions for each switch
+        switch_events = [create_event_function(switch_times[switch_id]) for switch_id in self.power_switches]
+        
+        return switch_events

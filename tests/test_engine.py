@@ -113,3 +113,40 @@ def test_switch_control_signals():
         for i, switch_id in enumerate(engine.power_switches):
             assert states[i] == expected_states[switch_id], f"Switch {switch_id} at t={t}"
 
+def test_switch_events():
+    """
+    Test the creation of switch events for solve_ivp.
+    """
+    # Load and parse circuit with multiple switches
+    circuit_data = load_test_circuit("engine_switch_control.json")
+    parser = ParserJson()
+    graph = parser.parse(circuit_data)
+    
+    # Create engine instance and initialize
+    engine = Engine(graph)
+    engine.initialize()
+    
+    # Get the switch events
+    switch_events = engine._get_switch_events()
+    
+    # Define expected switch times
+    expected_switch_times = {
+        "S1": -1.1,
+        "S2": 20.0,
+        "S3": 2.3333
+    }
+    
+    # Test that the number of events matches the number of switches
+    assert len(switch_events) == len(engine.power_switches)
+    
+    # Test each event function
+    for i, switch_id in enumerate(engine.power_switches):
+        event = switch_events[i]
+        switch_time = expected_switch_times[switch_id]
+        # Event should return 0 at the switch time
+        assert event(switch_time, None) == 0
+        # Event should not return 0 before the switch time
+        assert event(switch_time - 0.1, None) != 0
+        # Event should not return 0 after the switch time
+        assert event(switch_time + 0.1, None) != 0
+
