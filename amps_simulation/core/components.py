@@ -56,12 +56,10 @@ class Capacitor(Component):
 class Inductor(Component):
     """Inductor component."""
     inductance: float = Field(..., description="Inductance value in henries", ge=0)
-    I_max: Optional[float] = Field(None, description="Maximum current rating in amperes")
 
 class PowerSwitch(Component):
     """Power switch component."""
     switch_time: float = Field(..., description="Time to switch in seconds")
-    pass
 
 class Diode(Component):
     """Diode component."""
