@@ -5,6 +5,7 @@ import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
 from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource
+import itertools
 
 class Engine:
     """
@@ -50,12 +51,19 @@ class Engine:
         self._get_state_vars()
         self._get_input_vars()
         self._get_power_switches()
-        self.switch_control_signals = self._get_switch_control_signals()
-        self.switch_events = self._get_switch_events()
+        if self.power_switches:
+            self.switch_control_signals = self._get_switch_control_signals()
+            self.switch_events = self._get_switch_events()
+            self.possible_switch_positions = self._get_possible_switch_positions()
+        else:
+            self.switch_events = None
+            self.possible_switch_positions = (0,) # Default to 0 if no power switches
         
-        logging.info(f"✅ State variables: {self.state_vars}")
-        logging.info(f"✅ Input variables: {self.input_vars}")
-        logging.info(f"✅ Power switches: {self.power_switches}")
+        logging.debug(f"✅ State variables: {self.state_vars}")
+        logging.debug(f"✅ Input variables: {self.input_vars}")
+        logging.debug(f"✅ Power switches: {self.power_switches}")
+        logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
+        logging.debug(f"✅ Switch events: {self.switch_events}")
 
     def _get_state_vars(self) -> None:
         """
@@ -180,3 +188,12 @@ class Engine:
         switch_events = [create_event_function(switch_times[switch_id]) for switch_id in self.power_switches]
         
         return switch_events
+    
+    def _get_possible_switch_positions(self):
+        """
+        Get all possible switch positions for the circuit.
+        
+        Returns:
+            List[Tuple[int, ...]]: A list of tuples representing the possible switch positions
+        """
+        return list(itertools.product([0, 1], repeat=len(self.power_switches)))
