@@ -70,3 +70,46 @@ def test_initialize_resistive():
     assert len(engine.power_switches) == 1
     assert "S1" in engine.power_switches
 
+def test_switch_control_signals():
+    """
+    Test the switch control signals functionality with multiple switches.
+    Tests a circuit with three switches:
+    - S1: switch time = -1.1s (always ON)
+    - S2: switch time = 20.0s
+    - S3: switch time = 2.3333s
+    """
+    # Load and parse circuit with multiple switches
+    circuit_data = load_test_circuit("engine_switch_control.json")
+    parser = ParserJson()
+    graph = parser.parse(circuit_data)
+    
+    # Create engine instance and initialize
+    engine = Engine(graph)
+    engine.initialize()
+    
+    # Define switch times
+    switch_times = {
+        "S1": -1.1,  # Switch S1 is always ON
+        "S2": 20.0,  # Switch S2 turns ON at t=20.0
+        "S3": 2.3333  # Switch S3 turns ON at t=2.3333
+    }
+    
+    # Get the switch control signals function
+    switch_control_signals = engine._get_switch_control_signals()
+    
+    # Test switch states at different times
+    test_times = {
+        0.0: {"S1": 1, "S2": 0, "S3": 0},  # t=0 (S1 ON, S2 OFF, S3 OFF)
+        1.0: {"S1": 1, "S2": 0, "S3": 0},  # t=1 (S1 ON, S2 OFF, S3 OFF)
+        2.3333: {"S1": 1, "S2": 0, "S3": 1},  # t=2.3333 (S1 ON, S2 OFF, S3 ON)
+        2.3334: {"S1": 1, "S2": 0, "S3": 1},  # t=2.3334 (S1 ON, S2 OFF, S3 ON)
+        20.0: {"S1": 1, "S2": 1, "S3": 1},  # t=20.0 (S1 ON, S2 ON, S3 ON)
+        21.0: {"S1": 1, "S2": 1, "S3": 1}  # t=21.0 (S1 ON, S2 ON, S3 ON)
+    }
+    
+    for t, expected_states in test_times.items():
+        states = switch_control_signals(t)
+        assert len(states) == len(engine.power_switches)
+        for i, switch_id in enumerate(engine.power_switches):
+            assert states[i] == expected_states[switch_id], f"Switch {switch_id} at t={t}"
+
