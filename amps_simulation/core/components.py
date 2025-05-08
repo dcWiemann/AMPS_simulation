@@ -60,6 +60,7 @@ class Inductor(Component):
 
 class PowerSwitch(Component):
     """Power switch component."""
+    switch_time: float = Field(..., description="Time to switch in seconds")
     pass
 
 class Diode(Component):

@@ -124,3 +124,34 @@ class Engine:
             comp.comp_id for comp in self.components_list
             if isinstance(comp, PowerSwitch)
         )
+
+    def _get_switch_control_signals(self):
+        """
+        Creates a callable function that returns the switch states at any given time t.
+        
+        Returns:
+            callable: A function switch_control_signals(t) that returns a tuple of 0s and 1s
+                     representing the state of each switch at time t. The order of the tuple
+                     corresponds exactly to the order of switches in self.power_switches.
+        """
+        # Get switch times from components
+        switch_times = {}
+        for comp in self.components_list:
+            if isinstance(comp, PowerSwitch):
+                switch_times[comp.comp_id] = comp.switch_time
+
+        def switch_control_signals(t):
+            """
+            Returns the state of all switches at time t.
+            
+            Args:
+                t: Time at which to evaluate switch states
+                
+            Returns:
+                tuple: A tuple of 0s and 1s representing switch states (0=OFF, 1=ON)
+            """
+            # Create tuple of switch states in the same order as self.power_switches
+            return tuple(1 if t >= switch_times[switch_id] else 0 
+                        for switch_id in self.power_switches)
+            
+        return switch_control_signals

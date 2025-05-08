@@ -92,6 +92,8 @@ class ParserJson(CircuitParser):
                 kwargs["voltage"] = data.get("value")
             elif ctype == "current-source":
                 kwargs["current"] = data.get("value")
+            elif ctype == "switch":
+                kwargs["switch_time"] = data.get("value")
             # Add more mappings as needed for other types
             component_list.append(cls(**kwargs))
         return component_list
