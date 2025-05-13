@@ -1,5 +1,5 @@
 import pytest
-from amps_simulation.core.components import Resistor, Component, ElecJunction
+from amps_simulation.core.components import Resistor, Component, ElecJunction, PowerSwitch
 
 def test_component_variable_names():
     """Test that component variable names are correctly generated."""
@@ -80,4 +80,16 @@ def test_unique_junction_ids():
     
     # Attempt to create second junction with same ID
     with pytest.raises(ValueError, match="Junction ID '1' is already in use"):
-        ElecJunction(junction_id=1) 
+        ElecJunction(junction_id=1)
+
+def test_power_switch_control_signal():
+    """Test the control signal calculation for PowerSwitch."""
+    # Create a PowerSwitch instance
+    switch = PowerSwitch(comp_id="SW1", switch_time=1.0, is_on=True)
+    
+    # Test when the switch is on
+    assert switch.control_signal(0.2) == 0  # Should be 0 when off, before switch_time
+    
+    # Test when the switch is off
+    switch.is_on = False
+    assert switch.control_signal(1) == 1  # Should be 1 when on, after switch_time

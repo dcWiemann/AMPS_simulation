@@ -43,7 +43,7 @@ class Component(BaseModel, ABC):
         return f"v_{self.comp_id}"
     
     # Use ConfigDict for configuration
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=False)
 
 class Resistor(Component):
     """Resistor component."""
@@ -82,6 +82,23 @@ class PowerSwitch(Component):
             return f"{self.voltage_var} = 0"
         else:  # open
             return f"{self.current_var} = 0"
+        
+    def control_signal(self, t: float) -> int:
+        """Returns the control signal for the switch. 
+        If the switch is open, the control signal is 0.
+        If the switch is closed, the control signal is 1.
+        """
+        if self.switch_time:
+            if t >= self.switch_time:
+                self.is_on = True
+                return 1
+            else:
+                self.is_on = False
+                return 0
+        else:
+            self.is_on = False
+            return 0
+        
 
 class Diode(Component):
     """Diode component."""
