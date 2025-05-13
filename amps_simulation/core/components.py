@@ -29,7 +29,7 @@ class Component(BaseModel, ABC):
     def get_component(cls, comp_id: str) -> Optional['Component']:
         """Get a component by its ID."""
         return cls._registry.get(comp_id)
-    
+
     @computed_field
     @property
     def current_var(self) -> str:
@@ -48,6 +48,15 @@ class Component(BaseModel, ABC):
 class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms", ge=0)
+    
+    def get_comp_eq(self) -> str:
+        """Returns the symbolic equation for Ohm's law.
+        
+        Returns:
+            str: Symbolic equation representing V = I * R, where V is voltage,
+                 I is current, and R is resistance.
+        """
+        return f"{self.voltage_var} = {self.current_var} * {self.resistance}"
 
 class Capacitor(Component):
     """Capacitor component."""

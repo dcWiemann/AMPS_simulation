@@ -135,10 +135,6 @@ class ElectricalDaeModel(DaeModel):
         R_eqs = []
         for _, _, data in self.graph.edges(data=True):
             if isinstance(data['component'], Resistor):
-                v_R = sympify(data['component'].voltage_var)
-                i_R = sympify(data['component'].current_var)
-                R = data['component'].resistance
-                # Create symbolic equation v_R = i_R * R
-                R_eqs.append(str(v_R - i_R * R))
+                R_eqs.append(data['component'].get_comp_eq())
         return R_eqs
     
