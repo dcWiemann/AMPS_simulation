@@ -100,13 +100,24 @@ class ElectricalDaeModel(DaeModel):
         """Compute Kirchhoff's Current Law equations.
         
         Returns:
-            List[str]: List of KCL equations in symbolic form.
+            List[str]: List of KCL equations in symbolic form, excluding the ground node equation.
         """
         incidence_matrix, _, comp_current_vars, _ = self.compute_incidence_matrix()
         
         # Create current vector and multiply with incidence matrix
         current_vector = Matrix(comp_current_vars)
         kcl_equations = incidence_matrix * current_vector
+        
+        # Find the ground node index (where voltage_var is None)
+        ground_node_idx = None
+        for i, node in enumerate(self.graph.nodes()):
+            if self.graph.nodes[node]['junction'].voltage_var is None:
+                ground_node_idx = i
+                break
+        
+        # Remove the ground node equation if found
+        if ground_node_idx is not None:
+            kcl_equations = [eq for i, eq in enumerate(kcl_equations) if i != ground_node_idx]
         
         # Convert equations to strings
         return [str(eq) for eq in kcl_equations]

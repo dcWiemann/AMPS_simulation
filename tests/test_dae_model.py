@@ -1,6 +1,7 @@
 import pytest
 from amps_simulation.core.dae_model import DaeModel, ElectricalDaeModel
 from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.components import Resistor, ElecJunction
 from typing import Dict
 import networkx as nx
 import numpy as np
@@ -210,4 +211,36 @@ def test_print_dae_model_components():
     
     print("\nResistance Equations:")
     for i, eq in enumerate(r_eqs):
-        print(f"R {i}: {eq}") 
+        print(f"R {i}: {eq}")
+
+
+def test_kcl_equations_exclude_ground():
+    """Test that KCL equations exclude the ground node equation."""
+    # Create a simple circuit with a ground node
+    graph = nx.Graph()
+    
+    # Create junctions
+    ground_junction = ElecJunction(junction_id=1, is_ground=True)
+    node_junction = ElecJunction(junction_id=2)
+    
+    # Add nodes
+    graph.add_node("1", junction=ground_junction)
+    graph.add_node("2", junction=node_junction)
+    
+    # Add a resistor between nodes
+    resistor1 = Resistor(comp_id="R1", value=1000)
+    resistor2 = Resistor(comp_id="R2", value=2000)
+    graph.add_edge("1", "2", component=resistor1)
+    graph.add_edge("2", "1", component=resistor2)
+    
+    # Create DAE model
+    model = ElectricalDaeModel(graph)
+    
+    # Get KCL equations
+    kcl_equations = model.compute_kcl_equations()
+    
+    # Verify that we only have one equation (for the non-ground node)
+    assert len(kcl_equations) == 1, "Should have only one KCL equation (excluding ground)"
+    
+    # Verify that the equation contains the resistor current
+    assert "I_R1" in kcl_equations[0], "KCL equation should contain the resistor current" 
