@@ -60,10 +60,35 @@ class Inductor(Component):
 class PowerSwitch(Component):
     """Power switch component."""
     switch_time: float = Field(..., description="Time to switch in seconds")
+    is_on: bool = Field(..., description="Whether the switch is on")
+    
+    def get_comp_eq(self) -> str:
+        """Returns the symbolic equation for the switch based on its position.
+        
+        Returns:
+            str: Symbolic equation. If switch is closed (1), returns voltage equation.
+                 If switch is open (0), returns current equation.
+        """
+        if self.is_on:  # closed
+            return f"{self.voltage_var} = 0"
+        else:  # open
+            return f"{self.current_var} = 0"
 
 class Diode(Component):
     """Diode component."""
-    pass
+    is_on: bool = Field(False, description="Whether the diode is conducting")
+    
+    def get_comp_eq(self) -> str:
+        """Returns the symbolic equation for the diode based on its state.
+        
+        Returns:
+            str: Symbolic equation. If diode is conducting, returns voltage equation.
+                 If diode is not conducting, returns current equation.
+        """
+        if self.is_on:
+            return f"{self.voltage_var} = 0"
+        else:
+            return f"{self.current_var} = 0"
 
 class VoltageSource(Component):
     """Voltage source component."""
