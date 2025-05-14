@@ -4,7 +4,7 @@ from typing import Any, Dict, Tuple, List, Optional
 import networkx as nx
 from .components import (
     Component, Resistor, Capacitor, Inductor,
-    PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction
+    PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction, Ammeter, Voltmeter
 )
 
 class CircuitParser(ABC):
@@ -71,6 +71,8 @@ class ParserJson(CircuitParser):
             "voltage-source": VoltageSource,
             "current-source": CurrentSource,
             "ground": Ground,
+            "ammeter": Ammeter,
+            "voltmeter": Voltmeter,
         }
         component_list = []
         for comp in components:
