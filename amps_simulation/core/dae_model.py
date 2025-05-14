@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Tuple
 import numpy as np
 import networkx as nx
-from amps_simulation.core.components import Resistor
-from sympy import Matrix, Symbol, sympify
-
+from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter
+from sympy import Matrix, Symbol, sympify, solve
 
 class DaeModel(ABC):
     """Abstract base class for Differential-Algebraic Equation (DAE) models.
@@ -54,14 +53,57 @@ class ElectricalDaeModel(DaeModel):
     def __init__(self, graph: nx.Graph):
         super().__init__(graph)
 
-    def compute_incidence_matrix(self) -> Tuple[Matrix, List[Symbol], List[Symbol], List[Symbol]]:
-        """Compute the incidence matrix of the graph.
+        # Initialize the model
+        # Find all circuit variables
+        self.state_vars = self.find_state_vars()
+        self.output_vars = self.find_output_vars()
+        self.input_vars = self.find_input_vars()
+        self.junction_voltage_var_list, self.component_current_var_list, self.component_voltage_var_list = self.variable_lists()
+        # Find all equations that describe the circuit
+        self.incidence_matrix = self.compute_incidence_matrix()
+        self.kcl_eqs = self.compute_kcl_equations()
+        self.kvl_eqs = self.compute_kvl_equations()
+        self.res_eqs = self.compute_resistance_equations()
+        self.switch_eqs = self.compute_switch_equations()
+        self.circuit_vars = self.compute_circuit_vars()
+
+    def find_state_vars(self) -> List[Symbol]:
+        """Find the state variables in the graph.
         
         Returns:
-            Matrix: The incidence matrix of the graph
-            List[Symbol]: The node voltage variables (corresponds to the rows of the incidence matrix)
-            List[Symbol]: The component current variables (corresponds to the columns of the incidence matrix)
-            List[Symbol]: The component voltage variables
+            List[Symbol]: List of state variables
+        """
+        state_vars = []
+        for edge in self.graph.edges(data=True):
+            if isinstance(edge['component'], Inductor):
+                state_vars.append(edge['component'].current_var)
+            elif isinstance(edge['component'], Capacitor):
+                state_vars.append(edge['component'].voltage_var)
+        return state_vars
+    
+    def find_output_vars(self) -> List[Symbol]:
+        """Find the output variables in the graph.
+        """
+        output_vars = []
+        for edge in self.graph.edges(data=True):
+            if isinstance(edge['component'], Meter):
+                output_vars.append(edge['component'].output_var)
+        return output_vars
+
+    def find_input_vars(self) -> List[Symbol]:
+        """Find the input variables in the graph.
+        """
+        input_vars = []
+        for edge in self.graph.edges(data=True):
+            if isinstance(edge['component'], Source):
+                input_vars.append(edge['component'].input_var)
+        return input_vars
+    
+    def variable_lists(self) -> Tuple[List[Symbol], List[Symbol], List[Symbol]]:
+        """Get the lists of variables for the circuit.
+        
+        Returns:
+            Tuple[List[Symbol], List[Symbol], List[Symbol]]: Lists of node voltage variables, component current variables, and component voltage variables
         """
         nodelist = [node for node in self.graph.nodes()]
         edgelist = list(self.graph.edges(data=True))
@@ -74,9 +116,24 @@ class ElectricalDaeModel(DaeModel):
                 junction_voltage_var_list.append(sympify(0))
             else:
                 junction_voltage_var_list.append(sympify(voltage_var))
+                        
         component_current_var_list = [sympify(data['component'].current_var) for _, _, data in edgelist]
         component_voltage_var_list = [sympify(data['component'].voltage_var) for _, _, data in edgelist]
+
+        return junction_voltage_var_list, component_current_var_list, component_voltage_var_list
+
+    def compute_incidence_matrix(self) -> Tuple[Matrix, List[Symbol], List[Symbol], List[Symbol]]:
+        """Compute the incidence matrix of the graph.
         
+        Returns:
+            Matrix: The incidence matrix of the graph
+            List[Symbol]: The node voltage variables (corresponds to the rows of the incidence matrix)
+            List[Symbol]: The component current variables (corresponds to the columns of the incidence matrix)
+            List[Symbol]: The component voltage variables
+        """
+        nodelist = [node for node in self.graph.nodes()]
+        edgelist = list(self.graph.edges(data=True))
+
         # Create incidence matrix manually to handle edge directions
         n_nodes = len(nodelist)
         n_edges = len(edgelist)
@@ -92,9 +149,9 @@ class ElectricalDaeModel(DaeModel):
             incidence_matrix[target_idx, edge_idx] = -1
         
         # Convert to SymPy Matrix
-        incidence_matrix = Matrix(incidence_matrix)
+        self.incidence_matrix = Matrix(incidence_matrix)
         
-        return incidence_matrix, junction_voltage_var_list, component_current_var_list, component_voltage_var_list
+        return self.incidence_matrix
     
     def compute_kcl_equations(self) -> List[str]:
         """Compute Kirchhoff's Current Law equations.
@@ -148,4 +205,31 @@ class ElectricalDaeModel(DaeModel):
             if isinstance(data['component'], Resistor):
                 R_eqs.append(data['component'].get_comp_eq())
         return R_eqs
+    
+    def compute_switch_equations(self) -> List[str]:
+        """Compute the switch equations of the graph.
+        
+        Returns:
+            List[str]: The switch equations of the graph.
+        """
+        switch_eqs = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], PowerSwitch):
+                switch_eqs.append(data['component'].get_comp_eq())
+        return switch_eqs
+    
+    def compute_circuit_vars(self) -> List[str]:
+        """Solve the circuit variables.
+        
+        Returns:
+            List[str]: List of circuit variables in symbolic form.
+        """
+        # Combine all equations
+        all_eqs = self.kcl_eqs + self.kvl_eqs + self.res_eqs + self.switch_eqs
+        all_vars = self.junction_voltage_var_list + self.component_current_var_list + self.component_voltage_var_list
+
+        # Solve the equations
+        solution = solve(all_eqs, all_vars)
+        return solution
+    
     
