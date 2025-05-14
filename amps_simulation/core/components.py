@@ -47,11 +47,11 @@ class Component(BaseModel, ABC):
 
 class Source(Component):
     """Source component."""
-    pass
+    input_var: Optional[str] = None
 
 class Meter(Component):
     """Meter component."""
-    pass
+    output_var: Optional[str] = None
 
 class Resistor(Component):
     """Resistor component."""
@@ -128,9 +128,17 @@ class VoltageSource(Source):
     """Voltage source component."""
     voltage: float = Field(..., description="Voltage value in volts")
 
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.input_var = self.voltage_var
+
 class CurrentSource(Source):
     """Current source component."""
     current: float = Field(..., description="Current value in amperes")
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.input_var = self.current_var
 
 class Ground(Component):
     """Ground component."""
@@ -138,6 +146,11 @@ class Ground(Component):
 
 class Ammeter(Meter):
     """Ammeter component."""
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.output_var = self.current_var
+
     def get_comp_eq(self) -> str:
         """Returns the symbolic equation for the ammeter. Ideal ammeter has 0 voltage drop.
         
@@ -148,6 +161,11 @@ class Ammeter(Meter):
 
 class Voltmeter(Meter):
     """Voltmeter component."""
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.output_var = self.voltage_var
+
     def get_comp_eq(self) -> str:
         """Returns the symbolic equation for the voltmeter. Ideal voltmeter has 0 current.
         
