@@ -45,6 +45,10 @@ class Component(BaseModel, ABC):
     # Use ConfigDict for configuration
     model_config = ConfigDict(frozen=False)
 
+class Source(Component):
+    """Source component."""
+    pass
+
 class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms", ge=0)
@@ -116,11 +120,11 @@ class Diode(Component):
         else:
             return f"{self.current_var} = 0"
 
-class VoltageSource(Component):
+class VoltageSource(Source):
     """Voltage source component."""
     voltage: float = Field(..., description="Voltage value in volts")
 
-class CurrentSource(Component):
+class CurrentSource(Source):
     """Current source component."""
     current: float = Field(..., description="Current value in amperes")
 
