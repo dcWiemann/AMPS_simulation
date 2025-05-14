@@ -206,6 +206,18 @@ class ElectricalDaeModel(DaeModel):
                 R_eqs.append(data['component'].get_comp_eq())
         return R_eqs
     
+    def compute_meter_equations(self) -> List[str]:
+        """Compute the meter equations of the graph.
+        
+        Returns:
+            List[str]: The meter equations of the graph.
+        """
+        meter_eqs = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Meter):
+                meter_eqs.append(data['component'].get_comp_eq())
+        return meter_eqs
+        
     def compute_switch_equations(self) -> List[str]:
         """Compute the switch equations of the graph.
         
