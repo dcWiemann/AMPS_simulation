@@ -49,6 +49,10 @@ class Source(Component):
     """Source component."""
     pass
 
+class Meter(Component):
+    """Meter component."""
+    pass
+
 class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms", ge=0)
@@ -131,6 +135,26 @@ class CurrentSource(Source):
 class Ground(Component):
     """Ground component."""
     pass
+
+class Ammeter(Meter):
+    """Ammeter component."""
+    def get_comp_eq(self) -> str:
+        """Returns the symbolic equation for the ammeter. Ideal ammeter has 0 voltage drop.
+        
+        Returns:
+            str: Symbolic equation.
+        """
+        return f"{self.voltage_var} = 0"
+
+class Voltmeter(Meter):
+    """Voltmeter component."""
+    def get_comp_eq(self) -> str:
+        """Returns the symbolic equation for the voltmeter. Ideal voltmeter has 0 current.
+        
+        Returns:
+            str: Symbolic equation.
+        """
+        return f"{self.current_var} = 0"
 
 class ElecJunction(BaseModel):
     """Electrical junction component."""
