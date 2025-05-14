@@ -1,5 +1,5 @@
 import pytest
-from amps_simulation.core.components import Resistor, Component, ElecJunction, PowerSwitch
+from amps_simulation.core.components import Resistor, Component, ElecJunction, PowerSwitch, VoltageSource, CurrentSource, Ammeter, Voltmeter
 
 def test_component_variable_names():
     """Test that component variable names are correctly generated."""
@@ -93,3 +93,22 @@ def test_power_switch_control_signal():
     # Test when the switch is off
     switch.is_on = False
     assert switch.control_signal(1) == 1  # Should be 1 when on, after switch_time
+
+def test_voltage_source_input_var():
+    vs = VoltageSource(comp_id='V1', voltage=5.0)
+    assert vs.input_var == vs.voltage_var
+
+
+def test_current_source_input_var():
+    cs = CurrentSource(comp_id='I1', current=10.0)
+    assert cs.input_var == cs.current_var
+
+
+def test_ammeter_output_var():
+    am = Ammeter(comp_id='A1')
+    assert am.output_var == am.current_var
+
+
+def test_voltmeter_output_var():
+    vm = Voltmeter(comp_id='VM1')
+    assert vm.output_var == vm.voltage_var
