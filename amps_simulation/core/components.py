@@ -74,9 +74,29 @@ class Capacitor(Component):
     """Capacitor component."""
     capacitance: float = Field(..., description="Capacitance value in farads", ge=0)
 
+    def get_comp_eq(self) -> Symbol:
+        """Returns the symbolic equation for the capacitor.
+        
+        Returns:
+            Symbol: Symbolic equation representing I = C * dV/dt, where I is current,
+                 C is capacitance, and dV/dt is the derivative of voltage with respect to time.
+        """
+        t = symbols('t')
+        return self.current_var - self.capacitance * self.voltage_var.diff(t)
+
 class Inductor(Component):
     """Inductor component."""
     inductance: float = Field(..., description="Inductance value in henries", ge=0)
+
+    def get_comp_eq(self) -> Symbol:
+        """Returns the symbolic equation for the inductor.
+        
+        Returns:
+            Symbol: Symbolic equation representing V = L * dI/dt, where V is voltage,
+                 L is inductance, and dI/dt is the derivative of current with respect to time.
+        """
+        t = symbols('t')
+        return self.voltage_var - self.inductance * self.current_var.diff(t)
 
 class PowerSwitch(Component):
     """Power switch component."""

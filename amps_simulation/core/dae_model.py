@@ -319,4 +319,18 @@ class ElectricalDaeModel(DaeModel):
         
         return solution
     
+
+    def compute_derivatives(self) -> List[Symbol]:
+        """Compute the derivatives of the state variables.
+        
+        Returns:
+            List[Symbol]: List of derivatives of the state variables
+        """
+        derivatives = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Inductor):
+                derivatives.append(data['component'].get_comp_eq())
+            elif isinstance(data['component'], Capacitor):
+                derivatives.append(data['component'].get_comp_eq())
+        return derivatives
     
