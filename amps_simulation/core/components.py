@@ -2,6 +2,7 @@ from abc import ABC
 from typing import Optional, ClassVar, Dict
 from pydantic import BaseModel, Field, computed_field, field_validator
 from pydantic import ConfigDict
+from sympy import symbols, Symbol
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
@@ -19,6 +20,9 @@ class Component(BaseModel, ABC):
     def __init__(self, **data):
         super().__init__(**data)
         self._registry[self.comp_id] = self
+        # Initialize current and voltage variables as sympy symbols
+        self._current_var = symbols(f"i_{self.comp_id}")
+        self._voltage_var = symbols(f"v_{self.comp_id}")
     
     @classmethod
     def clear_registry(cls) -> None:
@@ -34,13 +38,13 @@ class Component(BaseModel, ABC):
     @property
     def current_var(self) -> str:
         """Returns the current variable name for this component."""
-        return f"i_{self.comp_id}"
+        return self._current_var
     
     @computed_field
     @property
     def voltage_var(self) -> str:
         """Returns the voltage variable name for this component."""
-        return f"v_{self.comp_id}"
+        return self._voltage_var
     
     # Use ConfigDict for configuration
     model_config = ConfigDict(frozen=False)
@@ -57,14 +61,14 @@ class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms", ge=0)
     
-    def get_comp_eq(self) -> str:
+    def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for Ohm's law.
         
         Returns:
-            str: Symbolic equation representing V = I * R, where V is voltage,
+            Symbol: Symbolic equation representing V = I * R, where V is voltage,
                  I is current, and R is resistance.
         """
-        return f"{self.voltage_var} = {self.current_var} * {self.resistance}"
+        return self.voltage_var - self.current_var * self.resistance
 
 class Capacitor(Component):
     """Capacitor component."""
@@ -79,17 +83,17 @@ class PowerSwitch(Component):
     switch_time: float = Field(..., description="Time to switch in seconds")
     is_on: bool = Field(..., description="Whether the switch is on")
     
-    def get_comp_eq(self) -> str:
+    def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the switch based on its position.
         
         Returns:
-            str: Symbolic equation. If switch is closed (1), returns voltage equation.
+            Symbol: Symbolic equation. If switch is closed (1), returns voltage equation.
                  If switch is open (0), returns current equation.
         """
         if self.is_on:  # closed
-            return f"{self.voltage_var} = 0"
+            return self.voltage_var
         else:  # open
-            return f"{self.current_var} = 0"
+            return self.current_var
         
     def control_signal(self, t: float) -> int:
         """Returns the control signal for the switch. 
@@ -112,17 +116,17 @@ class Diode(Component):
     """Diode component."""
     is_on: bool = Field(False, description="Whether the diode is conducting")
     
-    def get_comp_eq(self) -> str:
+    def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the diode based on its state.
         
         Returns:
-            str: Symbolic equation. If diode is conducting, returns voltage equation.
+            Symbol: Symbolic equation. If diode is conducting, returns voltage equation.
                  If diode is not conducting, returns current equation.
         """
         if self.is_on:
-            return f"{self.voltage_var} = 0"
+            return self.voltage_var
         else:
-            return f"{self.current_var} = 0"
+            return self.current_var
 
 class VoltageSource(Source):
     """Voltage source component."""
@@ -151,13 +155,13 @@ class Ammeter(Meter):
         super().__init__(**data)
         self.output_var = self.current_var
 
-    def get_comp_eq(self) -> str:
+    def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the ammeter. Ideal ammeter has 0 voltage drop.
         
         Returns:
-            str: Symbolic equation.
+            Symbol: Symbolic equation.
         """
-        return f"{self.voltage_var} = 0"
+        return self.voltage_var
 
 class Voltmeter(Meter):
     """Voltmeter component."""
@@ -166,13 +170,13 @@ class Voltmeter(Meter):
         super().__init__(**data)
         self.output_var = self.voltage_var
 
-    def get_comp_eq(self) -> str:
+    def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the voltmeter. Ideal voltmeter has 0 current.
         
         Returns:
-            str: Symbolic equation.
+            Symbol: Symbolic equation.
         """
-        return f"{self.current_var} = 0"
+        return self.current_var
 
 class ElecJunction(BaseModel):
     """Electrical junction component."""
@@ -191,6 +195,8 @@ class ElecJunction(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         self._registry[self.junction_id] = self
+        # Initialize voltage variable as a sympy symbol
+        self._voltage_var = symbols(f"V_{self.junction_id}") if not self.is_ground else None
 
     @classmethod
     def clear_registry(cls) -> None:
@@ -202,6 +208,4 @@ class ElecJunction(BaseModel):
     def voltage_var(self) -> Optional[str]:
         """Returns the voltage variable name for this junction.
         Returns None if the junction is a ground node."""
-        if self.is_ground:
-            return None
-        return f"V_{self.junction_id}"
+        return self._voltage_var

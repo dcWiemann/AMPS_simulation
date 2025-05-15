@@ -52,8 +52,11 @@ class ElectricalDaeModel(DaeModel):
     """
     def __init__(self, graph: nx.Graph):
         super().__init__(graph)
+        self.initialized = False
 
+    def initialize(self):
         # Initialize the model
+        
         # Find all circuit variables
         self.state_vars = self.find_state_vars()
         self.output_vars = self.find_output_vars()
@@ -64,8 +67,11 @@ class ElectricalDaeModel(DaeModel):
         self.kcl_eqs = self.compute_kcl_equations()
         self.kvl_eqs = self.compute_kvl_equations()
         self.res_eqs = self.compute_resistance_equations()
+        self.meter_eqs = self.compute_meter_equations()
         self.switch_eqs = self.compute_switch_equations()
         self.circuit_vars = self.compute_circuit_vars()
+        
+        self.initialized = True
 
     def find_state_vars(self) -> List[Symbol]:
         """Find the state variables in the graph.
@@ -74,29 +80,35 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: List of state variables
         """
         state_vars = []
-        for edge in self.graph.edges(data=True):
-            if isinstance(edge['component'], Inductor):
-                state_vars.append(edge['component'].current_var)
-            elif isinstance(edge['component'], Capacitor):
-                state_vars.append(edge['component'].voltage_var)
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Inductor):
+                state_vars.append(data['component'].current_var)
+            elif isinstance(data['component'], Capacitor):
+                state_vars.append(data['component'].voltage_var)
         return state_vars
     
     def find_output_vars(self) -> List[Symbol]:
         """Find the output variables in the graph.
+        
+        Returns:
+            List[Symbol]: List of output variables
         """
         output_vars = []
-        for edge in self.graph.edges(data=True):
-            if isinstance(edge['component'], Meter):
-                output_vars.append(edge['component'].output_var)
+        for _, _, data in self.graph.edges(data=True):  # Correctly unpack edge data
+            if isinstance(data['component'], Meter):
+                output_vars.append(data['component'].output_var)
         return output_vars
 
     def find_input_vars(self) -> List[Symbol]:
         """Find the input variables in the graph.
+        
+        Returns:
+            List[Symbol]: List of input variables
         """
         input_vars = []
-        for edge in self.graph.edges(data=True):
-            if isinstance(edge['component'], Source):
-                input_vars.append(edge['component'].input_var)
+        for _, _, data in self.graph.edges(data=True):  # Correctly unpack edge data
+            if isinstance(data['component'], Source):
+                input_vars.append(data['component'].input_var)
         return input_vars
     
     def variable_lists(self) -> Tuple[List[Symbol], List[Symbol], List[Symbol]]:
@@ -108,17 +120,17 @@ class ElectricalDaeModel(DaeModel):
         nodelist = [node for node in self.graph.nodes()]
         edgelist = list(self.graph.edges(data=True))
 
-        # Convert variables to SymPy symbols, set ground voltage to 0
+        # Set ground voltage to 0
         junction_voltage_var_list = []
         for node in nodelist:
             voltage_var = self.graph.nodes[node]['junction'].voltage_var
             if voltage_var is None:
-                junction_voltage_var_list.append(sympify(0))
+                junction_voltage_var_list.append(0)
             else:
-                junction_voltage_var_list.append(sympify(voltage_var))
+                junction_voltage_var_list.append(voltage_var)
                         
-        component_current_var_list = [sympify(data['component'].current_var) for _, _, data in edgelist]
-        component_voltage_var_list = [sympify(data['component'].voltage_var) for _, _, data in edgelist]
+        component_current_var_list = [data['component'].current_var for _, _, data in edgelist]
+        component_voltage_var_list = [data['component'].voltage_var for _, _, data in edgelist]
 
         return junction_voltage_var_list, component_current_var_list, component_voltage_var_list
 
@@ -149,17 +161,22 @@ class ElectricalDaeModel(DaeModel):
             incidence_matrix[target_idx, edge_idx] = -1
         
         # Convert to SymPy Matrix
-        self.incidence_matrix = Matrix(incidence_matrix)
+        incidence_matrix = Matrix(incidence_matrix)
         
-        return self.incidence_matrix
+        return incidence_matrix
     
-    def compute_kcl_equations(self) -> List[str]:
+    def compute_kcl_equations(self) -> List[Symbol]:
         """Compute Kirchhoff's Current Law equations.
         
         Returns:
-            List[str]: List of KCL equations in symbolic form, excluding the ground node equation.
+            List[Symbol]: List of KCL equations in symbolic form, excluding the ground node equation.
         """
-        incidence_matrix, _, comp_current_vars, _ = self.compute_incidence_matrix()
+        if self.initialized == False:
+            _, comp_current_vars, _ = self.variable_lists()
+            incidence_matrix = self.compute_incidence_matrix()
+        else:
+            comp_current_vars = self.component_current_var_list
+            incidence_matrix = self.incidence_matrix
         
         # Create current vector and multiply with incidence matrix
         current_vector = Matrix(comp_current_vars)
@@ -176,29 +193,36 @@ class ElectricalDaeModel(DaeModel):
         if ground_node_idx is not None:
             kcl_equations = [eq for i, eq in enumerate(kcl_equations) if i != ground_node_idx]
         
-        # Convert equations to strings
-        return [str(eq) for eq in kcl_equations]
+        return kcl_equations
     
-    def compute_kvl_equations(self) -> List[str]:
+    def compute_kvl_equations(self) -> List[Symbol]:
         """Compute Kirchhoff's Voltage Law equations.
         
         Returns:
-            List[str]: List of KVL equations in symbolic form.
+            List[Symbol]: List of KVL equations in symbolic form.
         """
-        incidence_matrix, junction_vars, _, comp_voltage_vars = self.compute_incidence_matrix()
+        if self.initialized == False:
+            junction_voltage_var_list, _, comp_voltage_vars = self.variable_lists()
+            incidence_matrix = self.compute_incidence_matrix()
+        else:
+            junction_voltage_var_list = self.junction_voltage_var_list
+            comp_voltage_vars = self.component_voltage_var_list
+            incidence_matrix = self.incidence_matrix
         
         # Create voltage vector and multiply with transpose of incidence matrix
-        voltage_vector = Matrix(junction_vars)
+        voltage_vector = Matrix(junction_voltage_var_list)
         kvl_equations = incidence_matrix.T * voltage_vector
         
-        # Convert equations to strings and add component voltage variables
-        return [f"{str(eq)} = {str(v_comp)}" for eq, v_comp in zip(kvl_equations, comp_voltage_vars)]
+        # Add component voltage variables
+        kvl_eqs = [eq - v_comp for eq, v_comp in zip(kvl_equations, comp_voltage_vars)]
+        
+        return kvl_eqs
     
-    def compute_resistance_equations(self) -> List[str]:
+    def compute_resistance_equations(self) -> List[Symbol]:
         """Compute the resistance equations of the graph.
         
         Returns:
-            List[str]: The resistance equations of the graph.
+            List[Symbol]: The resistance equations of the graph.
         """
         R_eqs = []
         for _, _, data in self.graph.edges(data=True):
@@ -206,11 +230,11 @@ class ElectricalDaeModel(DaeModel):
                 R_eqs.append(data['component'].get_comp_eq())
         return R_eqs
     
-    def compute_meter_equations(self) -> List[str]:
+    def compute_meter_equations(self) -> List[Symbol]:
         """Compute the meter equations of the graph.
         
         Returns:
-            List[str]: The meter equations of the graph.
+            List[Symbol]: The meter equations of the graph.
         """
         meter_eqs = []
         for _, _, data in self.graph.edges(data=True):
@@ -237,11 +261,61 @@ class ElectricalDaeModel(DaeModel):
             List[str]: List of circuit variables in symbolic form.
         """
         # Combine all equations
-        all_eqs = self.kcl_eqs + self.kvl_eqs + self.res_eqs + self.switch_eqs
-        all_vars = self.junction_voltage_var_list + self.component_current_var_list + self.component_voltage_var_list
+        if self.initialized == False:
+            input_vars = self.find_input_vars()
+            output_vars = self.find_output_vars()
+            state_vars = self.find_state_vars()
+            kcl_eqs = self.compute_kcl_equations()
+            kvl_eqs = self.compute_kvl_equations()
+            res_eqs = self.compute_resistance_equations()
+            switch_eqs = self.compute_switch_equations()
+            junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.variable_lists()
+        else:
+            input_vars = self.input_vars
+            output_vars = self.output_vars
+            state_vars = self.state_vars
+            kcl_eqs = self.kcl_eqs
+            kvl_eqs = self.kvl_eqs
+            res_eqs = self.res_eqs
+            switch_eqs = self.switch_eqs
+            junction_voltage_var_list = self.junction_voltage_var_list
+            component_current_var_list = self.component_current_var_list
+            component_voltage_var_list = self.component_voltage_var_list
+        
+        print("input_vars: ", input_vars)
+        print("output_vars: ", output_vars)
+        print("state_vars: ", state_vars)
 
+        all_eqs = kcl_eqs + kvl_eqs + res_eqs + switch_eqs
+        # Find vars to solve for:
+        # Remove 0 (ground node) from junction_voltage_var_list
+        junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
+        # Combine all variables
+        combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
+        # Remove input_vars and state_vars
+        excluded = set(input_vars) | set(state_vars)
+        all_vars = [var for var in combined_vars if var not in excluded]
+
+        print("all_eqs: ", all_eqs)
+        print("all_vars: ", all_vars)
+
+        number_of_equations = len(all_eqs)
+        number_of_variables = len(all_vars)
+        print("number of eqs: ", number_of_equations)
+        print("number of vars: ", number_of_variables)
+
+        if number_of_equations != number_of_variables:
+            raise Warning("The number of equations and variables must be the same. (%d equations, %d variables)" % (number_of_equations, number_of_variables))
+        
         # Solve the equations
         solution = solve(all_eqs, all_vars)
+        number_of_solutions = len(solution)
+        print("number of sols:", number_of_solutions)
+        print("solutions: ", solution)
+
+        if number_of_solutions != number_of_variables:
+            raise Warning("Did not find a solution for every variable. (%d solutions, %d variables)" % (number_of_solutions, number_of_variables))
+        
         return solution
     
     
