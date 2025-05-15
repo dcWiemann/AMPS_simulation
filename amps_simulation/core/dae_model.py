@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter
 from sympy import Matrix, Symbol, sympify, solve
+import logging
 
 class DaeModel(ABC):
     """Abstract base class for Differential-Algebraic Equation (DAE) models.
@@ -282,9 +283,9 @@ class ElectricalDaeModel(DaeModel):
             component_current_var_list = self.component_current_var_list
             component_voltage_var_list = self.component_voltage_var_list
         
-        print("input_vars: ", input_vars)
-        print("output_vars: ", output_vars)
-        print("state_vars: ", state_vars)
+        logging.debug("input_vars: ", input_vars)
+        logging.debug("output_vars: ", output_vars)
+        logging.debug("state_vars: ", state_vars)
 
         all_eqs = kcl_eqs + kvl_eqs + res_eqs + switch_eqs
         # Find vars to solve for:
@@ -296,13 +297,13 @@ class ElectricalDaeModel(DaeModel):
         excluded = set(input_vars) | set(state_vars)
         all_vars = [var for var in combined_vars if var not in excluded]
 
-        print("all_eqs: ", all_eqs)
-        print("all_vars: ", all_vars)
+        logging.debug("all_eqs: ", all_eqs)
+        logging.debug("all_vars: ", all_vars)
 
         number_of_equations = len(all_eqs)
         number_of_variables = len(all_vars)
-        print("number of eqs: ", number_of_equations)
-        print("number of vars: ", number_of_variables)
+        logging.debug("number of eqs: ", number_of_equations)
+        logging.debug("number of vars: ", number_of_variables)
 
         if number_of_equations != number_of_variables:
             raise Warning("The number of equations and variables must be the same. (%d equations, %d variables)" % (number_of_equations, number_of_variables))
@@ -310,8 +311,8 @@ class ElectricalDaeModel(DaeModel):
         # Solve the equations
         solution = solve(all_eqs, all_vars)
         number_of_solutions = len(solution)
-        print("number of sols:", number_of_solutions)
-        print("solutions: ", solution)
+        logging.debug("number of sols:", number_of_solutions)
+        logging.debug("solutions: ", solution)
 
         if number_of_solutions != number_of_variables:
             raise Warning("Did not find a solution for every variable. (%d solutions, %d variables)" % (number_of_solutions, number_of_variables))
