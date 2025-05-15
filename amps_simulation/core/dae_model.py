@@ -71,7 +71,7 @@ class ElectricalDaeModel(DaeModel):
         self.meter_eqs = self.compute_meter_equations()
         self.switch_eqs = self.compute_switch_equations()
         self.circuit_vars = self.compute_circuit_vars()
-        
+        self.derivatives = self.compute_derivatives()
         self.initialized = True
 
     def find_state_vars(self) -> List[Symbol]:
@@ -332,5 +332,18 @@ class ElectricalDaeModel(DaeModel):
                 derivatives.append(data['component'].get_comp_eq())
             elif isinstance(data['component'], Capacitor):
                 derivatives.append(data['component'].get_comp_eq())
+
+
+        if self.circuit_vars is not None:
+            circuit_vars = self.circuit_vars
+        else:
+            circuit_vars = self.compute_circuit_vars()
+        
+        #substitute circuit_vars into derivatives
+        for var in circuit_vars:
+            derivatives = [eq.subs(var, circuit_vars[var]) for eq in derivatives]
+        
+        logging.debug("derivatives: ", derivatives)
+
         return derivatives
     
