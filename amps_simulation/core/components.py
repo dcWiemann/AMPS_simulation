@@ -59,7 +59,7 @@ class Meter(Component):
 
 class Resistor(Component):
     """Resistor component."""
-    resistance: float = Field(..., description="Resistance value in ohms", ge=0)
+    resistance: float = Field(..., description="Resistance value in ohms")
     
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for Ohm's law.
