@@ -96,6 +96,7 @@ class ParserJson(CircuitParser):
                 kwargs["current"] = data.get("value")
             elif ctype == "switch":
                 kwargs["switch_time"] = data.get("value")
+                kwargs["is_on"] = False # default is off
             # Add more mappings as needed for other types
             component_list.append(cls(**kwargs))
         return component_list
