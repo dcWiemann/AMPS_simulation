@@ -333,7 +333,8 @@ class ElectricalDaeModel(DaeModel):
             elif isinstance(data['component'], Capacitor):
                 derivatives.append(data['component'].get_comp_eq())
 
-
+        print("derivatives: ", derivatives)
+        
         if self.circuit_vars is not None:
             circuit_vars = self.circuit_vars
         else:

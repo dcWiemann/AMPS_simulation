@@ -2,7 +2,8 @@ from abc import ABC
 from typing import Optional, ClassVar, Dict
 from pydantic import BaseModel, Field, computed_field, field_validator
 from pydantic import ConfigDict
-from sympy import symbols, Symbol
+from sympy import symbols, Symbol, Eq, Function
+from sympy.abc import t
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
@@ -78,11 +79,16 @@ class Capacitor(Component):
         """Returns the symbolic equation for the capacitor.
         
         Returns:
-            Symbol: Symbolic equation representing I = C * dV/dt, where I is current,
-                 C is capacitance, and dV/dt is the derivative of voltage with respect to time.
+            Symbol: Symbolic equation representing dV/dt = 1/C * I, where dV/dt is the derivative of voltage with respect to time,
+                 C is capacitance, and I is current.
         """
-        t = symbols('t')
-        return self.current_var - self.capacitance * self.voltage_var.diff(t)
+        return Eq(self.voltage_var.diff(t), (1/self.capacitance) * self.current_var)
+    
+    @computed_field
+    @property
+    def voltage_var(self) -> str:
+        """Returns the voltage variable as a function of time for this component."""
+        return Function(f"v_{self.comp_id}")(t)
 
 class Inductor(Component):
     """Inductor component."""
@@ -92,11 +98,16 @@ class Inductor(Component):
         """Returns the symbolic equation for the inductor.
         
         Returns:
-            Symbol: Symbolic equation representing V = L * dI/dt, where V is voltage,
-                 L is inductance, and dI/dt is the derivative of current with respect to time.
+            Symbol: Symbolic equation representing dI/dt = 1/L * V, where dI/dt is the derivative of current with respect to time,
+                 L is inductance, and V is voltage.
         """
-        t = symbols('t')
-        return self.voltage_var - self.inductance * self.current_var.diff(t)
+        return Eq(self.current_var.diff(t), (1/self.inductance) * self.voltage_var)
+
+    @computed_field
+    @property
+    def current_var(self) -> str:
+        """Returns the current variable as a function of time for this component."""
+        return Function(f"i_{self.comp_id}")(t)
 
 class PowerSwitch(Component):
     """Power switch component."""

@@ -6,6 +6,8 @@ from typing import Dict
 import networkx as nx
 import numpy as np
 import sympy
+from sympy import Derivative
+from sympy.abc import t
 import json
 
 
@@ -203,16 +205,25 @@ def test_compute_circuit_vars():
     
     # Define resistance value
     R = 10
-    
+    V_1 = sympy.symbols('V_1')
+    v_V1 = sympy.symbols('v_V1')
+    i_R1 = sympy.symbols('i_R1')
+    i_C1 = sympy.symbols('i_C1')
+    v_L1 = sympy.symbols('v_L1')
+    v_C1 = sympy.Function('v_C1')(t)
+    i_L1 = sympy.Function('i_L1')(t)
+
     # Check that the solution contains expected symbolic relationships
     expected_relationships = {
-        sympy.symbols('V_1'): sympy.symbols('v_V1'),
-        sympy.symbols('i_R1'): -(1/R) * sympy.symbols('v_C1') + (1/R) * sympy.symbols('v_V1'),
-        sympy.symbols('i_C1'): -sympy.symbols('i_L1') - (1/R) * sympy.symbols('v_C1') + (1/R) * sympy.symbols('v_V1'),
-        sympy.symbols('v_L1'): sympy.symbols('v_C1')
+        V_1: v_V1,
+        i_R1: -(1/R) * v_C1 + (1/R) * v_V1,
+        i_C1: -i_L1 - (1/R) * v_C1 + (1/R) * v_V1,
+        v_L1: v_C1 
     }
     for var, expr in expected_relationships.items():
-        assert circuit_vars.get(var) == expr
+        actual_expr = circuit_vars.get(var)
+        # Use sympy.simplify to check if the difference is zero
+        assert sympy.simplify(actual_expr - expr) == 0, f"Mismatch for {var}: expected {expr}, got {actual_expr}"
 
 
 def test_print_dae_model_components():
@@ -248,3 +259,55 @@ def test_kcl_equations_exclude_ground():
     
     # Verify that the equation contains the resistor current
     assert any(var in kcl_equations[0].free_symbols for var in [sympy.symbols('i_R8'), sympy.symbols('i_R9')]), "KCL equation should contain the resistor current"
+
+
+def test_compute_derivatives():
+    """Test computation of derivatives of state variables using DaeModel_circuit_var_solution.json."""
+    # Load and analyze the circuit from DaeModel_circuit_var_solution.json
+    parser = ParserJson()
+    with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
+        circuit_json = json.load(f)
+    G = parser.parse(circuit_json)
+    model = ElectricalDaeModel(G)
+    model.initialize()
+    
+    
+
+    
+    derivatives = model.compute_derivatives()
+    print("derivatives: ", derivatives)
+    
+    # Check that derivatives are computed
+    assert len(derivatives) == 2
+    
+    # Check that derivatives are symbolic expressions
+    assert all(isinstance(derivative, sympy.Basic) for derivative in derivatives)
+    
+    # Define the component values
+    R1 = 10.0
+    L1 = 0.001
+    C1 = 0.002   
+    # Use the correct symbolic variables with time dependency
+    i_L1 = sympy.Function('i_L1')(t)
+    v_C1 = sympy.Function('v_C1')(t)
+    v_V1 = sympy.symbols('v_V1')
+
+    expected_derivatives = [
+        (v_C1.diff(t), (-i_L1*R1 - v_C1 + v_V1)/(C1*R1)),
+        (i_L1.diff(t), v_C1/L1)
+    ]
+    print("expected_derivatives: ", expected_derivatives)
+
+    for expected in expected_derivatives:
+        # Extract the left and right sides of the equality
+        for derivative in derivatives:
+            if isinstance(derivative, sympy.Eq):
+                lhs, rhs = derivative.lhs, derivative.rhs
+                # Check if the left-hand side matches the expected derivative
+                if sympy.simplify(lhs - expected[0]) == 0:
+                    # Check if the right-hand side matches the expected expression
+                    assert sympy.simplify(rhs - expected[1]) == 0
+                    break
+        else:
+            # If no match was found, the test should fail
+            assert False, f"No matching derivative found for {expected}"
