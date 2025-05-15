@@ -104,22 +104,10 @@ def test_compute_incidence_matrix():
     G = create_test_circuit()
     model = ElectricalDaeModel(G)
     
-    incidence_matrix, junction_vars, comp_current_vars, comp_voltage_vars = model.compute_incidence_matrix()
+    incidence_matrix = model.compute_incidence_matrix()
     
     # Check matrix dimensions (3 nodes including ground, 2 components)
     assert incidence_matrix.shape == (3, 2)
-    
-    # Check node variables (should be voltage variables for all nodes)
-    assert len(junction_vars) == 3
-    assert all(isinstance(var, sympy.Basic) for var in junction_vars)
-    
-    # Check component variables (should be current variables for resistors)
-    assert len(comp_current_vars) == 2
-    assert all(isinstance(var, sympy.Basic) for var in comp_current_vars)
-    
-    # Check component voltage variables
-    assert len(comp_voltage_vars) == 2
-    assert all(isinstance(var, sympy.Basic) for var in comp_voltage_vars)
 
 
 def test_compute_kcl_equations():
@@ -129,11 +117,11 @@ def test_compute_kcl_equations():
     
     kcl_equations = model.compute_kcl_equations()
     
-    # Check that we get 3 equations (one for each node)
-    assert len(kcl_equations) == 3
+    # Check that we get 2 equations (one for each non-ground node)
+    assert len(kcl_equations) == 2
     
     # Check that equations are symbolic expressions
-    assert all(isinstance(eq, str) for eq in kcl_equations)
+    assert all(isinstance(eq, sympy.Basic) for eq in kcl_equations)
 
 
 def test_compute_kvl_equations():
@@ -147,7 +135,7 @@ def test_compute_kvl_equations():
     assert len(kvl_equations) == 2
     
     # Check that equations are symbolic expressions
-    assert all(isinstance(eq, str) for eq in kvl_equations)
+    assert all(isinstance(eq, sympy.Basic) for eq in kvl_equations)
 
 
 def test_compute_resistance_equations():
@@ -160,8 +148,8 @@ def test_compute_resistance_equations():
     # Check that we get 2 equations (one for each resistor)
     assert len(R_eqs) == 2
     
-    # Check that equations are strings
-    assert all(isinstance(eq, str) for eq in R_eqs)
+    # Check that equations are symbolic expressions
+    assert all(isinstance(eq, sympy.Basic) for eq in R_eqs)
     
     # Check that equations follow the form v = i*R
     for (source, target, data), eq in zip(G.edges(data=True), R_eqs):
@@ -170,71 +158,87 @@ def test_compute_resistance_equations():
         assert component.resistance in [10.0, 20.0]  # Values from our test circuit 
 
 
-def test_print_dae_model_components():
-    """Test function to print out key components of the DAE model for inspection."""
-    # Load and analyze the circuit from DaeModel.json
-    print("\n=== Circuit Analysis from DaeModel.json ===")
+def test_compute_meter_equations():
+    """Test computation of meter equations."""
+    G = create_test_circuit()
+    model = ElectricalDaeModel(G)
+    
+    meter_eqs = model.compute_meter_equations()
+    
+    # Check that we get the expected number of equations
+    assert len(meter_eqs) == 0  # Adjust based on the test circuit
+    
+    # Check that equations are symbolic expressions
+    assert all(isinstance(eq, sympy.Basic) for eq in meter_eqs)
+
+
+def test_compute_switch_equations():
+    """Test computation of switch equations."""
+    G = create_test_circuit()
+    model = ElectricalDaeModel(G)
+    
+    switch_eqs = model.compute_switch_equations()
+    
+    # Check that we get the expected number of equations
+    assert len(switch_eqs) == 0  # Adjust based on the test circuit
+    
+    # Check that equations are symbolic expressions
+    assert all(isinstance(eq, sympy.Basic) for eq in switch_eqs)
+
+
+def test_compute_circuit_vars():
+    """Test solving of circuit variables using DaeModel_circuit_var_solution.json."""
+    # Load and analyze the circuit from DaeModel_circuit_var_solution.json
     parser = ParserJson()
-    with open('test_data/DaeModel.json', 'r') as f:
+    with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
         circuit_json = json.load(f)
     G = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     
-    # Get and print incidence matrix and variables
-    inc_matrix, junction_vars, comp_current_vars, comp_voltage_vars = model.compute_incidence_matrix()
+    circuit_vars = model.compute_circuit_vars()
+    print("circuit_vars: ", circuit_vars)
+    
+    # Check that the solution is a dictionary
+    assert isinstance(circuit_vars, dict)
+    
+    # Define resistance value
+    R = 10
+    
+    # Check that the solution contains expected symbolic relationships
+    expected_relationships = {
+        sympy.symbols('V_1'): sympy.symbols('v_V1'),
+        sympy.symbols('i_R1'): -(1/R) * sympy.symbols('v_C1') + (1/R) * sympy.symbols('v_V1'),
+        sympy.symbols('i_C1'): -sympy.symbols('i_L1') - (1/R) * sympy.symbols('v_C1') + (1/R) * sympy.symbols('v_V1'),
+        sympy.symbols('v_L1'): sympy.symbols('v_C1')
+    }
+    for var, expr in expected_relationships.items():
+        assert circuit_vars.get(var) == expr
+
+
+def test_print_dae_model_components():
+    """Test function to print out key components of the DAE model for inspection."""
+    # Load and analyze the circuit from DaeModel_meters.json
+    print("\n=== Circuit Analysis from DaeModel_meters.json ===")
+    parser = ParserJson()
+    with open('test_data/DaeModel_meters.json', 'r') as f:
+        circuit_json = json.load(f)
+    G = parser.parse(circuit_json)
+    model = ElectricalDaeModel(G)
+    
+    # Get and print incidence matrix
+    inc_matrix = model.compute_incidence_matrix()
     print("\nIncidence Matrix:")
     print(inc_matrix)
-    print("\nJunction Variables (Voltages):")
-    for i, var in enumerate(junction_vars):
-        print(f"V{i}: {var}")
-    
-    print("\nComponent Current Variables:")
-    for i, var in enumerate(comp_current_vars):
-        print(f"I{i}: {var}")
-    
-    print("\nComponent Voltage Variables:")
-    for i, var in enumerate(comp_voltage_vars):
-        print(f"V{i}: {var}")
-    
-    # Get and print equations
-    kcl_eqs = model.compute_kcl_equations()
-    kvl_eqs = model.compute_kvl_equations()
-    r_eqs = model.compute_resistance_equations()
-    
-    print("\nKCL Equations:")
-    for i, eq in enumerate(kcl_eqs):
-        print(f"KCL {i}: {eq}")
-    
-    print("\nKVL Equations:")
-    for i, eq in enumerate(kvl_eqs):
-        print(f"KVL {i}: {eq}")
-    
-    print("\nResistance Equations:")
-    for i, eq in enumerate(r_eqs):
-        print(f"R {i}: {eq}")
 
 
 def test_kcl_equations_exclude_ground():
     """Test that KCL equations exclude the ground node equation."""
-    # Create a simple circuit with a ground node
-    graph = nx.Graph()
-    
-    # Create junctions
-    ground_junction = ElecJunction(junction_id=1, is_ground=True)
-    node_junction = ElecJunction(junction_id=2)
-    
-    # Add nodes
-    graph.add_node("1", junction=ground_junction)
-    graph.add_node("2", junction=node_junction)
-    
-    # Add a resistor between nodes
-    resistor1 = Resistor(comp_id="R1", value=1000)
-    resistor2 = Resistor(comp_id="R2", value=2000)
-    graph.add_edge("1", "2", component=resistor1)
-    graph.add_edge("2", "1", component=resistor2)
-    
-    # Create DAE model
-    model = ElectricalDaeModel(graph)
+    # Load and analyze the circuit from DaeModel_kcl_minimal.json
+    parser = ParserJson()
+    with open('test_data/DaeModel_kcl_minimal.json', 'r') as f:
+        circuit_json = json.load(f)
+    G = parser.parse(circuit_json)
+    model = ElectricalDaeModel(G)
     
     # Get KCL equations
     kcl_equations = model.compute_kcl_equations()
@@ -243,4 +247,4 @@ def test_kcl_equations_exclude_ground():
     assert len(kcl_equations) == 1, "Should have only one KCL equation (excluding ground)"
     
     # Verify that the equation contains the resistor current
-    assert "I_R1" in kcl_equations[0], "KCL equation should contain the resistor current" 
+    assert any(var in kcl_equations[0].free_symbols for var in [sympy.symbols('i_R8'), sympy.symbols('i_R9')]), "KCL equation should contain the resistor current"
