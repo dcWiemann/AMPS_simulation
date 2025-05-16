@@ -29,7 +29,7 @@ class Engine:
         self.state_derivatives = {}  # Dictionary of state derivatives
         self.input_vars = {}  # Dictionary of input variables
         self.power_switches = ()  # Tuple of power switches
-        self.switch_control_signals = None  # Function to get switch control signals
+        # self.switch_control_signals = None  # Function to get switch control signals
         self.switch_events = None  # List of switch events
         
         # Ground node reference
@@ -52,18 +52,20 @@ class Engine:
         self._get_input_vars()
         self._get_power_switches()
         if self.power_switches:
-            self.switch_control_signals = self._get_switch_control_signals()
+            # self.switch_control_signals = self._get_switch_control_signals()
             self.switch_events = self._get_switch_events()
-            self.possible_switch_positions = self._get_possible_switch_positions()
+            # self.possible_switch_positions = self._get_possible_switch_positions()
         else:
+            self.switch_control_signals = None
             self.switch_events = None
-            self.possible_switch_positions = (0,) # Default to 0 if no power switches
-        
+            # self.possible_switch_positions = (0,) # Default to 0 if no power switches
+
         logging.debug(f"✅ State variables: {self.state_vars}")
         logging.debug(f"✅ Input variables: {self.input_vars}")
         logging.debug(f"✅ Power switches: {self.power_switches}")
         logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
         logging.debug(f"✅ Switch events: {self.switch_events}")
+
 
     def _get_state_vars(self) -> None:
         """
@@ -189,11 +191,11 @@ class Engine:
         
         return switch_events
     
-    def _get_possible_switch_positions(self):
-        """
-        Get all possible switch positions for the circuit.
+    # def _get_possible_switch_positions(self):
+    #     """
+    #     Get all possible switch positions for the circuit.
         
-        Returns:
-            List[Tuple[int, ...]]: A list of tuples representing the possible switch positions
-        """
-        return list(itertools.product([0, 1], repeat=len(self.power_switches)))
+    #     Returns:
+    #         List[Tuple[int, ...]]: A list of tuples representing the possible switch positions
+    #     """
+    #     return list(itertools.product([0, 1], repeat=len(self.power_switches)))
