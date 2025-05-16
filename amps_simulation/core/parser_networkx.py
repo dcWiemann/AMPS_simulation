@@ -206,6 +206,7 @@ class ParserJson(CircuitParser):
         for node_number in number_map.values():
             is_ground = (node_number == ground_node) if ground_node is not None else False
             junctions[node_number] = ElecJunction(junction_id=node_number, is_ground=is_ground)
+
         return junctions
 
     def _add_nodes_and_edges(self, node_mapping: Dict[Tuple[str, str], int], junctions: Dict[int, ElecJunction]) -> None:
@@ -265,4 +266,12 @@ class ParserJson(CircuitParser):
         node_mapping, next_node_number, ground_node = self._identify_electrical_nodes(connections)
         junctions = self._create_junctions(node_mapping, ground_node)
         self._add_nodes_and_edges(node_mapping, junctions)
-        
+
+        # Add ground node to the graph
+        if ground_node is None:
+            # Find the node with the most components (edges) connected to it
+            node_degrees = self.graph.degree()
+            max_degree_node = max(node_degrees, key=lambda x: x[1])[0]
+            ground_node = int(max_degree_node)
+            # Assign is_ground = True to the node with the most connections
+            junctions[ground_node].is_ground = True
