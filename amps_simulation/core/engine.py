@@ -5,7 +5,8 @@ import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
 from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource
-import itertools
+from .dae_model import ElectricalDaeModel
+# import itertools
 
 class Engine:
     """
@@ -66,6 +67,30 @@ class Engine:
         logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
         logging.debug(f"✅ Switch events: {self.switch_events}")
 
+    def run_solver(self):
+        """
+        Run the solver for the circuit.
+        """
+        t = 0
+        switchmap = {}
+        if self.power_switches:
+            switch_states = tuple(
+                comp.control_signal(t) for comp in self.components_list
+                if isinstance(comp, PowerSwitch)
+            )
+            logging.debug(f"Switch states at time t = {t}: {switch_states}")
+        
+        # build model
+        model = ElectricalDaeModel(self.graph)
+        model.initialize()
+        derivatives = model.get_derivatives()
+        outputs = model.get_outputs()
+
+        # create a map of switch states to DAE system 
+        switchmap[switch_states] = [derivatives, outputs]
+        logging.debug(f"✅ Derivatives: {derivatives}")
+        logging.debug(f"✅ Outputs: {outputs}")
+        
 
     def _get_state_vars(self) -> None:
         """
