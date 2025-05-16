@@ -67,11 +67,11 @@ class ElectricalDaeModel(DaeModel):
         self.incidence_matrix = self.compute_incidence_matrix()
         self.kcl_eqs = self.compute_kcl_equations()
         self.kvl_eqs = self.compute_kvl_equations()
-        self.res_eqs = self.compute_resistance_equations()
-        self.meter_eqs = self.compute_meter_equations()
+        self.static_eqs = self.compute_static_component_equations()
         self.switch_eqs = self.compute_switch_equations()
         self.circuit_vars = self.compute_circuit_vars()
         self.derivatives = self.compute_derivatives()
+        self.outputs = self.compute_outputs()
         self.initialized = True
 
     def find_state_vars(self) -> List[Symbol]:
@@ -125,10 +125,8 @@ class ElectricalDaeModel(DaeModel):
         junction_voltage_var_list = []
         for node in nodelist:
             voltage_var = self.graph.nodes[node]['junction'].voltage_var
-            if voltage_var is None:
-                junction_voltage_var_list.append(0)
-            else:
-                junction_voltage_var_list.append(voltage_var)
+            assert voltage_var is not None, "Voltage variable is None for component %s" % self.graph.nodes[node]['component'].comp_id
+            junction_voltage_var_list.append(voltage_var)
                         
         component_current_var_list = [data['component'].current_var for _, _, data in edgelist]
         component_voltage_var_list = [data['component'].voltage_var for _, _, data in edgelist]
@@ -186,13 +184,17 @@ class ElectricalDaeModel(DaeModel):
         # Find the ground node index (where voltage_var is None)
         ground_node_idx = None
         for i, node in enumerate(self.graph.nodes()):
-            if self.graph.nodes[node]['junction'].voltage_var is None:
+            if self.graph.nodes[node]['junction'].is_ground:
                 ground_node_idx = i
                 break
         
         # Remove the ground node equation if found
         if ground_node_idx is not None:
             kcl_equations = [eq for i, eq in enumerate(kcl_equations) if i != ground_node_idx]
+        
+        # Convert kcl_eqs to a list if it is a MutableDenseMatrix
+        if isinstance(kcl_equations, Matrix):
+            kcl_equations = list(kcl_equations)
         
         return kcl_equations
     
@@ -219,39 +221,29 @@ class ElectricalDaeModel(DaeModel):
         
         return kvl_eqs
     
-    def compute_resistance_equations(self) -> List[Symbol]:
-        """Compute the resistance equations of the graph.
+    def compute_static_component_equations(self) -> List[Symbol]:
+        """Compute the static component equations of the graph.
         
         Returns:
-            List[Symbol]: The resistance equations of the graph.
+            List[Symbol]: The static component equations of the graph.
         """
-        R_eqs = []
+        static_eqs = []
         for _, _, data in self.graph.edges(data=True):
-            if isinstance(data['component'], Resistor):
-                R_eqs.append(data['component'].get_comp_eq())
-        return R_eqs
-    
-    def compute_meter_equations(self) -> List[Symbol]:
-        """Compute the meter equations of the graph.
+            component = data['component']
+            if isinstance(component, (Resistor, Meter)):
+                static_eqs.append(component.get_comp_eq())
+        return static_eqs
         
-        Returns:
-            List[Symbol]: The meter equations of the graph.
-        """
-        meter_eqs = []
-        for _, _, data in self.graph.edges(data=True):
-            if isinstance(data['component'], Meter):
-                meter_eqs.append(data['component'].get_comp_eq())
-        return meter_eqs
-        
-    def compute_switch_equations(self) -> List[str]:
+    def compute_switch_equations(self) -> List[Symbol]:
         """Compute the switch equations of the graph.
         
         Returns:
-            List[str]: The switch equations of the graph.
+            List[Symbol]: The switch equations of the graph.
         """
         switch_eqs = []
         for _, _, data in self.graph.edges(data=True):
             if isinstance(data['component'], PowerSwitch):
+                # Assuming get_comp_eq() returns a symbolic equation
                 switch_eqs.append(data['component'].get_comp_eq())
         return switch_eqs
     
@@ -261,14 +253,14 @@ class ElectricalDaeModel(DaeModel):
         Returns:
             List[str]: List of circuit variables in symbolic form.
         """
-        # Combine all equations
+        # for testing purposes
         if self.initialized == False:
             input_vars = self.find_input_vars()
             output_vars = self.find_output_vars()
             state_vars = self.find_state_vars()
             kcl_eqs = self.compute_kcl_equations()
             kvl_eqs = self.compute_kvl_equations()
-            res_eqs = self.compute_resistance_equations()
+            static_eqs = self.compute_static_component_equations()
             switch_eqs = self.compute_switch_equations()
             junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.variable_lists()
         else:
@@ -277,7 +269,7 @@ class ElectricalDaeModel(DaeModel):
             state_vars = self.state_vars
             kcl_eqs = self.kcl_eqs
             kvl_eqs = self.kvl_eqs
-            res_eqs = self.res_eqs
+            static_eqs = self.static_eqs
             switch_eqs = self.switch_eqs
             junction_voltage_var_list = self.junction_voltage_var_list
             component_current_var_list = self.component_current_var_list
@@ -287,7 +279,8 @@ class ElectricalDaeModel(DaeModel):
         logging.debug("output_vars: ", output_vars)
         logging.debug("state_vars: ", state_vars)
 
-        all_eqs = kcl_eqs + kvl_eqs + res_eqs + switch_eqs
+        # Combine all equations
+        all_eqs = kcl_eqs + kvl_eqs + static_eqs + switch_eqs
         # Find vars to solve for:
         # Remove 0 (ground node) from junction_voltage_var_list
         junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
@@ -332,8 +325,6 @@ class ElectricalDaeModel(DaeModel):
                 derivatives.append(data['component'].get_comp_eq())
             elif isinstance(data['component'], Capacitor):
                 derivatives.append(data['component'].get_comp_eq())
-
-        print("derivatives: ", derivatives)
         
         if self.circuit_vars is not None:
             circuit_vars = self.circuit_vars
@@ -347,4 +338,4 @@ class ElectricalDaeModel(DaeModel):
         logging.debug("derivatives: ", derivatives)
 
         return derivatives
-    
+        
