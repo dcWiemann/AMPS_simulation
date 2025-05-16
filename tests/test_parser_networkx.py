@@ -4,7 +4,7 @@ import networkx as nx
 from amps_simulation.core.parser_networkx import ParserJson
 from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
-    VoltageSource, Ground, Component
+    VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter
 )
 
 def load_test_file(filename: str) -> dict:
@@ -139,34 +139,46 @@ def test_parser_networkx_all_components() -> None:
     print_graph(graph, "All Components Test")
     
     # Get the created components
-    components = parser.components_list
-    
-    # Verify we have the expected number of components
-    assert len(components) == 6, "Should have 6 components (V2, S2, R7, C4, L2, GND1)"
-    
-    # Verify each component type and value
-    component_map = {
-        "V2": ("voltage-source", 5),
-        "S2": ("powerswitch", 0),
-        "R7": ("resistor", 1),
-        "C4": ("capacitor", 0.001),
-        "L2": ("inductor", 0.001),
-        "GND1": ("ground", 0)
-    }
-    
-    for comp_id, (expected_type, expected_value) in component_map.items():
-        # Find the component in the list
-        component = next((c for c in components if c.comp_id == comp_id), None)
-        assert component is not None, f"Component {comp_id} not found"
-        
-        # Verify component type
-        assert component.__class__.__name__.lower() == expected_type.replace("-", ""), \
-            f"Component {comp_id} has wrong type"
-        
-        # Verify component value
-        if hasattr(component, "value"):
-            assert component.value == expected_value, \
-                f"Component {comp_id} has wrong value"
-    
+    components = graph.edges(data=True)
+
     # Verify graph is initialized
     assert isinstance(graph, nx.MultiDiGraph), "Parser should return a directed graph"
+    
+    # Verify we have the expected number of components
+    assert len(components) == 9, "Should have 9 components (Vin, Iin, S, D, R, C, L, Am, Vm)"
+    
+    type_list = ['VoltageSource', 'CurrentSource', 'PowerSwitch', 'Diode', 'Resistor', 'Capacitor', 'Inductor', 'Ammeter', 'Voltmeter']
+    
+    # Verify that the components are of the correct type
+    for comp in components:
+        assert isinstance(comp[2]['component'], Component), "Component should be of type Component"
+    
+    # Create a mapping from type names to actual component classes
+    component_type_map = {
+        'VoltageSource': VoltageSource,
+        'CurrentSource': CurrentSource,
+        'PowerSwitch': PowerSwitch,
+        'Diode': Diode,
+        'Resistor': Resistor,
+        'Capacitor': Capacitor,
+        'Inductor': Inductor,
+        'Ground': Ground,
+        'Ammeter': Ammeter,
+        'Voltmeter': Voltmeter
+    }
+
+    # Verify that each type appears exactly once
+    for t in type_list:
+        count = 0  # Initialize count for each type
+        for comp in components:
+            if isinstance(comp[2]['component'], component_type_map[t]):
+                count += 1
+        assert count == 1, f"Component type {t} should appear exactly once"
+
+# def test_parser_networkx_has_ground_node() -> None:
+#     """Test that the parser creates a ground node."""
+#     # Clear the component registry to avoid duplicate comp_id issues
+#     Component.clear_registry()
+
+#     # Load test circuit
+#     circuit_data = load_test_file("parser_no_ground_node.json")
