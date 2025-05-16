@@ -4,7 +4,7 @@ import networkx as nx
 from amps_simulation.core.parser_networkx import ParserJson
 from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
-    VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter
+    VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter, ElecJunction
 )
 
 def load_test_file(filename: str) -> dict:
@@ -175,10 +175,27 @@ def test_parser_networkx_all_components() -> None:
                 count += 1
         assert count == 1, f"Component type {t} should appear exactly once"
 
-# def test_parser_networkx_has_ground_node() -> None:
-#     """Test that the parser creates a ground node."""
-#     # Clear the component registry to avoid duplicate comp_id issues
-#     Component.clear_registry()
+def test_parser_networkx_has_ground_node() -> None:
+    """Test that the parser creates a ground node."""
+    # Clear the component registry to avoid duplicate comp_id issues
+    Component.clear_registry()
 
-#     # Load test circuit
-#     circuit_data = load_test_file("parser_no_ground_node.json")
+    # Load test circuit
+    circuit_data = load_test_file("parser_no_ground_node.json")
+
+    # Create parser instance
+    parser = ParserJson()
+    
+    # Parse circuit data
+    graph = parser.parse(circuit_data)
+    print_graph(graph, "No Ground Node Test")
+
+    nodes = graph.nodes(data=True)
+    count = 0
+    for node in nodes:
+        assert isinstance(node[1]['junction'], ElecJunction), "Node should be an instance of ElecJunction"
+        if node[1]['junction'].is_ground:
+            assert node[1]['junction'].voltage_var == 0, "Ground node should have 0 voltage"
+            count += 1
+    assert count == 1, "Should have exactly one ground node"
+
