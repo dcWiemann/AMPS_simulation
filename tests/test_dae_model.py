@@ -1,7 +1,7 @@
 import pytest
 from amps_simulation.core.dae_model import DaeModel, ElectricalDaeModel
 from amps_simulation.core.parser_networkx import ParserJson
-from amps_simulation.core.components import Resistor, ElecJunction
+from amps_simulation.core.components import Resistor, ElecJunction, PowerSwitch
 from typing import Dict
 import networkx as nx
 import numpy as np
@@ -140,50 +140,43 @@ def test_compute_kvl_equations():
     assert all(isinstance(eq, sympy.Basic) for eq in kvl_equations)
 
 
-def test_compute_resistance_equations():
+def test_compute_static_component_equations():
     """Test computation of resistance equations."""
-    G = create_test_circuit()
+    parser = ParserJson()
+    with open('test_data/DaeModel_meters.json', 'r') as f:
+        circuit_json = json.load(f)
+    G = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     
-    R_eqs = model.compute_resistance_equations()
+    static_eqs = model.compute_static_component_equations()
     
     # Check that we get 2 equations (one for each resistor)
-    assert len(R_eqs) == 2
+    assert len(static_eqs) == 5
     
     # Check that equations are symbolic expressions
-    assert all(isinstance(eq, sympy.Basic) for eq in R_eqs)
-    
-    # Check that equations follow the form v = i*R
-    for (source, target, data), eq in zip(G.edges(data=True), R_eqs):
-        component = data['component']
-        assert isinstance(component.resistance, float)
-        assert component.resistance in [10.0, 20.0]  # Values from our test circuit 
+    assert all(isinstance(eq, sympy.Basic) for eq in static_eqs)
 
-
-def test_compute_meter_equations():
-    """Test computation of meter equations."""
-    G = create_test_circuit()
-    model = ElectricalDaeModel(G)
-    
-    meter_eqs = model.compute_meter_equations()
-    
-    # Check that we get the expected number of equations
-    assert len(meter_eqs) == 0  # Adjust based on the test circuit
-    
-    # Check that equations are symbolic expressions
-    assert all(isinstance(eq, sympy.Basic) for eq in meter_eqs)
 
 
 def test_compute_switch_equations():
     """Test computation of switch equations."""
-    G = create_test_circuit()
+    parser = ParserJson()
+    with open('test_data/DaeModel_meters.json', 'r') as f:
+        circuit_json = json.load(f)
+    G = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     
     switch_eqs = model.compute_switch_equations()
-    
-    # Check that we get the expected number of equations
-    assert len(switch_eqs) == 0  # Adjust based on the test circuit
-    
+    print("switch_eqs off:", switch_eqs)
+    assert switch_eqs == [sympy.symbols('i_S2')]
+
+    for edge in G.edges(data=True):
+        if isinstance(edge[2]['component'], PowerSwitch):
+            edge[2]['component'].is_on = True
+
+    switch_eqs = model.compute_switch_equations()
+    print("switch_eqs on: ", switch_eqs)
+    assert switch_eqs == [sympy.symbols('v_S2')]
     # Check that equations are symbolic expressions
     assert all(isinstance(eq, sympy.Basic) for eq in switch_eqs)
 
@@ -195,11 +188,15 @@ def test_compute_circuit_vars():
     with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
         circuit_json = json.load(f)
     G = parser.parse(circuit_json)
+    for edge in G.edges(data=True):
+        if isinstance(edge[2]['component'], PowerSwitch):
+            edge[2]['component'].is_on = False
+
     model = ElectricalDaeModel(G)
-    
+
     circuit_vars = model.compute_circuit_vars()
     print("circuit_vars: ", circuit_vars)
-    
+
     # Check that the solution is a dictionary
     assert isinstance(circuit_vars, dict)
     
@@ -235,11 +232,23 @@ def test_print_dae_model_components():
         circuit_json = json.load(f)
     G = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
+    model.initialize()
     
-    # Get and print incidence matrix
-    inc_matrix = model.compute_incidence_matrix()
-    print("\nIncidence Matrix:")
-    print(inc_matrix)
+    # print attributes of the model
+    print("\nstate_vars: ", model.state_vars)
+    print("\noutput_vars: ", model.output_vars)
+    print("\ninput_vars: ", model.input_vars)
+    print("\njunction_voltage_var_list: ", model.junction_voltage_var_list)
+    print("\ncomponent_current_var_list: ", model.component_current_var_list)
+    print("\ncomponent_voltage_var_list: ", model.component_voltage_var_list)
+    print("\nincidence_matrix: ", model.incidence_matrix)
+    print("\nkcl_eqs: ", model.kcl_eqs)
+    print("\nkvl_eqs: ", model.kvl_eqs)
+    print("\nstatic_eqs: ", model.static_eqs)
+    print("\nswitch_eqs: ", model.switch_eqs)
+    print("\ncircuit_vars: ", model.circuit_vars)
+    print("\nderivatives: ", model.derivatives)
+    print("\noutputs: ", model.outputs)
 
 
 def test_kcl_equations_exclude_ground():
