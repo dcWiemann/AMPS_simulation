@@ -178,11 +178,7 @@ class CurrentSource(Source):
 
 class Ground(Component):
     """Ground component."""
-    def __init__(self, **data):
-        super().__init__(**data)
-    
-    def voltage_var(self) -> Symbol:
-        return 0
+    pass
 
 class Ammeter(Meter):
     """Ammeter component."""
@@ -232,7 +228,7 @@ class ElecJunction(BaseModel):
         super().__init__(**data)
         self._registry[self.junction_id] = self
         # Initialize voltage variable as a sympy symbol
-        self._voltage_var = symbols(f"V_{self.junction_id}") if not self.is_ground else None
+        self._voltage_var = symbols(f"V_{self.junction_id}") if not self.is_ground else 0
 
     @classmethod
     def clear_registry(cls) -> None:
