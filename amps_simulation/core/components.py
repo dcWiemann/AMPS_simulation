@@ -21,9 +21,6 @@ class Component(BaseModel, ABC):
     def __init__(self, **data):
         super().__init__(**data)
         self._registry[self.comp_id] = self
-        # Initialize current and voltage variables as sympy symbols
-        self._current_var = symbols(f"i_{self.comp_id}")
-        self._voltage_var = symbols(f"v_{self.comp_id}")
     
     @classmethod
     def clear_registry(cls) -> None:
@@ -39,13 +36,13 @@ class Component(BaseModel, ABC):
     @property
     def current_var(self) -> str:
         """Returns the current variable name for this component."""
-        return self._current_var
+        return symbols(f"i_{self.comp_id}")
     
     @computed_field
     @property
     def voltage_var(self) -> str:
         """Returns the voltage variable name for this component."""
-        return self._voltage_var
+        return symbols(f"v_{self.comp_id}")
     
     # Use ConfigDict for configuration
     model_config = ConfigDict(frozen=False)
@@ -227,8 +224,6 @@ class ElecJunction(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         self._registry[self.junction_id] = self
-        # Initialize voltage variable as a sympy symbol
-        self._voltage_var = symbols(f"V_{self.junction_id}") if not self.is_ground else 0
 
     @classmethod
     def clear_registry(cls) -> None:
@@ -240,4 +235,4 @@ class ElecJunction(BaseModel):
     def voltage_var(self) -> Optional[str]:
         """Returns the voltage variable name for this junction.
         Returns None if the junction is a ground node."""
-        return self._voltage_var
+        return symbols(f"V_{self.junction_id}") if not self.is_ground else 0
