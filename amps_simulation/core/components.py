@@ -167,6 +167,7 @@ class VoltageSource(Source):
         super().__init__(**data)
         self.input_var = self.voltage_var
 
+
 class CurrentSource(Source):
     """Current source component."""
     current: float = Field(..., description="Current value in amperes")
@@ -177,7 +178,11 @@ class CurrentSource(Source):
 
 class Ground(Component):
     """Ground component."""
-    pass
+    def __init__(self, **data):
+        super().__init__(**data)
+    
+    def voltage_var(self) -> Symbol:
+        return 0
 
 class Ammeter(Meter):
     """Ammeter component."""
