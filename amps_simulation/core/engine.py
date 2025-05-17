@@ -85,12 +85,16 @@ class Engine:
         model.initialize()
         derivatives = model.get_derivatives()
         outputs = model.get_outputs()
+        print("\nderivatives: ", derivatives)
+        print("\noutputs: ", outputs)
+        # sort derivatives by state variables
+        sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+        print("\nsorted_derivatives: ", sorted_derivatives)
 
         # create a map of switch states to DAE system 
-        switchmap[switch_states] = [derivatives, outputs]
-        logging.debug(f"✅ Derivatives: {derivatives}")
+        switchmap[switch_states] = [sorted_derivatives, outputs]
+        logging.debug(f"✅ Derivatives: {sorted_derivatives}")
         logging.debug(f"✅ Outputs: {outputs}")
-        
 
     def _get_state_vars(self) -> None:
         """
@@ -224,3 +228,28 @@ class Engine:
     #         List[Tuple[int, ...]]: A list of tuples representing the possible switch positions
     #     """
     #     return list(itertools.product([0, 1], repeat=len(self.power_switches)))
+
+    def _sort_derivatives_by_state_vars(self, derivatives: List[sp.Eq]) -> List[sp.Eq]:
+        """
+        Sort derivatives to match the order of state variables.
+        
+        Args:
+            derivatives: List of derivative equations
+            
+        Returns:
+            List[sp.Eq]: Sorted list of derivative equations matching state_vars order
+        """
+        # Create a mapping of state variable to its derivative equation
+        derivative_map = {}
+        for eq in derivatives:
+            # Get the state variable from the derivative
+            state_var = eq.lhs.args[0]  # The variable being differentiated
+            derivative_map[state_var] = eq
+            
+        # Create sorted list based on state_vars order
+        sorted_derivatives = []
+        for state_var in self.state_vars.keys():
+            if state_var in derivative_map:
+                sorted_derivatives.append(derivative_map[state_var])
+                
+        return sorted_derivatives
