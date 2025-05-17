@@ -68,10 +68,11 @@ class ElectricalDaeModel(DaeModel):
         self.kcl_eqs = self.compute_kcl_equations()
         self.kvl_eqs = self.compute_kvl_equations()
         self.static_eqs = self.compute_static_component_equations()
+        self.switch_list = self.find_switches()
         self.switch_eqs = self.compute_switch_equations()
-        self.circuit_vars = self.compute_circuit_vars()
+        self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
-        self.outputs = self.compute_outputs()
+        self.output_eqs = self.compute_output_equations()
         self.initialized = True
 
     def find_state_vars(self) -> List[Symbol]:
@@ -233,6 +234,18 @@ class ElectricalDaeModel(DaeModel):
             if isinstance(component, (Resistor, Meter)):
                 static_eqs.append(component.get_comp_eq())
         return static_eqs
+    
+    def find_switches(self) -> List[PowerSwitch]:
+        """Find the switches in the graph.
+        
+        Returns:
+            List[PowerSwitch]: List of switches
+        """
+        switch_list = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], PowerSwitch):
+                switch_list.append(data['component'])
+        return switch_list
         
     def compute_switch_equations(self) -> List[Symbol]:
         """Compute the switch equations of the graph.
@@ -240,14 +253,18 @@ class ElectricalDaeModel(DaeModel):
         Returns:
             List[Symbol]: The switch equations of the graph.
         """
+        if self.initialized == False:
+            switch_list = self.find_switches()
+        else:
+            switch_list = self.switch_list
+        
         switch_eqs = []
-        for _, _, data in self.graph.edges(data=True):
-            if isinstance(data['component'], PowerSwitch):
-                # Assuming get_comp_eq() returns a symbolic equation
-                switch_eqs.append(data['component'].get_comp_eq())
+        for switch in switch_list:
+            switch_eqs.append(switch.get_comp_eq())
+
         return switch_eqs
     
-    def compute_circuit_vars(self) -> List[str]:
+    def compute_circuit_equations(self) -> List[str]:
         """Solve the circuit variables.
         
         Returns:
@@ -326,16 +343,62 @@ class ElectricalDaeModel(DaeModel):
             elif isinstance(data['component'], Capacitor):
                 derivatives.append(data['component'].get_comp_eq())
         
-        if self.circuit_vars is not None:
-            circuit_vars = self.circuit_vars
+        if self.circuit_eqs is not None:
+            circuit_eqs = self.circuit_eqs
         else:
-            circuit_vars = self.compute_circuit_vars()
+            circuit_eqs = self.compute_circuit_equations()
         
         #substitute circuit_vars into derivatives
-        for var in circuit_vars:
-            derivatives = [eq.subs(var, circuit_vars[var]) for eq in derivatives]
+        for var in circuit_eqs:
+            derivatives = [eq.subs(var, circuit_eqs[var]) for eq in derivatives]
         
         logging.debug("derivatives: ", derivatives)
 
         return derivatives
+    
+
+    def find_output_vars(self) -> List[Symbol]:
+        """Find the outputs in the graph.
         
+        Returns:
+            List[Symbol]: List of outputs
+        """
+        outputs = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Meter):
+                outputs.append(data['component'].output_var)
+        return outputs
+    
+    def compute_output_equations(self) -> Dict[Symbol, Symbol]:
+        """Compute the outputs of the circuit.
+        
+        Returns:
+            Dict[Symbol, Symbol]: Dictionary mapping output variables to their expressions
+        """
+        if self.initialized == False:
+            outputs = self.find_output_vars()
+        else:
+            outputs = self.output_vars
+        
+        output_eqs = {output: self.circuit_eqs[output] for output in outputs}
+        return output_eqs
+    
+    def update_switch_states(self, t = None) -> None:
+        """Update the switch states. This method is called during simulation when a switch event is detected.
+        It uses the kcl, kvl and component equations previously computed and only updates the switch equations.
+        Based on that, it recomputes the circuit variables and derivatives.
+
+        """
+        if t is not None:
+            assert isinstance(t, float), "Time must be a float"
+            switchmap = {switch.comp_id: switch.control_signal(t) for switch in self.switch_list}
+        
+        assert self.initialized == True, "Model must be initialized before updating switch states"
+        self.switch_eqs = self.compute_switch_equations()
+        self.circuit_eqs = self.compute_circuit_equations()
+        self.derivatives = self.compute_derivatives()
+        
+        if t is not None:
+            return self.circuit_eqs, self.derivatives, switchmap
+        else:
+            return self.circuit_eqs, self.derivatives
