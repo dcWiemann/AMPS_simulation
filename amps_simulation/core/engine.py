@@ -312,38 +312,28 @@ class Engine:
         n_states = len(self.state_vars)
         n_inputs = len(self.input_vars)
         n_outputs = len(self.output_vars)
-
-        # Handle empty derivatives
-        if not derivatives:
-            return (sp.zeros(n_states, n_states), 
-                   sp.zeros(n_states, n_inputs), 
-                   sp.zeros(n_outputs, n_states), 
-                   sp.zeros(n_outputs, n_inputs))
+        assert n_states == len(derivatives), "Number of state variables does not match number of derivatives"
+        assert n_outputs == len(output_eqs), "Number of output variables does not match number of output equations"
+        
 
         # Create dx_dt matrix from derivatives
-        dx_dt = sp.Matrix([eq.rhs for eq in derivatives])
-        # Ensure dx_dt is a column vector
-        if dx_dt.shape[1] != 1:
-            dx_dt = dx_dt.T
-
-        # Handle empty output equations
-        if not output_eqs:
+        if derivatives:
+            dx_dt = sp.Matrix([eq.rhs for eq in derivatives])
             A = dx_dt.jacobian(self.state_vars)
             B = dx_dt.jacobian(self.input_vars)
-            return (A, 
-                   B, 
-                   sp.zeros(n_outputs, n_states), 
-                   sp.zeros(n_outputs, n_inputs))
+        else:
+            A = sp.zeros(n_states, n_states)
+            B = sp.zeros(n_states, n_inputs)
 
         # Create y matrix from output equations
-        y = sp.Matrix([eq.rhs for eq in output_eqs])
-        if y.shape[1] != 1:
-            y = y.T
-
-        # Compute state space matrices
-        A = dx_dt.jacobian(self.state_vars)
-        B = dx_dt.jacobian(self.input_vars)
-        C = y.jacobian(self.state_vars)
-        D = y.jacobian(self.input_vars)
+        if output_eqs:
+            y = sp.Matrix([eq.rhs for eq in output_eqs])
+            C = y.jacobian(self.state_vars)
+            D = y.jacobian(self.input_vars)
+        else:
+            C = sp.zeros(n_outputs, n_states)
+            D = sp.zeros(n_outputs, n_inputs)
+        
+        
 
         return A, B, C, D
