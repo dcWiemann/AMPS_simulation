@@ -164,6 +164,12 @@ class VoltageSource(Source):
         super().__init__(**data)
         self.input_var = self.voltage_var
 
+    @computed_field
+    @property
+    def voltage_var(self) -> str:
+        """Returns the voltage variable as a function of time for this component."""
+        return Function(f"v_{self.comp_id}")(t)
+
 
 class CurrentSource(Source):
     """Current source component."""
@@ -172,6 +178,12 @@ class CurrentSource(Source):
     def __init__(self, **data):
         super().__init__(**data)
         self.input_var = self.current_var
+
+    @computed_field
+    @property
+    def current_var(self) -> str:
+        """Returns the current variable as a function of time for this component."""
+        return Function(f"i_{self.comp_id}")(t)
 
 class Ground(Component):
     """Ground component."""
