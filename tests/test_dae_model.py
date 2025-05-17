@@ -20,7 +20,7 @@ class SimpleDaeModel(DaeModel):
         u = inputs.get('u', 0.0)
         
         self.derivatives['x'] = -x + u
-        self.outputs['y'] = x
+        self.output_eqs['y'] = x
 
 
 def test_dae_model_initialization():
@@ -28,7 +28,7 @@ def test_dae_model_initialization():
     G = nx.Graph()  # Create an empty graph for the simple model
     model = SimpleDaeModel(G)
     assert model.derivatives == {}
-    assert model.outputs == {}
+    assert model.output_eqs == {}
 
 
 def test_dae_model_getters():
@@ -41,10 +41,10 @@ def test_dae_model_getters():
     model.evaluate(t=0.0, states=states, inputs=inputs)
     
     derivatives = model.get_derivatives()
-    outputs = model.get_outputs()
+    output_eqs = model.get_outputs()
     
     assert derivatives['x'] == 1.0
-    assert outputs['y'] == 1.0
+    assert output_eqs['y'] == 1.0
 
 
 def create_test_circuit():
@@ -98,7 +98,7 @@ def test_electrical_dae_model_initialization():
     model = ElectricalDaeModel(G)
     assert isinstance(model.graph, nx.Graph)
     assert model.derivatives == {}
-    assert model.outputs == {}
+    assert model.output_eqs == {}
 
 
 def test_compute_incidence_matrix():
@@ -203,7 +203,7 @@ def test_compute_circuit_equations():
     # Define resistance value
     R = 10
     V_1 = sympy.symbols('V_1')
-    v_V1 = sympy.symbols('v_V1')
+    v_V1 = sympy.Function('v_V1')(t)
     i_R1 = sympy.symbols('i_R1')
     i_C1 = sympy.symbols('i_C1')
     v_L1 = sympy.symbols('v_L1')
@@ -233,6 +233,9 @@ def test_print_dae_model_components():
     G = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     model.initialize()
+    for switch in model.switch_list:
+        switch.is_on = True
+    model.update_switch_states()
     
     # print attributes of the model
     print("\nstate_vars: ", model.state_vars)
@@ -248,7 +251,7 @@ def test_print_dae_model_components():
     print("\nswitch_eqs: ", model.switch_eqs)
     print("\ncircuit_eqs: ", model.circuit_eqs)
     print("\nderivatives: ", model.derivatives)
-    print("\noutputs: ", model.outputs)
+    print("\noutput_eqs: ", model.output_eqs)
 
 
 def test_kcl_equations_exclude_ground():
@@ -296,7 +299,7 @@ def test_compute_derivatives():
     # Use the correct symbolic variables with time dependency
     i_L1 = sympy.Function('i_L1')(t)
     v_C1 = sympy.Function('v_C1')(t)
-    v_V1 = sympy.symbols('v_V1')
+    v_V1 = sympy.Function('v_V1')(t)
 
     expected_derivatives = [
         (v_C1.diff(t), (-i_L1*R1 - v_C1 + v_V1)/(C1*R1)),
