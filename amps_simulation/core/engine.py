@@ -4,7 +4,7 @@ from typing import Dict, Set, Tuple, List, Any
 import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
-from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource
+from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource, Meter
 from .dae_model import ElectricalDaeModel
 # import itertools
 
@@ -51,6 +51,7 @@ class Engine:
         # Set up all necessary variables
         self._get_state_vars()
         self._get_input_vars()
+        self._get_output_vars()
         self._get_power_switches()
         if self.power_switches:
             # self.switch_control_signals = self._get_switch_control_signals()
@@ -84,17 +85,21 @@ class Engine:
         model = ElectricalDaeModel(self.graph)
         model.initialize()
         derivatives = model.get_derivatives()
-        outputs = model.get_outputs()
+        output_eqs = model.get_output_eqs()
         print("\nderivatives: ", derivatives)
-        print("\noutputs: ", outputs)
+        print("\noutput_eqs: ", output_eqs)
         # sort derivatives by state variables
         sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+        sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
+        
         print("\nsorted_derivatives: ", sorted_derivatives)
+        print("\nsorted_output_eqs: ", sorted_output_eqs)
 
         # create a map of switch states to DAE system 
-        switchmap[switch_states] = [sorted_derivatives, outputs]
+        switchmap[switch_states] = [sorted_derivatives, sorted_output_eqs]
         logging.debug(f"✅ Derivatives: {sorted_derivatives}")
-        logging.debug(f"✅ Outputs: {outputs}")
+        logging.debug(f"✅ Outputs: {sorted_output_eqs}")
+        
 
     def _get_state_vars(self) -> None:
         """
@@ -151,6 +156,14 @@ class Engine:
                 # For current sources, the input variable is the current
                 I_source = sp.Symbol(component.current_var)
                 self.input_vars[I_source] = component.comp_id
+
+    def _get_output_vars(self) -> None:
+        """
+        Set output variables for meters.
+        """
+        for component in self.components_list:
+            if isinstance(component, Meter):
+                self.output_vars[component.output_var] = component.comp_id
 
     def _get_power_switches(self) -> None:
         """
@@ -253,3 +266,48 @@ class Engine:
                 sorted_derivatives.append(derivative_map[state_var])
                 
         return sorted_derivatives
+
+    def _sort_output_eqs_by_output_vars(self, output_eqs: List[sp.Eq]) -> List[sp.Eq]:
+        """
+        Sort output equations to match the order of output variables.
+        
+        Args:
+            output_eqs: List of output equations
+            
+        Returns:
+            List[sp.Eq]: Sorted list of output equations matching output_vars order
+        """
+        # Create a mapping of output variable to its equation
+        output_map = {}
+        for eq in output_eqs:
+            # Get the output variable from the equation
+            output_var = eq.lhs  # The output variable is on the left side
+            output_map[output_var] = eq
+            
+        # Create sorted list based on output_vars order
+        sorted_output_eqs = []
+        for output_var in self.output_vars.keys():
+            if output_var in output_map:
+                sorted_output_eqs.append(output_map[output_var])
+                
+        return sorted_output_eqs
+    
+    def compute_state_space_model(self, derivatives: List[sp.Eq], output_eqs: List[sp.Eq]) -> None:
+        """
+        Compute the state space model of the circuit.
+
+        Args:
+            derivatives: ordered list of derivative equations
+            output_eqs: ordered list of output equations
+
+        Returns:
+            A, B, C, D: State space model matrices
+        """
+        dx_dt = sp.Matrix(derivatives.rhs)
+        y = sp.Matrix(output_eqs.rhs)
+        A = dx_dt.jacobian(self.state_vars.keys())
+        B = dx_dt.jacobian(self.input_vars.keys())
+        C = y.jacobian(self.state_vars.keys())
+        D = y.jacobian(self.input_vars.keys())
+
+        return A, B, C, D
