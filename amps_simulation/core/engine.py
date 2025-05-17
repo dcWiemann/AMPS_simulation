@@ -27,9 +27,9 @@ class Engine:
         # Initialize simulation variables
         self.components_list = []
         self.state_vars = {}  # Dictionary of state variables
-        self.state_derivatives = {}  # Dictionary of state derivatives
+        # self.state_derivatives = {}  # Dictionary of state derivatives
         self.input_vars = {}  # Dictionary of input variables
-        self.power_switches = ()  # Tuple of power switches
+        self.switch_list = None  # Tuple of power switches
         # self.switch_control_signals = None  # Function to get switch control signals
         self.switch_events = None  # List of switch events
         
@@ -48,25 +48,33 @@ class Engine:
             if component is not None:
                 self.components_list.append(component)
         
+        self.electrical_model = ElectricalDaeModel(self.graph)
+        self.electrical_model.initialize()
+
         # Set up all necessary variables
-        self._get_state_vars()
-        self._get_input_vars()
-        self._get_output_vars()
-        self._get_power_switches()
-        if self.power_switches:
+        self.state_vars = tuple(self.electrical_model.state_vars)
+        self.input_vars = tuple(self.electrical_model.input_vars)
+        self.output_vars = tuple(self.electrical_model.output_vars)
+        self.switch_list = tuple(self.electrical_model.switch_list)
+
+        # self._get_state_vars()
+        # self._get_input_vars()
+        # self._get_output_vars()
+        # self._get_power_switches()
+        if self.switch_list is not None:
             # self.switch_control_signals = self._get_switch_control_signals()
             self.switch_events = self._get_switch_events()
             # self.possible_switch_positions = self._get_possible_switch_positions()
-        else:
-            self.switch_control_signals = None
-            self.switch_events = None
+        # else:
+            # self.switch_control_signals = None
+            # self.switch_events = None
             # self.possible_switch_positions = (0,) # Default to 0 if no power switches
 
-        logging.debug(f"✅ State variables: {self.state_vars}")
-        logging.debug(f"✅ Input variables: {self.input_vars}")
-        logging.debug(f"✅ Power switches: {self.power_switches}")
-        logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
-        logging.debug(f"✅ Switch events: {self.switch_events}")
+        # logging.debug(f"✅ State variables: {self.state_vars}")
+        # logging.debug(f"✅ Input variables: {self.input_vars}")
+        # logging.debug(f"✅ Power switches: {self.power_switches}")
+        # logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
+        # logging.debug(f"✅ Switch events: {self.switch_events}")
 
     def run_solver(self):
         """
@@ -74,18 +82,14 @@ class Engine:
         """
         t = 0
         switchmap = {}
-        if self.power_switches:
+        if self.switch_list:
             switch_states = tuple(
-                comp.control_signal(t) for comp in self.components_list
-                if isinstance(comp, PowerSwitch)
+                comp.control_signal(t) for comp in self.switch_list
             )
             logging.debug(f"Switch states at time t = {t}: {switch_states}")
         
-        # build model
-        model = ElectricalDaeModel(self.graph)
-        model.initialize()
-        derivatives = model.get_derivatives()
-        output_eqs = model.get_output_eqs()
+        derivatives = self.electrical_model.derivatives
+        output_eqs = self.electrical_model.output_eqs
         print("\nderivatives: ", derivatives)
         print("\noutput_eqs: ", output_eqs)
         # sort derivatives by state variables
@@ -99,7 +103,13 @@ class Engine:
         switchmap[switch_states] = [sorted_derivatives, sorted_output_eqs]
         logging.debug(f"✅ Derivatives: {sorted_derivatives}")
         logging.debug(f"✅ Outputs: {sorted_output_eqs}")
-        
+
+        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+        print("\nA: ", A)
+        print("\nB: ", B)
+        print("\nC: ", C)
+        print("\nD: ", D)
+
 
     def _get_state_vars(self) -> None:
         """
@@ -215,11 +225,7 @@ class Engine:
         Returns:
             List[callable]: A list of event functions that return 0 when a switch changes state.
         """
-        # Get switch times from components
-        switch_times = {}
-        for comp in self.components_list:
-            if isinstance(comp, PowerSwitch):
-                switch_times[comp.comp_id] = comp.switch_time
+
 
         def create_event_function(switch_time):
             def event(t, x):
@@ -229,7 +235,7 @@ class Engine:
             return event
 
         # Create a list of event functions for each switch
-        switch_events = [create_event_function(switch_times[switch_id]) for switch_id in self.power_switches]
+        switch_events = [create_event_function(switch.switch_time) for switch in self.switch_list]
         
         return switch_events
     
@@ -261,7 +267,7 @@ class Engine:
             
         # Create sorted list based on state_vars order
         sorted_derivatives = []
-        for state_var in self.state_vars.keys():
+        for state_var in self.state_vars:
             if state_var in derivative_map:
                 sorted_derivatives.append(derivative_map[state_var])
                 
@@ -286,7 +292,7 @@ class Engine:
             
         # Create sorted list based on output_vars order
         sorted_output_eqs = []
-        for output_var in self.output_vars.keys():
+        for output_var in self.output_vars:
             if output_var in output_map:
                 sorted_output_eqs.append(output_map[output_var])
                 
@@ -303,11 +309,41 @@ class Engine:
         Returns:
             A, B, C, D: State space model matrices
         """
-        dx_dt = sp.Matrix(derivatives.rhs)
-        y = sp.Matrix(output_eqs.rhs)
-        A = dx_dt.jacobian(self.state_vars.keys())
-        B = dx_dt.jacobian(self.input_vars.keys())
-        C = y.jacobian(self.state_vars.keys())
-        D = y.jacobian(self.input_vars.keys())
+        n_states = len(self.state_vars)
+        n_inputs = len(self.input_vars)
+        n_outputs = len(self.output_vars)
+
+        # Handle empty derivatives
+        if not derivatives:
+            return (sp.zeros(n_states, n_states), 
+                   sp.zeros(n_states, n_inputs), 
+                   sp.zeros(n_outputs, n_states), 
+                   sp.zeros(n_outputs, n_inputs))
+
+        # Create dx_dt matrix from derivatives
+        dx_dt = sp.Matrix([eq.rhs for eq in derivatives])
+        # Ensure dx_dt is a column vector
+        if dx_dt.shape[1] != 1:
+            dx_dt = dx_dt.T
+
+        # Handle empty output equations
+        if not output_eqs:
+            A = dx_dt.jacobian(self.state_vars)
+            B = dx_dt.jacobian(self.input_vars)
+            return (A, 
+                   B, 
+                   sp.zeros(n_outputs, n_states), 
+                   sp.zeros(n_outputs, n_inputs))
+
+        # Create y matrix from output equations
+        y = sp.Matrix([eq.rhs for eq in output_eqs])
+        if y.shape[1] != 1:
+            y = y.T
+
+        # Compute state space matrices
+        A = dx_dt.jacobian(self.state_vars)
+        B = dx_dt.jacobian(self.input_vars)
+        C = y.jacobian(self.state_vars)
+        D = y.jacobian(self.input_vars)
 
         return A, B, C, D
