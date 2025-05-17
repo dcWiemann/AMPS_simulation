@@ -181,7 +181,7 @@ def test_compute_switch_equations():
     assert all(isinstance(eq, sympy.Basic) for eq in switch_eqs)
 
 
-def test_compute_circuit_vars():
+def test_compute_circuit_equations():
     """Test solving of circuit variables using DaeModel_circuit_var_solution.json."""
     # Load and analyze the circuit from DaeModel_circuit_var_solution.json
     parser = ParserJson()
@@ -194,11 +194,11 @@ def test_compute_circuit_vars():
 
     model = ElectricalDaeModel(G)
 
-    circuit_vars = model.compute_circuit_vars()
-    print("circuit_vars: ", circuit_vars)
+    circuit_eqs = model.compute_circuit_equations()
+    print("circuit_eqs: ", circuit_eqs)
 
     # Check that the solution is a dictionary
-    assert isinstance(circuit_vars, dict)
+    assert isinstance(circuit_eqs, dict)
     
     # Define resistance value
     R = 10
@@ -218,7 +218,7 @@ def test_compute_circuit_vars():
         v_L1: v_C1 
     }
     for var, expr in expected_relationships.items():
-        actual_expr = circuit_vars.get(var)
+        actual_expr = circuit_eqs.get(var)
         # Use sympy.simplify to check if the difference is zero
         assert sympy.simplify(actual_expr - expr) == 0, f"Mismatch for {var}: expected {expr}, got {actual_expr}"
 
@@ -246,7 +246,7 @@ def test_print_dae_model_components():
     print("\nkvl_eqs: ", model.kvl_eqs)
     print("\nstatic_eqs: ", model.static_eqs)
     print("\nswitch_eqs: ", model.switch_eqs)
-    print("\ncircuit_vars: ", model.circuit_vars)
+    print("\ncircuit_eqs: ", model.circuit_eqs)
     print("\nderivatives: ", model.derivatives)
     print("\noutputs: ", model.outputs)
 
@@ -279,9 +279,6 @@ def test_compute_derivatives():
     G = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     model.initialize()
-    
-    
-
     
     derivatives = model.compute_derivatives()
     print("derivatives: ", derivatives)
