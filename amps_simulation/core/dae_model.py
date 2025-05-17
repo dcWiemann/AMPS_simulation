@@ -21,7 +21,7 @@ class DaeModel(ABC):
         """Initialize the DAE model with empty derivatives and outputs dictionaries."""
         self.graph = graph
         self.derivatives: Dict[str, float] = {}
-        self.outputs: Dict[str, float] = {}
+        self.output_eqs: Dict[Symbol, Symbol] = {}
     
     
     def get_derivatives(self) -> Dict[str, float]:
@@ -32,13 +32,13 @@ class DaeModel(ABC):
         """
         return self.derivatives
     
-    def get_outputs(self) -> Dict[str, float]:
+    def get_outputs(self) -> Dict[Symbol, Symbol]:
         """Get the current output values.
         
         Returns:
             Dict[str, float]: Dictionary mapping output variable names to their values
         """
-        return self.outputs 
+        return self.output_eqs
     
 
 class ElectricalDaeModel(DaeModel):
@@ -352,7 +352,7 @@ class ElectricalDaeModel(DaeModel):
         for var in circuit_eqs:
             derivatives = [eq.subs(var, circuit_eqs[var]) for eq in derivatives]
         
-        logging.debug("derivatives: ", derivatives)
+        # logging.debug("derivatives: ", derivatives)
 
         return derivatives
     
@@ -397,6 +397,7 @@ class ElectricalDaeModel(DaeModel):
         self.switch_eqs = self.compute_switch_equations()
         self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
+        self.output_eqs = self.compute_output_equations()
         
         if t is not None:
             return self.circuit_eqs, self.derivatives, switchmap
