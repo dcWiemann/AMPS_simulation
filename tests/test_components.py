@@ -1,5 +1,6 @@
 import pytest
 from amps_simulation.core.components import Resistor, Component, ElecJunction, PowerSwitch, VoltageSource, CurrentSource, Ammeter, Voltmeter
+from sympy import symbols
 
 def test_component_variable_names():
     """Test that component variable names are correctly generated."""
@@ -7,13 +8,13 @@ def test_component_variable_names():
     resistor = Resistor(comp_id="R1", resistance=100.0)
     
     # Test current and voltage variable names
-    assert resistor.current_var == "i_R1"
-    assert resistor.voltage_var == "v_R1"
+    assert resistor.current_var == symbols("i_R1")
+    assert resistor.voltage_var == symbols("v_R1")
     
     # Test with a different component ID
     resistor2 = Resistor(comp_id="R2", resistance=200.0)
-    assert resistor2.current_var == "i_R2"
-    assert resistor2.voltage_var == "v_R2"
+    assert resistor2.current_var == symbols("i_R2")
+    assert resistor2.voltage_var == symbols("v_R2")
 
 def test_component_registry():
     """Test the component registry functionality."""
@@ -61,14 +62,15 @@ def test_component_id_starts_with_letter():
 def test_elec_junction_voltage_var():
     """Test that ElecJunction voltage variable names are correctly generated."""
     # Create a test junction
+    ElecJunction.clear_registry()
     junction = ElecJunction(junction_id=1)
     
     # Test voltage variable name
-    assert junction.voltage_var == "V_1"
+    assert junction.voltage_var == symbols("V_1")
     
     # Test with a different junction ID
     junction2 = ElecJunction(junction_id=2)
-    assert junction2.voltage_var == "V_2"
+    assert junction2.voltage_var == symbols("V_2")
 
 def test_unique_junction_ids():
     """Test that duplicate junction IDs are not allowed."""
