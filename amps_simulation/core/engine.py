@@ -6,6 +6,7 @@ from scipy.integrate import solve_ivp
 import numpy as np
 from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource, Meter
 from .dae_model import ElectricalDaeModel
+from control import StateSpace
 # import itertools
 
 class Engine:
@@ -88,10 +89,9 @@ class Engine:
             )
             logging.debug(f"Switch states at time t = {t}: {switch_states}")
         
+        
         derivatives = self.electrical_model.derivatives
         output_eqs = self.electrical_model.output_eqs
-        print("\nderivatives: ", derivatives)
-        print("\noutput_eqs: ", output_eqs)
         # sort derivatives by state variables
         sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
         sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
@@ -99,16 +99,14 @@ class Engine:
         print("\nsorted_derivatives: ", sorted_derivatives)
         print("\nsorted_output_eqs: ", sorted_output_eqs)
 
-        # create a map of switch states to DAE system 
-        switchmap[switch_states] = [sorted_derivatives, sorted_output_eqs]
+        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+        elecStateSpace = StateSpace(A, B, C, D)
+
+        # create a map of switch states to DAE system
+        switchmap[switch_states] = elecStateSpace
         logging.debug(f"✅ Derivatives: {sorted_derivatives}")
         logging.debug(f"✅ Outputs: {sorted_output_eqs}")
-
-        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
-        print("\nA: ", A)
-        print("\nB: ", B)
-        print("\nC: ", C)
-        print("\nD: ", D)
+        logging.debug(f"✅ Electrical State Space: {elecStateSpace}")
 
 
     def _get_state_vars(self) -> None:
@@ -333,7 +331,5 @@ class Engine:
         else:
             C = sp.zeros(n_outputs, n_states)
             D = sp.zeros(n_outputs, n_inputs)
-        
-        
 
         return A, B, C, D
