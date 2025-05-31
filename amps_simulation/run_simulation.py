@@ -51,4 +51,4 @@ def run_simulation(circuit_json_data, test_mode=False):
 
 
 if __name__ == "__main__":
-    run_simulation_from_file('test_data/test_lcr.json')
+    run_simulation_from_file('test_data/DaeModel_meters.json')
