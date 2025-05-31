@@ -123,7 +123,7 @@ class PowerSwitch(Component):
         else:  # open
             return self.current_var
         
-    def control_signal(self, t: float) -> int:
+    def set_switch_state(self, t: float) -> int:
         """Returns the control signal for the switch. 
         If the switch is open, the control signal is 0.
         If the switch is closed, the control signal is 1.

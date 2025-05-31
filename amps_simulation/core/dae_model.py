@@ -391,7 +391,7 @@ class ElectricalDaeModel(DaeModel):
         """
         if t is not None:
             assert isinstance(t, float), "Time must be a float"
-            switchmap = {switch.comp_id: switch.control_signal(t) for switch in self.switch_list}
+            switchmap = {switch.comp_id: switch.set_switch_state(t) for switch in self.switch_list}
         
         assert self.initialized == True, "Model must be initialized before updating switch states"
         self.switch_eqs = self.compute_switch_equations()

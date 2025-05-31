@@ -85,7 +85,7 @@ class Engine:
         switchmap = {}
         if self.switch_list:
             switch_states = tuple(
-                comp.control_signal(t) for comp in self.switch_list
+                comp.set_switch_state(t) for comp in self.switch_list
             )
             logging.debug(f"Switch states at time t = {t}: {switch_states}")
         
