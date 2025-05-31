@@ -6,8 +6,8 @@ from scipy.integrate import solve_ivp
 import numpy as np
 from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource, Meter
 from .dae_model import ElectricalDaeModel
+from .engine_settings import EngineSettings
 from control import StateSpace
-# import itertools
 
 class Engine:
     """
@@ -33,7 +33,8 @@ class Engine:
         self.switch_list = None  # Tuple of power switches
         # self.switch_control_signals = None  # Function to get switch control signals
         self.switch_events = None  # List of switch events
-        
+        # Simulation settings
+        self.engine_settings = EngineSettings()
         # Ground node reference
         self.ground_node = None
 
@@ -83,12 +84,12 @@ class Engine:
         """
         t = 0
         switchmap = {}
+        
         if self.switch_list:
             switch_states = tuple(
                 comp.set_switch_state(t) for comp in self.switch_list
             )
             logging.debug(f"Switch states at time t = {t}: {switch_states}")
-        
         
         derivatives = self.electrical_model.derivatives
         output_eqs = self.electrical_model.output_eqs
