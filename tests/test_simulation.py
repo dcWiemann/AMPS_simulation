@@ -1,5 +1,5 @@
 import json
-from amps_simulation.core.parser import ParserJson
+from amps_simulation.core.parser import ParserJson_todict
 from amps_simulation.core.simulation import Simulation
 
 
@@ -9,7 +9,7 @@ def test_simulation_class():
         circuit_json = json.load(file)
     
     # Create a parser instance
-    parser = ParserJson()
+    parser = ParserJson_todict()
     
     # Parse the circuit data
     electrical_nodes, circuit_components = parser.parse(circuit_json)

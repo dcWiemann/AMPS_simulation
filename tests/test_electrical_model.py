@@ -3,7 +3,7 @@ import json
 import os
 import sympy as sp
 from amps_simulation.core.electrical_model import ElectricalModel
-from amps_simulation.core.parser import ParserJson
+from amps_simulation.core.parser import ParserJson_todict
 from amps_simulation.core.simulation import Simulation
 
 # Test data configuration
@@ -23,7 +23,7 @@ def mock_rlc_circuit():
     """Create a simple RLC circuit for testing."""
     # Load and parse the circuit
     circuit_data = load_test_file("test_rlc.json")
-    parser = ParserJson()
+    parser = ParserJson_todict()
     electrical_nodes, circuit_components = parser.parse(circuit_data)
     
     # Create simulation instance to get variables
@@ -72,7 +72,7 @@ def test_electrical_model_with_real_circuits(test_file):
     """Test ElectricalModel with real circuit data."""
     # Load and parse circuit data
     circuit_data = load_test_file(test_file)
-    parser = ParserJson()
+    parser = ParserJson_todict()
     electrical_nodes, circuit_components = parser.parse(circuit_data)
     
     # Create simulation instance to get variables
@@ -103,7 +103,7 @@ def test_electrical_model_specific_rlc_circuit():
     """Test specific properties of the RLC circuit model."""
     # Load and parse RLC circuit
     circuit_data = load_test_file("test_rlc.json")
-    parser = ParserJson()
+    parser = ParserJson_todict()
     electrical_nodes, circuit_components = parser.parse(circuit_data)
     
     # Create simulation instance to get variables

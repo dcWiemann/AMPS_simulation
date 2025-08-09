@@ -2,7 +2,7 @@ import pytest
 import json
 import os
 from typing import Dict, Any, Set, Tuple
-from amps_simulation.core.parser import ParserJson
+from amps_simulation.core.parser import ParserJson_todict
 
 # Test data configuration
 TEST_DATA_DIR = "test_data"
@@ -131,7 +131,7 @@ def test_parser_json(test_file: str) -> None:
         circuit_data = load_test_file(test_file)
         
         # Create parser instance
-        parser = ParserJson()
+        parser = ParserJson_todict()
         
         # Parse circuit data
         electrical_nodes, circuit_components = parser.parse(circuit_data)
@@ -180,7 +180,7 @@ def test_parser_json_specific_circuit() -> None:
     circuit_data = load_test_file("test_rlc.json")
     
     # Create parser instance
-    parser = ParserJson()
+    parser = ParserJson_todict()
     
     # Parse circuit data
     electrical_nodes, circuit_components = parser.parse(circuit_data)
