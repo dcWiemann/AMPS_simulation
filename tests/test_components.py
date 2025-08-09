@@ -90,11 +90,11 @@ def test_power_switch_control_signal():
     switch = PowerSwitch(comp_id="SW1", switch_time=1.0, is_on=True)
     
     # Test when the switch is on
-    assert switch.control_signal(0.2) == 0  # Should be 0 when off, before switch_time
+    assert switch.set_switch_state(0.2) == 0  # Should be 0 when off, before switch_time
     
     # Test when the switch is off
     switch.is_on = False
-    assert switch.control_signal(1) == 1  # Should be 1 when on, after switch_time
+    assert switch.set_switch_state(1) == 1  # Should be 1 when on, after switch_time
 
 def test_voltage_source_input_var():
     vs = VoltageSource(comp_id='V1', voltage=5.0)
