@@ -116,13 +116,16 @@ class Engine:
 
                 # create a map of switch states to DAE system
                 switchmap[switch_states] = elecStateSpace
-            
-                
 
             logging.debug(f"✅ Derivatives: {sorted_derivatives}")
             logging.debug(f"✅ Outputs: {sorted_output_eqs}")
             logging.debug(f"✅ Electrical State Space: {elecStateSpace}")
+            
+            # Get eigenvalues of A matrix (for debugging)
+            eigenvalues = elecStateSpace.A.eigenvals()
+            logging.debug(f"✅ Eigenvalues of A matrix: {eigenvalues}")
 
+            
 
     def _get_state_vars(self) -> None:
         """
