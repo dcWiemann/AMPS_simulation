@@ -37,6 +37,7 @@ class Engine:
         self.engine_settings = EngineSettings()
         # Ground node reference
         self.ground_node = None
+        self.initialized = False
 
     def initialize(self) -> None:
         """
@@ -77,6 +78,9 @@ class Engine:
         # logging.debug(f"✅ Power switches: {self.power_switches}")
         # logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
         # logging.debug(f"✅ Switch events: {self.switch_events}")
+
+        # Set initialized flag to True
+        self.initialized = True
 
     def run_solver(self):
         """
