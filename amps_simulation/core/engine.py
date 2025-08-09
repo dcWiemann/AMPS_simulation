@@ -86,32 +86,42 @@ class Engine:
         """
         Run the solver for the circuit.
         """
-        t = 0
+        t = self.engine_settings.start_time
+        t_end = self.engine_settings.end_time
         switchmap = {}
         
-        if self.switch_list:
-            switch_states = tuple(
-                comp.set_switch_state(t) for comp in self.switch_list
-            )
-            logging.debug(f"Switch states at time t = {t}: {switch_states}")
-        
-        derivatives = self.electrical_model.derivatives
-        output_eqs = self.electrical_model.output_eqs
-        # sort derivatives by state variables
-        sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
-        sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
-        
-        print("\nsorted_derivatives: ", sorted_derivatives)
-        print("\nsorted_output_eqs: ", sorted_output_eqs)
+        while t < t_end:
+            if self.switch_list:
+                switch_states = tuple(
+                    comp.set_switch_state(t) for comp in self.switch_list
+                )
+                logging.debug(f"Switch states at time t = {t}: {switch_states}")
+            
+            # Check if the switch states are already in the map
+            if switch_states in switchmap:
+                elecStateSpace = switchmap[switch_states]
+            # If not, compute the state space model for the current switch states
+            else:
+                derivatives = self.electrical_model.derivatives
+                output_eqs = self.electrical_model.output_eqs
+                # sort derivatives by state variables
+                sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+                sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
+                
+                print("\nsorted_derivatives: ", sorted_derivatives)
+                print("\nsorted_output_eqs: ", sorted_output_eqs)
 
-        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
-        elecStateSpace = StateSpace(A, B, C, D)
+                A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+                elecStateSpace = StateSpace(A, B, C, D)
 
-        # create a map of switch states to DAE system
-        switchmap[switch_states] = elecStateSpace
-        logging.debug(f"✅ Derivatives: {sorted_derivatives}")
-        logging.debug(f"✅ Outputs: {sorted_output_eqs}")
-        logging.debug(f"✅ Electrical State Space: {elecStateSpace}")
+                # create a map of switch states to DAE system
+                switchmap[switch_states] = elecStateSpace
+            
+                
+
+            logging.debug(f"✅ Derivatives: {sorted_derivatives}")
+            logging.debug(f"✅ Outputs: {sorted_output_eqs}")
+            logging.debug(f"✅ Electrical State Space: {elecStateSpace}")
 
 
     def _get_state_vars(self) -> None:
