@@ -292,9 +292,9 @@ class ElectricalDaeModel(DaeModel):
             component_current_var_list = self.component_current_var_list
             component_voltage_var_list = self.component_voltage_var_list
         
-        logging.debug("input_vars: ", input_vars)
-        logging.debug("output_vars: ", output_vars)
-        logging.debug("state_vars: ", state_vars)
+        logging.debug(f"input_vars: {input_vars}")
+        logging.debug(f"output_vars: {output_vars}")
+        logging.debug(f"state_vars: {state_vars}")
 
         # Combine all equations
         all_eqs = kcl_eqs + kvl_eqs + static_eqs + switch_eqs
@@ -307,13 +307,13 @@ class ElectricalDaeModel(DaeModel):
         excluded = set(input_vars) | set(state_vars)
         all_vars = [var for var in combined_vars if var not in excluded]
 
-        logging.debug("all_eqs: ", all_eqs)
-        logging.debug("all_vars: ", all_vars)
+        logging.debug(f"all_eqs: {all_eqs}")
+        logging.debug(f"all_vars: {all_vars}")
 
         number_of_equations = len(all_eqs)
         number_of_variables = len(all_vars)
-        logging.debug("number of eqs: ", number_of_equations)
-        logging.debug("number of vars: ", number_of_variables)
+        logging.debug(f"number of eqs: {number_of_equations}")
+        logging.debug(f"number of vars: {number_of_variables}")
 
         if number_of_equations != number_of_variables:
             raise Warning("The number of equations and variables must be the same. (%d equations, %d variables)" % (number_of_equations, number_of_variables))
@@ -321,8 +321,8 @@ class ElectricalDaeModel(DaeModel):
         # Solve the equations
         solution = solve(all_eqs, all_vars)
         number_of_solutions = len(solution)
-        logging.debug("number of sols:", number_of_solutions)
-        logging.debug("solutions: ", solution)
+        logging.debug(f"number of sols: {number_of_solutions}")
+        logging.debug(f"solutions: {solution}")
 
         if number_of_solutions != number_of_variables:
             raise Warning("Did not find a solution for every variable. (%d solutions, %d variables)" % (number_of_solutions, number_of_variables))
