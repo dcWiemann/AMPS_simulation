@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from pydantic import ConfigDict
 from sympy import symbols, Symbol, Eq, Function
 from sympy.abc import t
+from .control_port import ControlPort
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
@@ -50,6 +51,10 @@ class Component(BaseModel, ABC):
 class Source(Component):
     """Source component."""
     input_var: Optional[str] = None
+    control_port: ControlPort = None
+
+    def __init__(self, **data):
+        super().__init__(**data)
 
 class Meter(Component):
     """Meter component."""
@@ -163,11 +168,12 @@ class VoltageSource(Source):
     def __init__(self, **data):
         super().__init__(**data)
         self.input_var = self.voltage_var
+        port_name = f"{self.comp_id}_port"
+        self.control_port = ControlPort(name=port_name, value=self.input_var)
 
     @computed_field
     @property
     def voltage_var(self) -> str:
-        """Returns the voltage variable as a function of time for this component."""
         return Function(f"v_{self.comp_id}")(t)
 
 
@@ -178,11 +184,12 @@ class CurrentSource(Source):
     def __init__(self, **data):
         super().__init__(**data)
         self.input_var = self.current_var
+        port_name = f"{self.comp_id}_port"
+        self.control_port = ControlPort(name=port_name, value=self.input_var)
 
     @computed_field
     @property
     def current_var(self) -> str:
-        """Returns the current variable as a function of time for this component."""
         return Function(f"i_{self.comp_id}")(t)
 
 class Ground(Component):
