@@ -1,5 +1,5 @@
 import pytest
-from amps_simulation.core.components import Resistor, Component, ElecJunction, PowerSwitch, VoltageSource, CurrentSource, Ammeter, Voltmeter
+from amps_simulation.core.components import Resistor, Component, ElecJunction, PowerSwitch, Source, VoltageSource, CurrentSource, Ammeter, Voltmeter
 from sympy import symbols
 
 def test_component_variable_names():
@@ -114,3 +114,15 @@ def test_ammeter_output_var():
 def test_voltmeter_output_var():
     vm = Voltmeter(comp_id='VM1')
     assert vm.output_var == vm.voltage_var
+
+def test_source_control_port_exposes_input_var():
+    Source.clear_registry()
+    # VoltageSource: input_var should be voltage_var
+    vs = VoltageSource(comp_id="V1", voltage=12.0)
+    assert vs.control_port.name == "V1_port"
+    assert vs.control_port.value == vs.input_var
+    # CurrentSource: input_var should be current_var
+    cs = CurrentSource(comp_id="I1", current=2.0)
+    assert cs.control_port.name == "I1_port"
+    assert cs.control_port.value == cs.input_var
+    Source.clear_registry()
