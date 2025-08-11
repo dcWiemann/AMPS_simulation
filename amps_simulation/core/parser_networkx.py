@@ -6,20 +6,22 @@ from .components import (
     Component, Resistor, Capacitor, Inductor,
     PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction, Ammeter, Voltmeter
 )
+from .control_orchestrator import ControlGraph, ControlSignal
+from .control_port import ControlPort
 
 class CircuitParser(ABC):
     """Abstract base class for circuit parsers that produce NetworkX graphs."""
     
     @abstractmethod
-    def parse(self, circuit_data: Any) -> nx.Graph:
+    def parse(self, circuit_data: Any) -> Tuple[nx.Graph, ControlGraph]:
         """
-        Parse circuit data into a NetworkX graph structure.
+        Parse circuit data into NetworkX graph and control graph structures.
         
         Args:
             circuit_data: Circuit description in the format supported by this parser
             
         Returns:
-            nx.Graph: A NetworkX graph representing the circuit
+            Tuple[nx.Graph, ControlGraph]: Electrical graph and control graph
         """
         pass
 
@@ -30,22 +32,24 @@ class ParserJson(CircuitParser):
     def __init__(self):
         """Initialize the parser with an empty directed graph."""
         self.graph = nx.MultiDiGraph()
+        self.control_graph = ControlGraph()
         self.components_list = []
 
     
-    def parse(self, circuit_json: Dict[str, Any]) -> nx.Graph:
+    def parse(self, circuit_json: Dict[str, Any]) -> Tuple[nx.Graph, ControlGraph]:
         """
-        Parse JSON circuit description into a NetworkX graph structure.
+        Parse JSON circuit description into NetworkX graph and control graph structures.
         
         Args:
             circuit_json: Dictionary containing circuit description with 'nodes' and 'edges'
             
         Returns:
-            nx.Graph: A NetworkX graph representing the circuit
+            Tuple[nx.Graph, ControlGraph]: Electrical graph and control graph
         """
         # Clear registries to avoid duplicate ID issues
         Component.clear_registry()
         ElecJunction.clear_registry()
+        ControlPort.clear_registry()
 
         # Extract components and connections
         components = circuit_json["nodes"]
@@ -53,8 +57,9 @@ class ParserJson(CircuitParser):
         
         self.components_list = self._create_circuit_components(components)
         self._create_electrical_graph(connections, components)
+        self._create_control_graph(components)
         
-        return self.graph
+        return self.graph, self.control_graph
     
 
     def _create_circuit_components(self, components: list) -> List[Component]:
@@ -275,3 +280,42 @@ class ParserJson(CircuitParser):
             ground_node = int(max_degree_node)
             # Assign is_ground = True to the node with the most connections
             junctions[ground_node].is_ground = True
+
+    def _create_control_graph(self, components: List[Dict[str, Any]]) -> None:
+        """
+        Create control graph from source components with 'value' fields.
+        
+        Args:
+            components: List of component dictionaries from JSON nodes
+        """
+        for comp_dict in components:
+            comp_id = comp_dict["id"]
+            data = comp_dict["data"]
+            comp_type = data.get("componentType")
+            
+            # Only process voltage and current sources
+            if comp_type not in ["voltage-source", "current-source"]:
+                continue
+                
+            value = data.get("value")
+            if value is None:
+                continue
+                
+            # Create control signal from value
+            signal_id = f"{comp_id}_signal"
+            signal = ControlSignal(signal_id, value)
+            self.control_graph.add_signal(signal)
+            
+            # Create control port for the source
+            port_name = f"{comp_id}_port"
+            # Get the component to access its input_var
+            component = Component.get_component(comp_id)
+            if component and hasattr(component, 'input_var'):
+                # Assign port name to the component
+                component.control_port_name = port_name
+                
+                port = ControlPort(name=port_name, variable=component.input_var, port_type="source")
+                self.control_graph.add_port(port)
+                
+                # Connect signal to port (1:1 mapping for now)
+                self.control_graph.connect_signal_to_port(signal_id, port_name)
