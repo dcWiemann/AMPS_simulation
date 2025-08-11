@@ -15,3 +15,4 @@ build/**
 .envrc
 notes/
 .cursorrules
+.CLAUDE.md
