@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from pydantic import ConfigDict
 from sympy import symbols, Symbol, Eq, Function
 from sympy.abc import t
-from .control_port import ControlPort
 
 class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
@@ -51,7 +50,7 @@ class Component(BaseModel, ABC):
 class Source(Component):
     """Source component."""
     input_var: Optional[str] = None
-    control_port: ControlPort = None
+    control_port_name: Optional[str] = None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -168,8 +167,7 @@ class VoltageSource(Source):
     def __init__(self, **data):
         super().__init__(**data)
         self.input_var = self.voltage_var
-        port_name = f"{self.comp_id}_port"
-        self.control_port = ControlPort(name=port_name, variable=self.input_var)
+        # control_port_name should be set by the parser if needed
 
     @computed_field
     @property
@@ -184,8 +182,7 @@ class CurrentSource(Source):
     def __init__(self, **data):
         super().__init__(**data)
         self.input_var = self.current_var
-        port_name = f"{self.comp_id}_port"
-        self.control_port = ControlPort(name=port_name, variable=self.input_var)
+        # control_port_name should be set by the parser if needed
 
     @computed_field
     @property
