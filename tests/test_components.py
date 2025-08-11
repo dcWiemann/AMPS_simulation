@@ -116,13 +116,13 @@ def test_voltmeter_output_var():
     assert vm.output_var == vm.voltage_var
 
 def test_source_control_port_exposes_input_var():
-    Source.clear_registry()
-    # VoltageSource: input_var should be voltage_var
+    Component.clear_registry()
+    # VoltageSource: input_var should be voltage_var, control_port_name should be None (set by parser)
     vs = VoltageSource(comp_id="V1", voltage=12.0)
-    assert vs.control_port.name == "V1_port"
-    assert vs.control_port.variable == vs.input_var
-    # CurrentSource: input_var should be current_var
+    assert vs.input_var == vs.voltage_var
+    assert vs.control_port_name is None  # Will be set by parser
+    # CurrentSource: input_var should be current_var, control_port_name should be None (set by parser)
     cs = CurrentSource(comp_id="I1", current=2.0)
-    assert cs.control_port.name == "I1_port"
-    assert cs.control_port.variable == cs.input_var
-    Source.clear_registry()
+    assert cs.input_var == cs.current_var
+    assert cs.control_port_name is None  # Will be set by parser
+    Component.clear_registry()

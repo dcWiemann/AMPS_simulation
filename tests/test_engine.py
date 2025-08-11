@@ -7,6 +7,7 @@ from amps_simulation.core.engine import Engine
 from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, CurrentSource, PowerSwitch, Component
 from amps_simulation.core.parser_networkx import ParserJson
 from amps_simulation.core.dae_model import ElectricalDaeModel
+from amps_simulation.core.control_orchestrator import ControlGraph
 
 def load_test_circuit(filename):
     """Helper function to load test circuit from JSON file."""
@@ -20,10 +21,10 @@ def test_initialize_rlc():
     # Load and parse RLC circuit
     circuit_data = load_test_circuit("test_rlc.json")
     parser = ParserJson()
-    graph = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
     
     # Create engine instance and initialize
-    engine = Engine(graph)
+    engine = Engine(graph, control_graph)
     engine.initialize()
     
     # Test components list
@@ -49,10 +50,10 @@ def test_initialize_resistive():
     # Load and parse resistive circuit
     circuit_data = load_test_circuit("engine_resistive.json")
     parser = ParserJson()
-    graph = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
     
     # Create engine instance and initialize
-    engine = Engine(graph)
+    engine = Engine(graph, control_graph)
     engine.initialize()
     
     # Test components list
@@ -119,7 +120,7 @@ def test_switch_events():
     # Load and parse circuit with multiple switches
     circuit_data = load_test_circuit("engine_switch_control.json")
     parser = ParserJson()
-    graph = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
     
     Component.clear_registry()
     # Create engine instance and initialize
@@ -164,10 +165,10 @@ def test_compute_state_space_model():
     # Load and parse RLC circuit
     circuit_data = load_test_circuit("test_rlc.json")
     parser = ParserJson()
-    graph = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
     
     # Create engine instance and initialize
-    engine = Engine(graph)
+    engine = Engine(graph, control_graph)
     engine.initialize()
     
     # Create model and get equations
@@ -198,4 +199,111 @@ def test_compute_state_space_model():
     assert all(isinstance(expr, sp.Expr) for expr in B)
     assert all(isinstance(expr, sp.Expr) for expr in C)
     assert all(isinstance(expr, sp.Expr) for expr in D)
+
+def test_engine_control_orchestrator_integration():
+    """Test that Engine integrates with ControlOrchestrator for sources with values."""
+    Component.clear_registry()
+    
+    # Create test circuit with voltage source having a value
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source", "value": 10.0}},
+            {"id": "R1", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "C1", "data": {"componentType": "capacitor", "value": 1e-6}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "0", "targetHandle": "0"},
+            {"source": "R1", "target": "C1", "sourceHandle": "1", "targetHandle": "0"},
+            {"source": "C1", "target": "GND", "sourceHandle": "1", "targetHandle": "0"},
+            {"source": "GND", "target": "V1", "sourceHandle": "0", "targetHandle": "1"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Create engine with control graph
+    engine = Engine(graph, control_graph)
+    engine.initialize()
+
+    # Verify ControlOrchestrator was created
+    assert hasattr(engine, 'control_orchestrator')
+    assert engine.control_orchestrator.control_graph is control_graph
+
+    # Verify control input function was created for source ports
+    assert hasattr(engine, 'control_input_function')
+    
+    # Test the input function
+    input_values = engine.control_input_function(0.0)
+    assert len(input_values) == 1  # One source
+    assert input_values[0] == 10.0  # Voltage source value
+
+def test_engine_no_control_sources():
+    """Test Engine behavior when circuit has no sources with values."""
+    Component.clear_registry()
+    
+    # Create test circuit without sources with values
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source"}},  # No value field
+            {"id": "R1", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "0", "targetHandle": "0"},
+            {"source": "R1", "target": "GND", "sourceHandle": "1", "targetHandle": "0"},
+            {"source": "GND", "target": "V1", "sourceHandle": "0", "targetHandle": "1"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Create engine with empty control graph
+    engine = Engine(graph, control_graph)
+    engine.initialize()
+
+    # Should still have ControlOrchestrator
+    assert hasattr(engine, 'control_orchestrator')
+    
+    # Should not have control input function since no source ports
+    assert not hasattr(engine, 'control_input_function')
+
+def test_engine_multiple_source_control():
+    """Test Engine with multiple sources having values."""
+    Component.clear_registry()
+    
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source", "value": 5.0}},
+            {"id": "I1", "data": {"componentType": "current-source", "value": 0.1}},
+            {"id": "R1", "data": {"componentType": "resistor", "value": 50}},
+            {"id": "R2", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "0", "targetHandle": "0"},
+            {"source": "R1", "target": "I1", "sourceHandle": "1", "targetHandle": "1"},
+            {"source": "I1", "target": "R2", "sourceHandle": "0", "targetHandle": "0"},
+            {"source": "R2", "target": "GND", "sourceHandle": "1", "targetHandle": "0"},
+            {"source": "GND", "target": "V1", "sourceHandle": "0", "targetHandle": "1"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    engine = Engine(graph, control_graph)
+    engine.initialize()
+
+    # Should have control input function for multiple sources
+    assert hasattr(engine, 'control_input_function')
+    
+    # Test input function returns values for both sources
+    input_values = engine.control_input_function(0.0)
+    assert len(input_values) == 2  # Two sources
+    # Values should match the order engine determines for input_vars
+    assert 5.0 in input_values  # Voltage source value
+    assert 0.1 in input_values  # Current source value
 

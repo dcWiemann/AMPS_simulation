@@ -6,6 +6,8 @@ from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
     VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter, ElecJunction
 )
+from amps_simulation.core.control_orchestrator import ControlGraph
+from amps_simulation.core.control_port import ControlPort
 
 def load_test_file(filename: str) -> dict:
     """Load a test circuit file from the test_data directory."""
@@ -51,7 +53,7 @@ def test_parser_json_creates_correct_graph():
     
     # Create parser and parse circuit
     parser = ParserJson()
-    graph = parser.parse(circuit_json)
+    graph, control_graph = parser.parse(circuit_json)
     print_graph(graph, "Complex Circuit")
     
     # Print node mapping for debugging
@@ -135,7 +137,7 @@ def test_parser_networkx_all_components() -> None:
     parser = ParserJson()
     
     # Parse circuit data
-    graph = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
     print_graph(graph, "All Components Test")
     
     # Get the created components
@@ -187,7 +189,7 @@ def test_parser_networkx_has_ground_node() -> None:
     parser = ParserJson()
     
     # Parse circuit data
-    graph = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
     print_graph(graph, "No Ground Node Test")
 
     nodes = graph.nodes(data=True)
@@ -198,4 +200,131 @@ def test_parser_networkx_has_ground_node() -> None:
             assert node[1]['junction'].voltage_var == 0, "Ground node should have 0 voltage"
             count += 1
     assert count == 1, "Should have exactly one ground node"
+
+def test_parser_creates_control_graph():
+    """Test that parser creates control graph from sources with values."""
+    Component.clear_registry()
+    ControlPort.clear_registry()
+
+    # Create test circuit with voltage source having a value
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source", "value": 12.0}},
+            {"id": "R1", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "positive", "targetHandle": "left"},
+            {"source": "R1", "target": "GND", "sourceHandle": "right", "targetHandle": "terminal"},
+            {"source": "GND", "target": "V1", "sourceHandle": "terminal", "targetHandle": "negative"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Verify control graph was created
+    assert isinstance(control_graph, ControlGraph)
+    
+    # Should have one signal for the voltage source
+    assert len(control_graph.signals) == 1
+    assert "V1_signal" in control_graph.signals
+    
+    # Should have one port for the voltage source
+    assert len(control_graph.ports) == 1
+    assert "V1_port" in control_graph.ports
+    
+    # Port should be connected to signal
+    assert len(control_graph.connections) == 1
+    assert control_graph.connections["V1_port"] == ("V1_signal", 1.0)
+    
+    # Verify signal value
+    signal = control_graph.signals["V1_signal"]
+    assert signal.evaluate(0.0) == 12.0
+    assert signal.evaluate(5.0) == 12.0  # Constant value
+    
+    # Verify port properties
+    port = control_graph.ports["V1_port"]
+    assert port.port_type == "source"
+    
+    # Verify component has control_port_name set
+    v_source = Component.get_component("V1")
+    assert v_source.control_port_name == "V1_port"
+
+def test_parser_control_graph_multiple_sources():
+    """Test control graph creation with multiple sources."""
+    Component.clear_registry()
+    ControlPort.clear_registry()
+
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source", "value": 5.0}},
+            {"id": "I1", "data": {"componentType": "current-source", "value": 0.1}},
+            {"id": "V2", "data": {"componentType": "voltage-source"}},  # No value field
+            {"id": "R1", "data": {"componentType": "resistor", "value": 50}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "positive", "targetHandle": "left"},
+            {"source": "R1", "target": "I1", "sourceHandle": "right", "targetHandle": "negative"},
+            {"source": "I1", "target": "V2", "sourceHandle": "positive", "targetHandle": "negative"},
+            {"source": "V2", "target": "GND", "sourceHandle": "positive", "targetHandle": "terminal"},
+            {"source": "GND", "target": "V1", "sourceHandle": "terminal", "targetHandle": "negative"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Should have signals only for sources with values
+    assert len(control_graph.signals) == 2
+    assert "V1_signal" in control_graph.signals
+    assert "I1_signal" in control_graph.signals
+    assert "V2_signal" not in control_graph.signals  # No value provided
+    
+    # Should have ports only for sources with values
+    assert len(control_graph.ports) == 2
+    assert "V1_port" in control_graph.ports
+    assert "I1_port" in control_graph.ports
+    assert "V2_port" not in control_graph.ports  # No value provided
+    
+    # Verify connections
+    assert len(control_graph.connections) == 2
+    assert control_graph.connections["V1_port"] == ("V1_signal", 1.0)
+    assert control_graph.connections["I1_port"] == ("I1_signal", 1.0)
+    
+    # Verify values
+    assert control_graph.signals["V1_signal"].evaluate(0.0) == 5.0
+    assert control_graph.signals["I1_signal"].evaluate(0.0) == 0.1
+
+def test_parser_control_graph_no_sources_with_values():
+    """Test control graph when no sources have values."""
+    Component.clear_registry()
+    ControlPort.clear_registry()
+
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source"}},  # No value field
+            {"id": "R1", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "positive", "targetHandle": "left"},
+            {"source": "R1", "target": "GND", "sourceHandle": "right", "targetHandle": "terminal"},
+            {"source": "GND", "target": "V1", "sourceHandle": "terminal", "targetHandle": "negative"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Voltage source should have been created with default voltage 0
+    v_source = Component.get_component("V1")
+    assert v_source is not None
+    assert v_source.voltage == 0.0
+    
+    # Control graph should be empty since no "value" field was provided
+    assert len(control_graph.signals) == 0
+    assert len(control_graph.ports) == 0
+    assert len(control_graph.connections) == 0
 

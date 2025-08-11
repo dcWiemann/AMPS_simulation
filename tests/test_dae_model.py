@@ -89,7 +89,8 @@ def create_test_circuit():
     }
     
     parser = ParserJson()
-    return parser.parse(circuit_json)
+    graph, control_graph = parser.parse(circuit_json)
+    return graph
 
 
 def test_electrical_dae_model_initialization():
@@ -145,7 +146,7 @@ def test_compute_static_component_equations():
     parser = ParserJson()
     with open('test_data/DaeModel_meters.json', 'r') as f:
         circuit_json = json.load(f)
-    G = parser.parse(circuit_json)
+    G, _ = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     
     static_eqs = model.compute_static_component_equations()
@@ -163,7 +164,7 @@ def test_compute_switch_equations():
     parser = ParserJson()
     with open('test_data/DaeModel_meters.json', 'r') as f:
         circuit_json = json.load(f)
-    G = parser.parse(circuit_json)
+    G, _ = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     
     switch_eqs = model.compute_switch_equations()
@@ -187,7 +188,7 @@ def test_compute_circuit_equations():
     parser = ParserJson()
     with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
         circuit_json = json.load(f)
-    G = parser.parse(circuit_json)
+    G, _ = parser.parse(circuit_json)
     for edge in G.edges(data=True):
         if isinstance(edge[2]['component'], PowerSwitch):
             edge[2]['component'].is_on = False
@@ -230,7 +231,7 @@ def test_print_dae_model_components():
     parser = ParserJson()
     with open('test_data/DaeModel_meters.json', 'r') as f:
         circuit_json = json.load(f)
-    G = parser.parse(circuit_json)
+    G, _ = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     model.initialize()
     for switch in model.switch_list:
@@ -260,7 +261,7 @@ def test_kcl_equations_exclude_ground():
     parser = ParserJson()
     with open('test_data/DaeModel_kcl_minimal.json', 'r') as f:
         circuit_json = json.load(f)
-    G = parser.parse(circuit_json)
+    G, _ = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     
     # Get KCL equations
@@ -279,7 +280,7 @@ def test_compute_derivatives():
     parser = ParserJson()
     with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
         circuit_json = json.load(f)
-    G = parser.parse(circuit_json)
+    G, _ = parser.parse(circuit_json)
     model = ElectricalDaeModel(G)
     model.initialize()
     

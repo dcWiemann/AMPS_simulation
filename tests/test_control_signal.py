@@ -34,3 +34,4 @@ def test_clear_registry():
     assert ControlSignal.get_control_signal("to_clear") is cs
     ControlSignal.clear_registry()
     assert ControlSignal.get_control_signal("to_clear") is None
+
