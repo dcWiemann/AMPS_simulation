@@ -1,4 +1,4 @@
-from typing import ClassVar, Dict, Any
+from typing import ClassVar, Dict, Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 class ControlPort(BaseModel):
@@ -8,6 +8,7 @@ class ControlPort(BaseModel):
     """
     name: str = Field(..., description="Unique name for the control port")
     variable: Any = Field(..., description="The controlled variable (e.g., voltage, current)")
+    port_type: Literal["source", "switch", "other"] = Field(..., description="Type of component this port belongs to")
 
     _registry: ClassVar[Dict[str, 'ControlPort']] = {}
 
