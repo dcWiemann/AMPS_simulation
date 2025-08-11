@@ -7,6 +7,7 @@ import numpy as np
 from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource, Meter
 from .dae_model import ElectricalDaeModel
 from .engine_settings import EngineSettings
+from .control_orchestrator import ControlOrchestrator, ControlGraph
 from control import StateSpace
 
 class Engine:
@@ -16,14 +17,17 @@ class Engine:
     This class takes a NetworkX graph and handles the simulation of the circuit.
     """
     
-    def __init__(self, graph: nx.MultiDiGraph):
+    def __init__(self, graph: nx.MultiDiGraph, control_graph: ControlGraph = None):
         """
         Initialize the Engine class.
         
         Args:
             graph: NetworkX MultiDiGraph representing the circuit
+            control_graph: ControlGraph representing the control layer
         """
         self.graph = graph
+        self.control_graph = control_graph or ControlGraph()
+        self.control_orchestrator = ControlOrchestrator(self.control_graph)
         
         # Initialize simulation variables
         self.components_list = []
@@ -59,6 +63,23 @@ class Engine:
         self.input_vars = tuple(self.electrical_model.input_vars)
         self.output_vars = tuple(self.electrical_model.output_vars)
         self.switch_list = tuple(self.electrical_model.switch_list)
+        
+        # Build control orchestrator input function for sources only
+        source_ports = self.control_graph.get_source_ports()
+        if source_ports:
+            # Create ordered list of SOURCE port names matching input_vars order
+            # Engine determines and maintains this order throughout simulation
+            port_order = []
+            for input_var in self.input_vars:
+                # Find the SOURCE control port that corresponds to this input variable
+                for port_name, port in source_ports.items():
+                    if port.variable == input_var:
+                        port_order.append(port_name)
+                        break
+            
+            if port_order:
+                self.control_input_function = self.control_orchestrator.compile_input_function(port_order)
+                logging.debug(f"✅ Control input function compiled with port order: {port_order}")
 
         # self._get_state_vars()
         # self._get_input_vars()
@@ -125,6 +146,16 @@ class Engine:
             eigenvalues = elecStateSpace.A.eigenvals()
             logging.debug(f"✅ Eigenvalues of A matrix: {eigenvalues}")
 
+            # Create input function for the state space model using control orchestrator
+            if hasattr(self, 'control_input_function'):
+                input_function = self.control_input_function
+            else:
+                # Fallback: zero input function
+                input_function = lambda t: np.zeros(len(self.input_vars))
+
+            # Create executable function for the state space model
+            # diff_eq = self._create_diff_eq(
+            #     elecStateSpace.A, elecStateSpace.B, )
             
 
     def _get_state_vars(self) -> None:
@@ -351,3 +382,10 @@ class Engine:
             D = sp.zeros(n_outputs, n_inputs)
 
         return A, B, C, D
+    
+    # Create state space ODE function for this model
+    def _create_diff_eq(A, B, input_function):
+        def model_function(t, x):
+            u = input_function(t)
+            return (A @ x) + (B @ u)
+        return model_function
