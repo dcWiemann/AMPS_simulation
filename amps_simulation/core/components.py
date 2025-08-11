@@ -169,7 +169,7 @@ class VoltageSource(Source):
         super().__init__(**data)
         self.input_var = self.voltage_var
         port_name = f"{self.comp_id}_port"
-        self.control_port = ControlPort(name=port_name, value=self.input_var)
+        self.control_port = ControlPort(name=port_name, variable=self.input_var)
 
     @computed_field
     @property
@@ -185,7 +185,7 @@ class CurrentSource(Source):
         super().__init__(**data)
         self.input_var = self.current_var
         port_name = f"{self.comp_id}_port"
-        self.control_port = ControlPort(name=port_name, value=self.input_var)
+        self.control_port = ControlPort(name=port_name, variable=self.input_var)
 
     @computed_field
     @property

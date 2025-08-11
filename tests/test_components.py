@@ -120,9 +120,9 @@ def test_source_control_port_exposes_input_var():
     # VoltageSource: input_var should be voltage_var
     vs = VoltageSource(comp_id="V1", voltage=12.0)
     assert vs.control_port.name == "V1_port"
-    assert vs.control_port.value == vs.input_var
+    assert vs.control_port.variable == vs.input_var
     # CurrentSource: input_var should be current_var
     cs = CurrentSource(comp_id="I1", current=2.0)
     assert cs.control_port.name == "I1_port"
-    assert cs.control_port.value == cs.input_var
+    assert cs.control_port.variable == cs.input_var
     Source.clear_registry()

@@ -7,7 +7,7 @@ class ControlPort(BaseModel):
     Each control port has a unique name.
     """
     name: str = Field(..., description="Unique name for the control port")
-    value: Any = Field(..., description="The controlled value (e.g., voltage, current)")
+    variable: Any = Field(..., description="The controlled variable (e.g., voltage, current)")
 
     _registry: ClassVar[Dict[str, 'ControlPort']] = {}
 
