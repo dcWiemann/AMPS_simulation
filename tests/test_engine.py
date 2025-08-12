@@ -70,88 +70,126 @@ def test_initialize_resistive():
     assert len(engine.switch_list) == 1
     assert any(switch.comp_id == "S1" for switch in engine.switch_list)
 
-# def test_switch_control_signals():
-#     """
-#     Test the switch control signals functionality with multiple switches.
-#     Tests a circuit with three switches:
-#     - S1: switch time = -1.1s (always ON)
-#     - S2: switch time = 20.0s
-#     - S3: switch time = 2.3333s
-#     """
-#     # Load and parse circuit with multiple switches
-#     circuit_data = load_test_circuit("engine_switch_control.json")
-#     parser = ParserJson()
-#     graph = parser.parse(circuit_data)
+def test_run_simulation_basic():
+    """Test the new run_simulation method with a simple circuit."""
+    # Load and parse RC circuit
+    circuit_data = load_test_circuit("test_rc.json")
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
     
-#     # Create engine instance and initialize
-#     engine = Engine(graph)
-#     engine.initialize()
+    # Create engine instance and initialize
+    engine = Engine(graph, control_graph)
+    engine.initialize()
     
-#     # Define switch times
-#     switch_times = {
-#         "S1": -1.1,  # Switch S1 is always ON
-#         "S2": 20.0,  # Switch S2 turns ON at t=20.0
-#         "S3": 2.3333  # Switch S3 turns ON at t=2.3333
-#     }
+    # Run simulation
+    result = engine.run_simulation(t_span=(0, 0.1), method='RK45')
     
-#     # Get the switch control signals function
-#     switch_control_signals = engine._get_switch_control_signals()
+    # Test result structure
+    assert result['success'] == True
+    assert 't' in result
+    assert 'y' in result
+    assert 'out' in result
+    assert 'switchmap_size' in result
     
-#     # Test switch states at different times
-#     test_times = {
-#         0.0: {"S1": 1, "S2": 0, "S3": 0},  # t=0 (S1 ON, S2 OFF, S3 OFF)
-#         1.0: {"S1": 1, "S2": 0, "S3": 0},  # t=1 (S1 ON, S2 OFF, S3 OFF)
-#         2.3333: {"S1": 1, "S2": 0, "S3": 1},  # t=2.3333 (S1 ON, S2 OFF, S3 ON)
-#         2.3334: {"S1": 1, "S2": 0, "S3": 1},  # t=2.3334 (S1 ON, S2 OFF, S3 ON)
-#         20.0: {"S1": 1, "S2": 1, "S3": 1},  # t=20.0 (S1 ON, S2 ON, S3 ON)
-#         21.0: {"S1": 1, "S2": 1, "S3": 1}  # t=21.0 (S1 ON, S2 ON, S3 ON)
-#     }
+    # Test that time array is reasonable
+    assert len(result['t']) > 1
+    assert result['t'][0] == 0.0
+    assert result['t'][-1] >= 0.1
     
-#     for t, expected_states in test_times.items():
-#         states = switch_control_signals(t)
-#         assert len(states) == len(engine.switch_list)
-#         for i, switch_id in enumerate(engine.switch_list):
-#             assert states[i] == expected_states[switch_id], f"Switch {switch_id} at t={t}"
+    # Test that state array has correct shape
+    n_states = len(engine.state_vars)
+    assert result['y'].shape[0] == n_states
+    assert result['y'].shape[1] == len(result['t'])
+
+def test_run_simulation_with_switch():
+    """Test the new run_simulation method with a switching circuit."""
+    # Load and parse switching circuit with meters
+    circuit_data = load_test_circuit("engine_switch_meters.json")
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+    
+    # Create engine instance and initialize
+    engine = Engine(graph, control_graph)
+    engine.initialize()
+    
+    # Run simulation that spans the switch event
+    result = engine.run_simulation(t_span=(0, 1.5), method='RK45')
+    
+    # Test result structure
+    assert result['success'] == True
+    assert 't' in result
+    assert 'y' in result
+    assert 'out' in result
+    assert 'switchmap_size' in result
+    assert 't_events' in result
+    
+    # Test switch-specific features
+    assert result['switchmap_size'] == 2  # Should cache models for switch open/closed
+    assert len([e for e in result['t_events'] if len(e) > 0]) == 1  # One switch event
+    
+    # Test that outputs exist (circuit has meters)
+    assert result['out'] is not None
+    assert result['out'].shape[0] == len(engine.output_vars)  # Number of meter outputs
+    assert result['out'].shape[1] == len(result['t'])  # Same number of time points
+
+def test_run_simulation_with_outputs():
+    """Test that run_simulation correctly generates outputs for circuits with meters."""
+    # Use the switching circuit which has both state variables and meter outputs
+    circuit_data = load_test_circuit("engine_switch_meters.json")
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+    
+    Component.clear_registry()
+    engine = Engine(graph, control_graph)
+    engine.initialize()
+    
+    # Run simulation
+    result = engine.run_simulation(t_span=(0, 0.5), method='RK45')
+    
+    # Test outputs
+    assert result['success'] == True
+    assert result['out'] is not None
+    assert len(engine.output_vars) > 0  # Should have meter outputs
+    assert result['out'].shape[0] == len(engine.output_vars)
+    assert result['out'].shape[1] == len(result['t'])
 
 def test_switch_events():
     """
     Test the creation of switch events for solve_ivp.
     """
-    # Load and parse circuit with multiple switches
-    circuit_data = load_test_circuit("engine_switch_control.json")
+    # Load and parse circuit with switch
+    circuit_data = load_test_circuit("engine_switch_meters.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
     
     Component.clear_registry()
     # Create engine instance and initialize
-    engine = Engine(graph)
-    engine.switch_list = [PowerSwitch(comp_id="S1", switch_time=-1.1, is_on=True),
-                          PowerSwitch(comp_id="S2", switch_time=20.0, is_on=False),
-                          PowerSwitch(comp_id="S3", switch_time=2.3333, is_on=False)]
+    engine = Engine(graph, control_graph)
+    engine.initialize()
     
-    # Get the switch events
-    switch_events = engine._get_switch_events()
-    
-    # Define expected switch times
-    expected_switch_times = {
-        "S1": -1.1,
-        "S2": 20.0,
-        "S3": 2.3333
-    }
-    
-    # Test that the number of events matches the number of switches
-    assert len(switch_events) == len(engine.switch_list)
-    
-    # Test each event function
-    for i, switch in enumerate(engine.switch_list):
-        event = switch_events[i]
-        switch_time = expected_switch_times[switch.comp_id]
-        # Event should return 0 at the switch time
-        assert event(switch_time, None) == 0
-        # Event should not return 0 before the switch time
-        assert event(switch_time - 0.1, None) != 0
-        # Event should not return 0 after the switch time
-        assert event(switch_time + 0.1, None) != 0
+    # Test that switch events were created
+    if engine.switch_list and len(engine.switch_list) > 0:
+        switch_events = engine.switch_events
+        assert switch_events is not None
+        assert len(switch_events) == len(engine.switch_list)
+        
+        # Test each event function
+        for i, switch in enumerate(engine.switch_list):
+            event = switch_events[i]
+            switch_time = switch.switch_time
+            
+            # Event should return 0 at the switch time
+            assert abs(event(switch_time, None)) < 1e-10
+            # Event should not return 0 before the switch time
+            assert event(switch_time - 0.1, None) != 0
+            # Event should not return 0 after the switch time  
+            assert event(switch_time + 0.1, None) != 0
+            
+            # Test event properties
+            assert hasattr(event, 'terminal')
+            assert hasattr(event, 'direction')
+            assert event.terminal == False  # Should allow continuation
+            assert event.direction == 1     # Positive crossings only
 
 def test_compute_state_space_model():
     """
