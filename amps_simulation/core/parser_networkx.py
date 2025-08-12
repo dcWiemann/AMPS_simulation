@@ -134,45 +134,80 @@ class ParserJson(CircuitParser):
         next_node_number = 1
         ground_node = None
 
-        # First pass: identify ground nodes and their connections
+        # Process all connections in two passes
+        # First pass: handle all non-ground connections
         for conn in connections:
             source_comp_id = conn["source"]
             target_comp_id = conn["target"]
             
-            # If either component is a ground, use the ground node number
+            # Skip ground connections for first pass
             if any(isinstance(self._get_component(comp_id), Ground) 
                    for comp_id in [source_comp_id, target_comp_id]):
-                if ground_node is None:
-                    ground_node = next_node_number
-                    next_node_number += 1
-                
-                source_key = (source_comp_id, conn.get("sourceHandle"))
-                target_key = (target_comp_id, conn.get("targetHandle"))
-                node_mapping[source_key] = ground_node
-                node_mapping[target_key] = ground_node
                 continue
 
-            # Regular node handling for non-ground connections
             source_key = (source_comp_id, conn.get("sourceHandle"))
             target_key = (target_comp_id, conn.get("targetHandle"))
             
             if source_key in node_mapping and target_key in node_mapping:
+                # Both terminals already mapped - merge if different
                 source_node = node_mapping[source_key]
                 target_node = node_mapping[target_key]
                 if source_node != target_node:
-                    # Merge nodes, preferring non-ground nodes
-                    merge_to = source_node if source_node != ground_node else target_node
+                    # Merge target_node into source_node
                     for key, node in list(node_mapping.items()):
-                        if node == (target_node if merge_to == source_node else source_node):
-                            node_mapping[key] = merge_to
+                        if node == target_node:
+                            node_mapping[key] = source_node
             elif source_key in node_mapping:
+                # Source mapped, assign target to same node
                 node_mapping[target_key] = node_mapping[source_key]
             elif target_key in node_mapping:
+                # Target mapped, assign source to same node
                 node_mapping[source_key] = node_mapping[target_key]
             else:
+                # Neither mapped, create new node for both
                 node_mapping[source_key] = next_node_number
                 node_mapping[target_key] = next_node_number
                 next_node_number += 1
+
+        # Second pass: handle ground connections and merge with existing nodes
+        for conn in connections:
+            source_comp_id = conn["source"]
+            target_comp_id = conn["target"]
+            
+            # Only process ground connections
+            if not any(isinstance(self._get_component(comp_id), Ground) 
+                       for comp_id in [source_comp_id, target_comp_id]):
+                continue
+
+            source_key = (source_comp_id, conn.get("sourceHandle"))
+            target_key = (target_comp_id, conn.get("targetHandle"))
+            
+            # Find which terminal is already mapped (non-ground terminal)
+            existing_node = None
+            if source_key in node_mapping:
+                existing_node = node_mapping[source_key]
+            elif target_key in node_mapping:
+                existing_node = node_mapping[target_key]
+            
+            if existing_node is not None:
+                # If we already have a ground node, merge the existing node with it
+                if ground_node is not None:
+                    # Merge existing_node into ground_node
+                    for key, node in list(node_mapping.items()):
+                        if node == existing_node:
+                            node_mapping[key] = ground_node
+                else:
+                    # Use the existing node as the ground node
+                    ground_node = existing_node
+            else:
+                # Neither terminal is mapped yet, create new ground node
+                if ground_node is None:
+                    ground_node = next_node_number
+                    next_node_number += 1
+            
+            # Assign both terminals to ground node
+            node_mapping[source_key] = ground_node
+            node_mapping[target_key] = ground_node
 
         # Create nodes for unconnected terminals (excluding ground)
         for comp in self.components_list:
