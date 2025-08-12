@@ -4,11 +4,10 @@ from typing import Dict, Set, Tuple, List, Any
 import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
-from .components import Component, PowerSwitch, Capacitor, Inductor, VoltageSource, CurrentSource, Meter
+from .components import Component
 from .dae_model import ElectricalDaeModel
 from .engine_settings import EngineSettings
 from .control_orchestrator import ControlOrchestrator, ControlGraph
-from control import StateSpace
 
 class Engine:
     """
@@ -32,10 +31,8 @@ class Engine:
         # Initialize simulation variables
         self.components_list = []
         self.state_vars = {}  # Dictionary of state variables
-        # self.state_derivatives = {}  # Dictionary of state derivatives
         self.input_vars = {}  # Dictionary of input variables
         self.switch_list = None  # Tuple of power switches
-        # self.switch_control_signals = None  # Function to get switch control signals
         self.switch_events = None  # List of switch events
         # Simulation settings
         self.engine_settings = EngineSettings()
@@ -81,189 +78,11 @@ class Engine:
                 self.control_input_function = self.control_orchestrator.compile_input_function(port_order)
                 logging.debug(f"Control input function compiled with port order: {port_order}")
 
-        # self._get_state_vars()
-        # self._get_input_vars()
-        # self._get_output_vars()
-        # self._get_power_switches()
         if self.switch_list is not None:
-            # self.switch_control_signals = self._get_switch_control_signals()
             self.switch_events = self._get_switch_events()
-            # self.possible_switch_positions = self._get_possible_switch_positions()
-        # else:
-            # self.switch_control_signals = None
-            # self.switch_events = None
-            # self.possible_switch_positions = (0,) # Default to 0 if no power switches
-
-        # logging.debug(f"✅ State variables: {self.state_vars}")
-        # logging.debug(f"✅ Input variables: {self.input_vars}")
-        # logging.debug(f"✅ Power switches: {self.power_switches}")
-        # logging.debug(f"✅ Switch control signals: {self.switch_control_signals}")
-        # logging.debug(f"✅ Switch events: {self.switch_events}")
 
         # Set initialized flag to True
         self.initialized = True
-
-    def run_solver(self):
-        """
-        Run the solver for the circuit.
-        """
-        t = self.engine_settings.start_time
-        t_end = self.engine_settings.end_time
-        switchmap = {}
-        
-        while t < t_end:
-            if self.switch_list:
-                switch_states = tuple(
-                    comp.set_switch_state(t) for comp in self.switch_list
-                )
-                logging.debug(f"Switch states at time t = {t}: {switch_states}")
-            
-            # Check if the switch states are already in the map
-            if switch_states in switchmap:
-                elecStateSpace = switchmap[switch_states]
-            # If not, compute the state space model for the current switch states
-            else:
-                derivatives = self.electrical_model.derivatives
-                output_eqs = self.electrical_model.output_eqs
-                # sort derivatives by state variables
-                sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
-                sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
-                
-                print("\nsorted_derivatives: ", sorted_derivatives)
-                print("\nsorted_output_eqs: ", sorted_output_eqs)
-
-                A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
-                elecStateSpace = StateSpace(A, B, C, D)
-
-                # create a map of switch states to DAE system
-                switchmap[switch_states] = elecStateSpace
-
-            logging.debug(f"✅ Derivatives: {sorted_derivatives}")
-            logging.debug(f"✅ Outputs: {sorted_output_eqs}")
-            logging.debug(f"✅ Electrical State Space: {elecStateSpace}")
-            
-            # Get eigenvalues of A matrix (for debugging)
-            eigenvalues = elecStateSpace.A.eigenvals()
-            logging.debug(f"✅ Eigenvalues of A matrix: {eigenvalues}")
-
-            # Create input function for the state space model using control orchestrator
-            if hasattr(self, 'control_input_function'):
-                input_function = self.control_input_function
-            else:
-                # Fallback: zero input function
-                input_function = lambda t: np.zeros(len(self.input_vars))
-
-            # Create executable function for the state space model
-            # diff_eq = self._create_diff_eq(
-            #     elecStateSpace.A, elecStateSpace.B, )
-            
-
-    def _get_state_vars(self) -> None:
-        """
-        Set state variables for capacitors and inductors and their derivatives.
-        
-        State variables are:
-        - Capacitor voltages (v_C)
-        - Inductor currents (i_L)
-        
-        Derivative equations are:
-        - Capacitor: dv/dt = i/C
-        - Inductor: di/dt = v/L
-        """
-        for component in self.components_list:
-            if isinstance(component, Capacitor):
-                # For capacitors, the state variable is the voltage
-                v_C = sp.Symbol(component.voltage_var)
-                i_C = sp.Symbol(component.current_var)
-                C_value = component.capacitance
-                
-                # Store state variable
-                self.state_vars[v_C] = component.comp_id
-                
-                # Create and store derivative equation: dv/dt = i/C
-                self.state_derivatives[sp.Derivative(v_C, 't')] = i_C/C_value
-                
-            elif isinstance(component, Inductor):
-                # For inductors, the state variable is the current
-                i_L = sp.Symbol(component.current_var)
-                v_L = sp.Symbol(component.voltage_var)
-                L_value = component.inductance
-                
-                # Store state variable
-                self.state_vars[i_L] = component.comp_id
-                
-                # Create and store derivative equation: di/dt = v/L
-                self.state_derivatives[sp.Derivative(i_L, 't')] = v_L/L_value
-
-    def _get_input_vars(self) -> None:
-        """
-        Set input variables for voltage and current sources.
-        
-        Input variables are:
-        - Voltage source voltages using component.voltage_var
-        - Current source currents using component.current_var
-        """
-        for component in self.components_list:
-            if isinstance(component, VoltageSource):
-                # For voltage sources, the input variable is the voltage
-                V_source = sp.Symbol(component.voltage_var)
-                self.input_vars[V_source] = component.comp_id
-                
-            elif isinstance(component, CurrentSource):
-                # For current sources, the input variable is the current
-                I_source = sp.Symbol(component.current_var)
-                self.input_vars[I_source] = component.comp_id
-
-    def _get_output_vars(self) -> None:
-        """
-        Set output variables for meters.
-        """
-        for component in self.components_list:
-            if isinstance(component, Meter):
-                self.output_vars[component.output_var] = component.comp_id
-
-    def _get_power_switches(self) -> None:
-        """
-        Extract power switches from the circuit components.
-        
-        Returns:
-            Tuple[str, ...]: A tuple containing the IDs of all power switches in the circuit
-        """
-        self.power_switches = tuple(
-            comp.comp_id for comp in self.components_list
-            if isinstance(comp, PowerSwitch)
-        )
-
-    def _get_switch_control_signals(self):
-        """
-        Creates a callable function that returns the switch states at any given time t.
-        
-        Returns:
-            callable: A function switch_control_signals(t) that returns a tuple of 0s and 1s
-                     representing the state of each switch at time t. The order of the tuple
-                     corresponds exactly to the order of switches in self.power_switches.
-        """
-        # Get switch times from components
-        switch_times = {}
-        for comp in self.components_list:
-            if isinstance(comp, PowerSwitch):
-                switch_times[comp.comp_id] = comp.switch_time
-
-        def switch_control_signals(t):
-            """
-            Returns the state of all switches at time t.
-            
-            Args:
-                t: Time at which to evaluate switch states
-                
-            Returns:
-                tuple: A tuple of 0s and 1s representing switch states (0=OFF, 1=ON)
-            """
-            # Create tuple of switch states in the same order as self.power_switches
-            return tuple(1 if t >= switch_times[switch_id] else 0 
-                        for switch_id in self.power_switches)
-            
-        return switch_control_signals
 
     def _get_switch_events(self):
         """
@@ -580,7 +399,7 @@ class Engine:
         # Check if this switch combination is already cached
         if current_switch_states in switchmap:
             A, B, C, D, ode_function = switchmap[current_switch_states]
-            logging.debug(f"Using cached ODE function for switch states: {current_switch_states}")
+            # logging.debug(f"Using cached ODE function for switch states: {current_switch_states}")
         else:
             # Compute new DAE model for this switch combination
             A, B, C, D = self._compute_state_space_for_switches(current_switch_states, t)
@@ -608,33 +427,6 @@ class Engine:
         if self.switch_list:
             self.electrical_model.update_switch_states(t)
         
-        # Get derivatives and output equations from DAE model
-        derivatives = self.electrical_model.derivatives
-        output_eqs = self.electrical_model.output_eqs
-        
-        # Sort equations to match variable order
-        sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
-        sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
-        
-        # Compute state space matrices
-        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
-        
-        return A, B, C, D
-        
-    def _get_state_space_matrices_for_switches(self, switch_states):
-        """Get state space matrices for a given switch configuration.
-        
-        Args:
-            switch_states: Tuple of boolean switch states
-            
-        Returns:
-            A, B, C, D: State space matrices for the given switch configuration
-        """
-        # Set switch states in the electrical model
-        if self.switch_list:
-            for switch, state in zip(self.switch_list, switch_states):
-                switch.is_on = state
-                
         # Get derivatives and output equations from DAE model
         derivatives = self.electrical_model.derivatives
         output_eqs = self.electrical_model.output_eqs
