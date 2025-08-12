@@ -3,6 +3,7 @@ import networkx as nx
 import sympy as sp
 from sympy.abc import t
 import json
+import numpy as np
 from amps_simulation.core.engine import Engine
 from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, CurrentSource, PowerSwitch, Component
 from amps_simulation.core.parser_networkx import ParserJson
@@ -152,6 +153,45 @@ def test_run_simulation_with_outputs():
     assert len(engine.output_vars) > 0  # Should have meter outputs
     assert result['out'].shape[0] == len(engine.output_vars)
     assert result['out'].shape[1] == len(result['t'])
+
+def test_run_simulation_no_states():
+    """Test the run_simulation method with a circuit that has no state variables."""
+    # Load and parse the no-states circuit (current source + resistor + voltmeter)
+    circuit_data = load_test_circuit("engine_nostates.json")
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+    
+    Component.clear_registry()
+    # Create engine instance and initialize
+    engine = Engine(graph, control_graph)
+    engine.initialize()
+    
+    # Verify this is indeed a no-states circuit
+    assert len(engine.state_vars) == 0, "Circuit should have no state variables"
+    assert len(engine.input_vars) > 0, "Circuit should have input variables (current source)"
+    assert len(engine.output_vars) > 0, "Circuit should have output variables (voltmeter)"
+    
+    # Run simulation - this should work even with no states
+    result = engine.run_simulation(t_span=(0, 0.1), method='RK45')
+    
+    # Test result structure
+    assert result['success'] == True, "Simulation should succeed even with no states"
+    assert 't' in result
+    assert 'y' in result
+    assert 'out' in result
+    assert 'switchmap_size' in result
+    
+    # For no-states circuit, y should be empty but out should have values
+    assert result['y'].shape[0] == 0, "Should have no state variables"
+    assert result['out'] is not None, "Should have outputs"
+    assert result['out'].shape[0] == len(engine.output_vars), "Output size should match number of meters"
+    
+    # Outputs should be constant (steady-state algebraic solution)
+    # For I=4.4A through R=0.5Ω, voltage magnitude should be |V|=|IR|=2.2V
+    # The DAE solver found v_VM2 = -0.5*i_I1(t) = -2.2V due to direction convention
+    expected_voltage = -2.2  # From DAE solution: v_VM2 = -0.5*i_I1(t) = -0.5*4.4 = -2.2V
+    output_values = result['out'][0]  # Voltmeter reading
+    assert np.allclose(output_values, expected_voltage, rtol=1e-6), f"Expected {expected_voltage}V, got {output_values}"
 
 def test_switch_events():
     """

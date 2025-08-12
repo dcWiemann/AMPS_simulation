@@ -206,8 +206,16 @@ class Engine:
         # Create y matrix from output equations
         if output_eqs:
             y = sp.Matrix([eq.rhs for eq in output_eqs])
-            C = y.jacobian(self.state_vars)
-            D = y.jacobian(self.input_vars)
+            # Handle case when there are no state variables
+            if n_states > 0:
+                C = y.jacobian(self.state_vars)
+            else:
+                C = sp.zeros(n_outputs, n_states)
+            # Handle case when there are no input variables
+            if n_inputs > 0:
+                D = y.jacobian(self.input_vars)
+            else:
+                D = sp.zeros(n_outputs, n_inputs)
         else:
             C = sp.zeros(n_outputs, n_states)
             D = sp.zeros(n_outputs, n_inputs)
@@ -225,6 +233,13 @@ class Engine:
         Returns:
             Callable function compatible with solve_ivp: f(t, x) -> dx/dt
         """
+        # Handle case with no state variables
+        if len(self.state_vars) == 0:
+            def ode_function(t, x):
+                """ODE function for circuits with no states: returns empty array"""
+                return np.array([])
+            return ode_function
+        
         # Convert symbolic matrices to numeric functions if needed
         if hasattr(A, 'subs'):  # Symbolic matrix
             A_func = sp.lambdify([], A, 'numpy')
