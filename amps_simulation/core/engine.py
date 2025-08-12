@@ -570,10 +570,9 @@ class Engine:
         """
         # Determine current switch states
         if self.switch_list:
-            # Add small time offset to avoid numerical issues at exact switch times
-            t_check = t + 1e-6  # Small offset to ensure we're past the switch event
+            # Use exact time without offset to test numerical stability
             current_switch_states = tuple(
-                switch.set_switch_state(t_check) for switch in self.switch_list
+                switch.set_switch_state(t) for switch in self.switch_list
             )
         else:
             current_switch_states = ()
