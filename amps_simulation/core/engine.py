@@ -79,7 +79,7 @@ class Engine:
             
             if port_order:
                 self.control_input_function = self.control_orchestrator.compile_input_function(port_order)
-                logging.debug(f"✅ Control input function compiled with port order: {port_order}")
+                logging.debug(f"Control input function compiled with port order: {port_order}")
 
         # self._get_state_vars()
         # self._get_input_vars()
@@ -383,9 +383,194 @@ class Engine:
 
         return A, B, C, D
     
-    # Create state space ODE function for this model
-    def _create_diff_eq(A, B, input_function):
-        def model_function(t, x):
+    def _create_state_space_ode(self, A, B, input_function):
+        """Create ODE function for solve_ivp from state space matrices.
+        
+        Args:
+            A: State matrix (symbolic or numeric)
+            B: Input matrix (symbolic or numeric)  
+            input_function: Function that returns input vector u(t)
+            
+        Returns:
+            Callable function compatible with solve_ivp: f(t, x) -> dx/dt
+        """
+        # Convert symbolic matrices to numeric functions if needed
+        if hasattr(A, 'subs'):  # Symbolic matrix
+            A_func = sp.lambdify([], A, 'numpy')
+            A_num = A_func()
+        else:
+            A_num = np.array(A, dtype=float)
+            
+        if hasattr(B, 'subs'):  # Symbolic matrix  
+            B_func = sp.lambdify([], B, 'numpy')
+            B_num = B_func()
+        else:
+            B_num = np.array(B, dtype=float)
+        
+        def ode_function(t, x):
+            """ODE function: dx/dt = Ax + Bu"""
             u = input_function(t)
-            return (A @ x) + (B @ u)
-        return model_function
+            if len(u.shape) == 1:
+                u = u.reshape(-1, 1)
+            if len(x.shape) == 1:
+                x = x.reshape(-1, 1)
+                
+            dx_dt = A_num @ x + B_num @ u
+            return dx_dt.flatten()
+            
+        return ode_function
+    
+    def run_simulation(self, t_span, initial_conditions=None, method='RK45', **kwargs):
+        """Run circuit simulation using solve_ivp with proper switch handling.
+        
+        This method handles switching events by:
+        1. Running simulation until a switch event is detected
+        2. Updating switch positions and recomputing the DAE model 
+        3. Storing new state space matrices for reuse
+        4. Continuing simulation with the new switch configuration
+        
+        Args:
+            t_span: Tuple (t_start, t_end) for simulation time span
+            initial_conditions: Initial state vector (defaults to zeros)
+            method: Integration method for solve_ivp ('RK45', 'DOP853', etc.)
+            **kwargs: Additional arguments passed to solve_ivp
+            
+        Returns:
+            Dictionary with 't', 'y', and other solution information
+        """
+        if not self.initialized:
+            raise ValueError("Engine must be initialized before running simulation")
+            
+        t_start, t_end = t_span
+        current_time = t_start
+        
+        # Set default initial conditions
+        if initial_conditions is None:
+            current_state = np.zeros(len(self.state_vars))
+        else:
+            current_state = np.array(initial_conditions)
+            
+        # Initialize result arrays
+        all_times = [current_time]
+        all_states = [current_state.copy()]
+        
+        # Cache for storing state space models for different switch configurations
+        switch_models_cache = {}
+        
+        # Create input function (from control orchestrator or zeros)
+        if hasattr(self, 'control_input_function'):
+            input_function = self.control_input_function
+        else:
+            input_function = lambda t: np.zeros(len(self.input_vars))
+            
+        while current_time < t_end:
+            # Determine current switch states at this time
+            if self.switch_list:
+                current_switch_states = tuple(
+                    switch.set_switch_state(current_time) for switch in self.switch_list
+                )
+            else:
+                current_switch_states = ()
+                
+            # Get state space model for current switch configuration
+            if current_switch_states in switch_models_cache:
+                A, B, C, D = switch_models_cache[current_switch_states]
+                logging.debug(f"Using cached model for switch states: {current_switch_states}")
+            else:
+                # Update switch states in DAE model and get new equations
+                if self.switch_list:
+                    self.electrical_model.update_switch_states(current_time)
+                    
+                # Get new derivatives and compute state space matrices
+                derivatives = self.electrical_model.derivatives
+                output_eqs = self.electrical_model.output_eqs
+                sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+                sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
+                
+                A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+                
+                # Cache the model for this switch configuration
+                switch_models_cache[current_switch_states] = (A, B, C, D)
+                logging.debug(f"Computed new model for switch states: {current_switch_states}")
+                
+            # Find next switch event time
+            next_event_time = t_end
+            if self.switch_list:
+                for switch in self.switch_list:
+                    if switch.switch_time > current_time and switch.switch_time < next_event_time:
+                        next_event_time = switch.switch_time
+                        
+            # Run simulation segment until next event or end time
+            segment_span = (current_time, next_event_time)
+            ode_function = self._create_state_space_ode(A, B, input_function)
+            
+            # Set up events for this segment
+            events = None
+            if self.switch_events and next_event_time < t_end:
+                events = self.switch_events
+                
+            segment_solution = solve_ivp(
+                fun=ode_function,
+                t_span=segment_span,
+                y0=current_state,
+                method=method,
+                events=events,
+                **kwargs
+            )
+            
+            if not segment_solution.success:
+                logging.warning(f"Integration failed at time {current_time}")
+                break
+                
+            # Append results (skip first point to avoid duplication)
+            if len(segment_solution.t) > 1:
+                all_times.extend(segment_solution.t[1:])
+                all_states.extend(segment_solution.y.T[1:])
+            
+            # Update current state and time
+            current_time = segment_solution.t[-1]
+            current_state = segment_solution.y[:, -1]
+            
+            # Check if we hit a switch event
+            if abs(current_time - next_event_time) < 1e-9:
+                logging.info(f"Switch event detected at t={current_time}")
+                # Add small time offset to move past the event
+                current_time += 1e-9
+                
+        # Convert results to numpy arrays
+        result = {
+            't': np.array(all_times),
+            'y': np.array(all_states).T if all_states else np.array([]).reshape(len(self.state_vars), 0),
+            'success': True,
+            'message': 'Simulation completed successfully',
+            'switch_models_used': len(switch_models_cache)
+        }
+        
+        return result
+        
+    def _get_state_space_matrices_for_switches(self, switch_states):
+        """Get state space matrices for a given switch configuration.
+        
+        Args:
+            switch_states: Tuple of boolean switch states
+            
+        Returns:
+            A, B, C, D: State space matrices for the given switch configuration
+        """
+        # Set switch states in the electrical model
+        if self.switch_list:
+            for switch, state in zip(self.switch_list, switch_states):
+                switch.is_on = state
+                
+        # Get derivatives and output equations from DAE model
+        derivatives = self.electrical_model.derivatives
+        output_eqs = self.electrical_model.output_eqs
+        
+        # Sort equations to match variable order
+        sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+        sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
+        
+        # Compute state space matrices
+        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+        
+        return A, B, C, D
