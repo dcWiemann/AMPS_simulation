@@ -1,0 +1,339 @@
+{
+  "nodes": [
+    {
+      "id": "V1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 120,
+        "y": 160
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Voltage Source",
+        "componentType": "voltage-source",
+        "value": 5,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "V"
+    },
+    {
+      "id": "S1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 340,
+        "y": 70
+      },
+      "data": {
+        "svgPath": "/svg/switch.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 4,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 76,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Switch",
+        "componentType": "switch",
+        "value": 1,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "S"
+    },
+    {
+      "id": "R1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 470,
+        "y": 70
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 4,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 76,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 1,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "R"
+    },
+    {
+      "id": "C2",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 250,
+        "y": 150
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.001,
+        "rotation": 0
+      },
+      "increment": 2,
+      "abbreviation": "C"
+    },
+    {
+      "id": "R2",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 180,
+        "y": 70
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 4,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 76,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 1,
+        "rotation": 0
+      },
+      "increment": 2,
+      "abbreviation": "R"
+    },
+    {
+      "id": "GND1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 120,
+        "y": 290
+      },
+      "data": {
+        "svgPath": "/svg/ground.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 14,
+            "type": "target"
+          }
+        ],
+        "label": "Ground",
+        "componentType": "ground",
+        "value": 0,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "GND"
+    }
+  ],
+  "edges": [
+    {
+      "id": "vueflow__edge-R10-S11",
+      "type": "step",
+      "source": "R1",
+      "target": "S1",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 470,
+      "sourceY": 109.99988904177563,
+      "targetX": 419.9997313430443,
+      "targetY": 109.99988904177563
+    },
+    {
+      "id": "vueflow__edge-C20-S10",
+      "type": "step",
+      "source": "C2",
+      "target": "S1",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 289.9998656715221,
+      "sourceY": 150,
+      "targetX": 340,
+      "targetY": 109.99988904177563
+    },
+    {
+      "id": "edge-S1-R2",
+      "type": "step",
+      "source": "S1",
+      "target": "R2",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 340,
+      "sourceY": 109.99988904177563,
+      "targetX": 259.9997780835513,
+      "targetY": 109.99988904177563
+    },
+    {
+      "id": "edge-R2-V1",
+      "type": "step",
+      "source": "R2",
+      "target": "V1",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 180,
+      "sourceY": 109.99988904177563,
+      "targetX": 159.99991241202912,
+      "targetY": 160
+    },
+    {
+      "id": "vueflow__edge-C21-R11",
+      "type": "step",
+      "source": "C2",
+      "target": "R1",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 289.9998656715221,
+      "sourceY": 229.99977808355126,
+      "targetX": 549.9997780835513,
+      "targetY": 109.99988904177563
+    },
+    {
+      "id": "vueflow__edge-V11-C21",
+      "type": "step",
+      "source": "V1",
+      "target": "C2",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 159.99991241202912,
+      "sourceY": 239.99975471329776,
+      "targetX": 289.9998656715221,
+      "targetY": 229.99977808355126
+    },
+    {
+      "id": "vueflow__edge-V11-GND10",
+      "type": "step",
+      "source": "V1",
+      "target": "GND1",
+      "sourceHandle": "1",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 159.99991241202912,
+      "sourceY": 239.99975471329776,
+      "targetX": 159.99991241202912,
+      "targetY": 299.9999211394166
+    }
+  ],
+  "position": [
+    101.42049356690859,
+    12.742106997758015
+  ],
+  "zoom": 1.3058258449441862,
+  "viewport": {
+    "x": 101.42049356690859,
+    "y": 12.742106997758015,
+    "zoom": 1.3058258449441862
+  }
+}

@@ -15,3 +15,6 @@ build/**
 .envrc
 notes/
 .cursorrules
+CLAUDE.md
+*.zip
+results/

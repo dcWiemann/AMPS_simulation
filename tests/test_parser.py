@@ -1,212 +1,330 @@
 import pytest
 import json
-import os
-from typing import Dict, Any, Set, Tuple
+import networkx as nx
 from amps_simulation.core.parser import ParserJson
+from amps_simulation.core.components import (
+    Resistor, Capacitor, Inductor, PowerSwitch,
+    VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter, ElecJunction
+)
+from amps_simulation.core.control_orchestrator import ControlGraph
+from amps_simulation.core.control_port import ControlPort
 
-# Test data configuration
-TEST_DATA_DIR = "test_data"
-TEST_FILES = [
-    "test_rc.json",       # RC circuit
-    "test_rlc.json",      # RLC circuit
-    "test_2v.json",       # Circuit with 2 voltage sources
-]
-
-def load_test_file(filename: str) -> Dict[str, Any]:
-    """
-    Load a test circuit file and return its contents.
-    
-    Args:
-        filename: Name of the JSON file containing circuit description
-        
-    Returns:
-        Dict containing the circuit description with 'nodes' and 'edges'
-        
-    Raises:
-        FileNotFoundError: If the test file doesn't exist
-        json.JSONDecodeError: If the file contains invalid JSON
-    """
-    file_path = os.path.join(TEST_DATA_DIR, filename)
-    with open(file_path, 'r') as f:
+def load_test_file(filename: str) -> dict:
+    """Load a test circuit file from the test_data directory."""
+    with open(f"test_data/{filename}", "r") as f:
         return json.load(f)
 
-def validate_electrical_nodes(electrical_nodes: Dict[int, Set[Tuple[str, str]]], test_file: str) -> None:
-    """
-    Validate the structure and content of electrical nodes.
-    
-    Given:
-        - A dictionary of electrical nodes
-        - Each node maps to a set of (component_id, terminal_id) tuples
-        - The test file name for error reporting
+def print_graph(graph, title="Graph Structure"):
+    """Helper function to print graph structure."""
+    print(f"\n=== {title} ===")
+    print("\nNodes:", graph.nodes)
+        # Print detailed node information
+    print("\nDetailed Node Information:")
+    for node in graph.nodes:
+        print(f"Node {node}: {graph.nodes[node]}")
         
-    When:
-        - The validation is performed
-        
-    Then:
-        - All node IDs are integers
-        - All node values are sets
-        - All terminals are tuples of (component_id, terminal_id)
-        
-    Args:
-        electrical_nodes: Dictionary mapping node IDs to sets of terminals
-        test_file: Name of the test file for error reporting
-        
-    Raises:
-        AssertionError: If any validation check fails
-    """
-    assert isinstance(electrical_nodes, dict), f"electrical_nodes should be a dictionary for {test_file}"
-    assert all(isinstance(node_id, int) for node_id in electrical_nodes.keys()), \
-        f"electrical_nodes keys should be integers for {test_file}"
-    assert all(isinstance(terminals, set) for terminals in electrical_nodes.values()), \
-        f"electrical_nodes values should be sets for {test_file}"
-    assert all(all(isinstance(term, tuple) and len(term) == 2 for term in terminals) 
-              for terminals in electrical_nodes.values()), \
-        f"each terminal in electrical_nodes should be a tuple of (component_id, terminal_id) for {test_file}"
+    print("\nEdges:", graph.edges)
+    print("\nDetailed Edge Information:")
+    for u, v, d in graph.edges(data=True):
+        comp = d["component"]
+        print(f"\n  {u} -> {v}:")
+        print(f"    Component Type: {comp.__class__.__name__}")
+        print(f"    Component ID: {comp.comp_id}")
+        # Print component-specific attributes
+        if hasattr(comp, "resistance"):
+            print(f"    Resistance: {comp.resistance}")
+        if hasattr(comp, "capacitance"):
+            print(f"    Capacitance: {comp.capacitance}")
+        if hasattr(comp, "inductance"):
+            print(f"    Inductance: {comp.inductance}")
+        if hasattr(comp, "voltage"):
+            print(f"    Voltage: {comp.voltage}")
+        if hasattr(comp, "current"):
+            print(f"    Current: {comp.current}")
 
-def validate_circuit_components(circuit_components: Dict[str, Dict], test_file: str) -> None:
-    """
-    Validate the structure and content of circuit components.
-    
-    Given:
-        - A dictionary of circuit components
-        - Each component has type, value, and terminals
-        - The test file name for error reporting
-        
-    When:
-        - The validation is performed
-        
-    Then:
-        - All component IDs are strings
-        - Each component has required fields (type, terminals)
-        - All terminal IDs are strings
-        - All electrical node IDs are integers
-        
-    Args:
-        circuit_components: Dictionary mapping component IDs to component data
-        test_file: Name of the test file for error reporting
-        
-    Raises:
-        AssertionError: If any validation check fails
-    """
-    assert isinstance(circuit_components, dict), f"circuit_components should be a dictionary for {test_file}"
-    for comp_id, comp_data in circuit_components.items():
-        assert isinstance(comp_id, str), f"component IDs should be strings for {test_file}"
-        assert isinstance(comp_data, dict), f"component data should be a dictionary for {test_file}"
-        assert "type" in comp_data, f"component {comp_id} missing 'type' field for {test_file}"
-        assert "terminals" in comp_data, f"component {comp_id} missing 'terminals' field for {test_file}"
-        assert isinstance(comp_data["terminals"], dict), \
-            f"terminals should be a dictionary for component {comp_id} in {test_file}"
-        assert all(isinstance(term_id, str) for term_id in comp_data["terminals"].keys()), \
-            f"terminal IDs should be strings for component {comp_id} in {test_file}"
-        assert all(isinstance(node_id, int) for node_id in comp_data["terminals"].values()), \
-            f"electrical node IDs should be integers for component {comp_id} in {test_file}"
+def test_parser_json_creates_correct_graph():
+    """Test parsing a complex circuit from JSON file into an electrical graph."""
+    # Clear the component registry to avoid duplicate comp_id issues
+    Component.clear_registry()
 
-@pytest.mark.parametrize("test_file", TEST_FILES)
-def test_parser_json(test_file: str) -> None:
+    # Load the test circuit
+    with open("test_data/parser_nodes.json", "r") as f:
+        circuit_json = json.load(f)
+    
+    # Create parser and parse circuit
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_json)
+    print_graph(graph, "Complex Circuit")
+    
+    # Print node mapping for debugging
+    print("\nComponent Connections:")
+    for conn in circuit_json["edges"]:
+        print(f"  {conn['source']}:{conn['sourceHandle']} -> {conn['target']}:{conn['targetHandle']}")
+    
+    # Check that we have the correct number of nodes (electrical junctions)
+    # We expect 6 electrical junctions:
+    # 1. V2 top/S2 left
+    # 2. S2 right/R7 left
+    # 3. R7 right/C4 top/L2 left
+    # 4. V2 bottom/C4 bottom/GND1/GND2 (merged ground node)
+    # 5. L2 right
+    # 6. R8/C5 connection point
+    assert len(graph.nodes) == 6
+    
+    # Check node attributes
+    for node in graph.nodes:
+        assert "junction" in graph.nodes[node]  # Check for junction attribute
+        # Verify nodes are numbered sequentially
+        assert node.isdigit()
+        assert 1 <= int(node) <= 6
+    
+    # Check that we have the correct number of edges (components)
+    # We expect 7 edges (one for each two-terminal component)
+    assert len(graph.edges) == 7
+    
+    # Check that all nodes are connected (no isolated nodes)
+    assert nx.is_connected(graph.to_undirected())
+    
+    # Check component types in edges
+    # Find edges with specific components by checking edge attributes
+    voltage_source_edges = [(u, v) for u, v, d in graph.edges(data=True) 
+                           if isinstance(d["component"], VoltageSource)]
+    assert len(voltage_source_edges) == 1  # One voltage source
+    
+    resistor_edges = [(u, v) for u, v, d in graph.edges(data=True) 
+                     if isinstance(d["component"], Resistor)]
+    assert len(resistor_edges) == 2  # Two resistors (R7, R8)
+    
+    capacitor_edges = [(u, v) for u, v, d in graph.edges(data=True) 
+                      if isinstance(d["component"], Capacitor)]
+    assert len(capacitor_edges) == 2  # Two capacitors (C4, C5)
+    
+    inductor_edges = [(u, v) for u, v, d in graph.edges(data=True) 
+                     if isinstance(d["component"], Inductor)]
+    assert len(inductor_edges) == 1  # One inductor
+    
+    switch_edges = [(u, v) for u, v, d in graph.edges(data=True) 
+                   if isinstance(d["component"], PowerSwitch)]
+    assert len(switch_edges) == 1  # One switch
+
+
+def test_parser_networkx_all_components() -> None:
     """
-    Test that ParserJson correctly processes circuit files.
+    Test ParserJson from parser_networkx.py with a circuit containing all supported components.
     
     Given:
-        - A circuit description in JSON format
-        - The circuit contains components and their connections
+        - A circuit description in JSON format containing all supported components
+        - The circuit contains voltage source, resistor, inductor, capacitor, ground, and switch
         
     When:
         - The circuit is parsed by ParserJson
         
     Then:
-        - Electrical nodes are correctly identified and structured
-        - Circuit components are properly extracted and typed
-        - All terminals are correctly mapped to electrical nodes
-        - No terminals are orphaned or incorrectly connected
-        
-    Args:
-        test_file: Name of the JSON file containing the circuit description
+        - All components are correctly created with their proper types and values
+        - The graph structure is properly initialized
         
     Raises:
         AssertionError: If any validation check fails
         Exception: If parsing fails
     """
-    try:
-        # Load circuit data
-        circuit_data = load_test_file(test_file)
-        
-        # Create parser instance
-        parser = ParserJson()
-        
-        # Parse circuit data
-        electrical_nodes, circuit_components = parser.parse(circuit_data)
-        
-        # Validate electrical nodes
-        validate_electrical_nodes(electrical_nodes, test_file)
-        
-        # Validate circuit components
-        validate_circuit_components(circuit_components, test_file)
-        
-        # Additional validation: check that all terminals in electrical_nodes are referenced in circuit_components
-        all_terminals = set()
-        for comp_id, comp_data in circuit_components.items():
-            for term_id in comp_data["terminals"].keys():
-                all_terminals.add((comp_id, term_id))
-        
-        for node_terminals in electrical_nodes.values():
-            assert all(term in all_terminals for term in node_terminals), \
-                f"Found terminal in electrical_nodes not referenced in circuit_components for {test_file}"
-        
-    except Exception as e:
-        pytest.fail(f"ParserJson.parse failed for {test_file} with error: {str(e)}")
+    # Clear the component registry to avoid duplicate comp_id issues
+    Component.clear_registry()
 
-def test_parser_json_specific_circuit() -> None:
-    """
-    Test ParserJson with a specific RLC circuit for detailed validation.
-    
-    Given:
-        - An RLC circuit description in JSON format
-        - The circuit contains a voltage source, resistor, inductor, and capacitor
-        
-    When:
-        - The circuit is parsed by ParserJson
-        
-    Then:
-        - Three electrical nodes are identified (one for each terminal of the components)
-        - All required components are present (voltage source, resistor, inductor, capacitor)
-        - Each component has a valid value
-        - Terminal connections are properly mapped
-        
-    Raises:
-        AssertionError: If any validation check fails
-        Exception: If parsing fails
-    """
-    # Load RLC circuit
-    circuit_data = load_test_file("test_rlc.json")
+    # Load test circuit
+    circuit_data = load_test_file("parser_all_components.json")
     
     # Create parser instance
     parser = ParserJson()
     
     # Parse circuit data
-    electrical_nodes, circuit_components = parser.parse(circuit_data)
+    graph, control_graph = parser.parse(circuit_data)
+    print_graph(graph, "All Components Test")
     
-    # For RLC circuit, we expect:
-    # - One capacitor
-    # - One resistor
-    # - One inductor
-    # - One voltage source
-    # - Three electrical nodes (one for each terminal of the components)
-    assert len(electrical_nodes) == 3, "RLC circuit should have three electrical nodes"
+    # Get the created components
+    components = graph.edges(data=True)
+
+    # Verify graph is initialized
+    assert isinstance(graph, nx.MultiDiGraph), "Parser should return a directed graph"
     
-    # Count component types
-    component_types = {comp["type"] for comp in circuit_components.values()}
-    assert "capacitor" in component_types, "RLC circuit should have a capacitor"
-    assert "resistor" in component_types, "RLC circuit should have a resistor"
-    assert "inductor" in component_types, "RLC circuit should have an inductor"
-    assert "voltage-source" in component_types, "RLC circuit should have a voltage source"
+    # Verify we have the expected number of components
+    assert len(components) == 9, "Should have 9 components (Vin, Iin, S, D, R, C, L, Am, Vm)"
     
-    # Verify component values
-    for comp_id, comp_data in circuit_components.items():
-        if comp_data["type"] == "capacitor":
-            assert comp_data["value"] is not None, "Capacitor should have a value"
-        elif comp_data["type"] == "resistor":
-            assert comp_data["value"] is not None, "Resistor should have a value"
-        elif comp_data["type"] == "inductor":
-            assert comp_data["value"] is not None, "Inductor should have a value"
-        elif comp_data["type"] == "voltage-source":
-            assert comp_data["value"] is not None, "Voltage source should have a value"
+    type_list = ['VoltageSource', 'CurrentSource', 'PowerSwitch', 'Diode', 'Resistor', 'Capacitor', 'Inductor', 'Ammeter', 'Voltmeter']
+    
+    # Verify that the components are of the correct type
+    for comp in components:
+        assert isinstance(comp[2]['component'], Component), "Component should be of type Component"
+    
+    # Create a mapping from type names to actual component classes
+    component_type_map = {
+        'VoltageSource': VoltageSource,
+        'CurrentSource': CurrentSource,
+        'PowerSwitch': PowerSwitch,
+        'Diode': Diode,
+        'Resistor': Resistor,
+        'Capacitor': Capacitor,
+        'Inductor': Inductor,
+        'Ground': Ground,
+        'Ammeter': Ammeter,
+        'Voltmeter': Voltmeter
+    }
+
+    # Verify that each type appears exactly once
+    for t in type_list:
+        count = 0  # Initialize count for each type
+        for comp in components:
+            if isinstance(comp[2]['component'], component_type_map[t]):
+                count += 1
+        assert count == 1, f"Component type {t} should appear exactly once"
+
+def test_parser_networkx_has_ground_node() -> None:
+    """Test that the parser creates a ground node."""
+    # Clear the component registry to avoid duplicate comp_id issues
+    Component.clear_registry()
+
+    # Load test circuit
+    circuit_data = load_test_file("parser_no_ground_node.json")
+
+    # Create parser instance
+    parser = ParserJson()
+    
+    # Parse circuit data
+    graph, control_graph = parser.parse(circuit_data)
+    print_graph(graph, "No Ground Node Test")
+
+    nodes = graph.nodes(data=True)
+    count = 0
+    for node in nodes:
+        assert isinstance(node[1]['junction'], ElecJunction), "Node should be an instance of ElecJunction"
+        if node[1]['junction'].is_ground:
+            assert node[1]['junction'].voltage_var == 0, "Ground node should have 0 voltage"
+            count += 1
+    assert count == 1, "Should have exactly one ground node"
+
+def test_parser_creates_control_graph():
+    """Test that parser creates control graph from sources with values."""
+    Component.clear_registry()
+    ControlPort.clear_registry()
+
+    # Create test circuit with voltage source having a value
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source", "value": 12.0}},
+            {"id": "R1", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "positive", "targetHandle": "left"},
+            {"source": "R1", "target": "GND", "sourceHandle": "right", "targetHandle": "terminal"},
+            {"source": "GND", "target": "V1", "sourceHandle": "terminal", "targetHandle": "negative"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Verify control graph was created
+    assert isinstance(control_graph, ControlGraph)
+    
+    # Should have one signal for the voltage source
+    assert len(control_graph.signals) == 1
+    assert "V1_signal" in control_graph.signals
+    
+    # Should have one port for the voltage source
+    assert len(control_graph.ports) == 1
+    assert "V1_port" in control_graph.ports
+    
+    # Port should be connected to signal
+    assert len(control_graph.connections) == 1
+    assert control_graph.connections["V1_port"] == ("V1_signal", 1.0)
+    
+    # Verify signal value
+    signal = control_graph.signals["V1_signal"]
+    assert signal.evaluate(0.0) == 12.0
+    assert signal.evaluate(5.0) == 12.0  # Constant value
+    
+    # Verify port properties
+    port = control_graph.ports["V1_port"]
+    assert port.port_type == "source"
+    
+    # Verify component has control_port_name set
+    v_source = Component.get_component("V1")
+    assert v_source.control_port_name == "V1_port"
+
+def test_parser_control_graph_multiple_sources():
+    """Test control graph creation with multiple sources."""
+    Component.clear_registry()
+    ControlPort.clear_registry()
+
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source", "value": 5.0}},
+            {"id": "I1", "data": {"componentType": "current-source", "value": 0.1}},
+            {"id": "V2", "data": {"componentType": "voltage-source"}},  # No value field
+            {"id": "R1", "data": {"componentType": "resistor", "value": 50}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "positive", "targetHandle": "left"},
+            {"source": "R1", "target": "I1", "sourceHandle": "right", "targetHandle": "negative"},
+            {"source": "I1", "target": "V2", "sourceHandle": "positive", "targetHandle": "negative"},
+            {"source": "V2", "target": "GND", "sourceHandle": "positive", "targetHandle": "terminal"},
+            {"source": "GND", "target": "V1", "sourceHandle": "terminal", "targetHandle": "negative"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Should have signals only for sources with values
+    assert len(control_graph.signals) == 2
+    assert "V1_signal" in control_graph.signals
+    assert "I1_signal" in control_graph.signals
+    assert "V2_signal" not in control_graph.signals  # No value provided
+    
+    # Should have ports only for sources with values
+    assert len(control_graph.ports) == 2
+    assert "V1_port" in control_graph.ports
+    assert "I1_port" in control_graph.ports
+    assert "V2_port" not in control_graph.ports  # No value provided
+    
+    # Verify connections
+    assert len(control_graph.connections) == 2
+    assert control_graph.connections["V1_port"] == ("V1_signal", 1.0)
+    assert control_graph.connections["I1_port"] == ("I1_signal", 1.0)
+    
+    # Verify values
+    assert control_graph.signals["V1_signal"].evaluate(0.0) == 5.0
+    assert control_graph.signals["I1_signal"].evaluate(0.0) == 0.1
+
+def test_parser_control_graph_no_sources_with_values():
+    """Test control graph when no sources have values."""
+    Component.clear_registry()
+    ControlPort.clear_registry()
+
+    circuit_data = {
+        "nodes": [
+            {"id": "V1", "data": {"componentType": "voltage-source"}},  # No value field
+            {"id": "R1", "data": {"componentType": "resistor", "value": 100}},
+            {"id": "GND", "data": {"componentType": "ground"}}
+        ],
+        "edges": [
+            {"source": "V1", "target": "R1", "sourceHandle": "positive", "targetHandle": "left"},
+            {"source": "R1", "target": "GND", "sourceHandle": "right", "targetHandle": "terminal"},
+            {"source": "GND", "target": "V1", "sourceHandle": "terminal", "targetHandle": "negative"}
+        ]
+    }
+
+    parser = ParserJson()
+    graph, control_graph = parser.parse(circuit_data)
+
+    # Voltage source should have been created with default voltage 0
+    v_source = Component.get_component("V1")
+    assert v_source is not None
+    assert v_source.voltage == 0.0
+    
+    # Control graph should be empty since no "value" field was provided
+    assert len(control_graph.signals) == 0
+    assert len(control_graph.ports) == 0
+    assert len(control_graph.connections) == 0
+
