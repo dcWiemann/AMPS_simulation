@@ -1,7 +1,7 @@
 # amps_simulation/core/__init__.py
 
-# Import from parser_networkx.py
-from .parser_networkx import CircuitParser, ParserJson
+# Import from parser.py
+from .parser import CircuitParser, ParserJson
 
 # Import from engine.py
 from .engine import Engine

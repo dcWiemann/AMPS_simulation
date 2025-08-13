@@ -1,7 +1,7 @@
 import pytest
 import json
 import networkx as nx
-from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
     VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter, ElecJunction

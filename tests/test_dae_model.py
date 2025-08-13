@@ -1,6 +1,6 @@
 import pytest
 from amps_simulation.core.dae_model import DaeModel, ElectricalDaeModel
-from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import Resistor, ElecJunction, PowerSwitch
 from typing import Dict
 import networkx as nx

@@ -6,7 +6,7 @@ import json
 import numpy as np
 from amps_simulation.core.engine import Engine
 from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, CurrentSource, PowerSwitch, Component
-from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.dae_model import ElectricalDaeModel
 from amps_simulation.core.control_orchestrator import ControlGraph
 
