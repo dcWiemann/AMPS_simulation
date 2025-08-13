@@ -4,7 +4,7 @@ Debug node mapping in the parser to understand why R1 and C2 aren't connecting t
 """
 
 import json
-from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import Component
 import logging
 

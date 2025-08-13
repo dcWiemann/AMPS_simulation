@@ -5,7 +5,7 @@ Debug script to examine the electrical graph construction for the RC switch circ
 
 import json
 import networkx as nx
-from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import Component
 import logging
 

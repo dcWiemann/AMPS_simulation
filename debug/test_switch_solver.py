@@ -7,7 +7,7 @@ Tests the run_simulation method with solve_ivp on a circuit containing switches.
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from amps_simulation.core.parser_networkx import ParserJson
+from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
 from amps_simulation.core.components import Component
 import logging
