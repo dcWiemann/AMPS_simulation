@@ -10,6 +10,16 @@ class Component(BaseModel, ABC):
     comp_id: str = Field(..., description="Unique identifier for the component", pattern=r"^[A-Za-z].*")
     _registry: ClassVar[Dict[str, 'Component']] = {}
     
+    @property
+    def is_short_circuit(self) -> bool:
+        """Check if component behaves as a short circuit (zero impedance)."""
+        return False
+    
+    @property 
+    def is_open_circuit(self) -> bool:
+        """Check if component behaves as an open circuit (infinite impedance)."""
+        return False
+    
     @field_validator('comp_id')
     @classmethod
     def validate_unique_comp_id(cls, v: str) -> str:
@@ -21,6 +31,16 @@ class Component(BaseModel, ABC):
     def __init__(self, **data):
         super().__init__(**data)
         self._registry[self.comp_id] = self
+    
+    def __hash__(self):
+        """Make components hashable by using comp_id."""
+        return hash(self.comp_id)
+    
+    def __eq__(self, other):
+        """Components are equal if they have the same comp_id."""
+        if not isinstance(other, Component):
+            return False
+        return self.comp_id == other.comp_id
     
     @classmethod
     def clear_registry(cls) -> None:
@@ -63,6 +83,16 @@ class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms")
     
+    @property
+    def is_short_circuit(self) -> bool:
+        """Resistor is short circuit if R = 0."""
+        return self.resistance == 0.0
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Resistor is open circuit if R approaches infinity."""
+        return self.resistance == float('inf')
+    
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for Ohm's law.
         
@@ -75,6 +105,16 @@ class Resistor(Component):
 class Capacitor(Component):
     """Capacitor component."""
     capacitance: float = Field(..., description="Capacitance value in farads", ge=0)
+    
+    @property
+    def is_short_circuit(self) -> bool:
+        """Capacitor is short circuit if C approaches infinity."""
+        return self.capacitance == float('inf')
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Capacitor is open circuit if C = 0."""
+        return self.capacitance == 0.0
 
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the capacitor.
@@ -94,6 +134,16 @@ class Capacitor(Component):
 class Inductor(Component):
     """Inductor component."""
     inductance: float = Field(..., description="Inductance value in henries", ge=0)
+    
+    @property
+    def is_short_circuit(self) -> bool:
+        """Inductor is short circuit if L = 0."""
+        return self.inductance == 0.0
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Inductor is open circuit if L approaches infinity."""
+        return self.inductance == float('inf')
 
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the inductor.
@@ -114,6 +164,16 @@ class PowerSwitch(Component):
     """Power switch component."""
     switch_time: float = Field(..., description="Time to switch in seconds")
     is_on: bool = Field(..., description="Whether the switch is on")
+    
+    @property
+    def is_short_circuit(self) -> bool:
+        """Switch is short circuit when closed (is_on = True)."""
+        return self.is_on
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Switch is open circuit when open (is_on = False)."""
+        return not self.is_on
     
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the switch based on its position.
@@ -148,6 +208,16 @@ class Diode(Component):
     """Diode component."""
     is_on: bool = Field(False, description="Whether the diode is conducting")
     
+    @property
+    def is_short_circuit(self) -> bool:
+        """Diode is short circuit when forward-biased and conducting."""
+        return self.is_on
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Diode is open circuit when reverse-biased or not conducting."""
+        return not self.is_on
+    
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for the diode based on its state.
         
@@ -163,6 +233,11 @@ class Diode(Component):
 class VoltageSource(Source):
     """Voltage source component."""
     voltage: float = Field(..., description="Voltage value in volts")
+    
+    @property
+    def is_short_circuit(self) -> bool:
+        """Voltage source is short circuit if voltage = 0."""
+        return self.voltage == 0.0
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -178,6 +253,11 @@ class VoltageSource(Source):
 class CurrentSource(Source):
     """Current source component."""
     current: float = Field(..., description="Current value in amperes")
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Current source is open circuit if current = 0."""
+        return self.current == 0.0
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -195,6 +275,11 @@ class Ground(Component):
 
 class Ammeter(Meter):
     """Ammeter component."""
+    
+    @property
+    def is_short_circuit(self) -> bool:
+        """Ideal ammeter has zero voltage drop (short circuit)."""
+        return True
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -210,6 +295,11 @@ class Ammeter(Meter):
 
 class Voltmeter(Meter):
     """Voltmeter component."""
+    
+    @property
+    def is_open_circuit(self) -> bool:
+        """Ideal voltmeter has infinite impedance (open circuit)."""
+        return True
 
     def __init__(self, **data):
         super().__init__(**data)
