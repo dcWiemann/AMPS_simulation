@@ -151,6 +151,7 @@ class CircuitSanityChecker:
                 )
         
         # Check for voltage sources connected through short circuit paths
+        # Only check if BOTH terminals of each source are short-circuited to the other
         for i, (s1_src, s1_tgt, vs1) in enumerate(voltage_sources):
             for j, (s2_src, s2_tgt, vs2) in enumerate(voltage_sources[i+1:], i+1):
                 # Skip if already found as direct parallel connection
@@ -159,20 +160,28 @@ class CircuitSanityChecker:
                 if pair1 == pair2:
                     continue
                 
-                # Check if any terminals are connected through short circuit path
-                terminal_pairs = [
-                    (s1_src, s2_src), (s1_src, s2_tgt),
-                    (s1_tgt, s2_src), (s1_tgt, s2_tgt)
-                ]
+                # For true parallel connection, both terminal pairs must be short-circuited:
+                # s1_src must be connected to s2_src AND s1_tgt must be connected to s2_tgt
+                # OR s1_src must be connected to s2_tgt AND s1_tgt must be connected to s2_src
                 
-                for t1, t2 in terminal_pairs:
-                    if has_short_circuit_path(self.graph, t1, t2, {vs1, vs2}):
-                        self.errors.append(
-                            f"Voltage sources '{vs1.comp_id}'({vs1.voltage}V) and "
-                            f"'{vs2.comp_id}'({vs2.voltage}V) connected through short circuit path "
-                            f"(parallel voltage sources are not allowed regardless of voltage values)"
-                        )
-                        break
+                # Check parallel configuration 1: s1_src<->s2_src AND s1_tgt<->s2_tgt
+                parallel_config1 = (
+                    has_short_circuit_path(self.graph, s1_src, s2_src, {vs1, vs2}) and
+                    has_short_circuit_path(self.graph, s1_tgt, s2_tgt, {vs1, vs2})
+                )
+                
+                # Check parallel configuration 2: s1_src<->s2_tgt AND s1_tgt<->s2_src  
+                parallel_config2 = (
+                    has_short_circuit_path(self.graph, s1_src, s2_tgt, {vs1, vs2}) and
+                    has_short_circuit_path(self.graph, s1_tgt, s2_src, {vs1, vs2})
+                )
+                
+                if parallel_config1 or parallel_config2:
+                    self.errors.append(
+                        f"Voltage sources '{vs1.comp_id}'({vs1.voltage}V) and "
+                        f"'{vs2.comp_id}'({vs2.voltage}V) connected in parallel through short circuit paths "
+                        f"(parallel voltage sources are not allowed regardless of voltage values)"
+                    )
     
     def _check_series_current_sources(self):
         """Check for current sources connected in series."""

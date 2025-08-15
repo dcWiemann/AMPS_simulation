@@ -45,6 +45,9 @@ class Engine:
         Initialize all variables needed for simulation.
         This method should be called before running any simulation.
         """
+        # Run circuit sanity checks before initialization
+        self._run_sanity_checks()
+        
         # Create components list from edge data
         self.components_list = []
         for _, _, edge_data in self.graph.edges(data=True):
@@ -83,6 +86,59 @@ class Engine:
 
         # Set initialized flag to True
         self.initialized = True
+        
+    def _run_sanity_checks(self) -> None:
+        """
+        Run circuit topology sanity checks and handle any issues found.
+        
+        This method checks for common circuit topology problems like:
+        - Short-circuited voltage sources
+        - Open circuit current sources  
+        - Parallel voltage sources
+        - Series current sources
+        - Floating nodes
+        - Open circuit inductors (requiring i_L=0, v_L=0 constraints)
+        - Short circuit capacitors (requiring v_C=0 constraints)
+        """
+        logging.info("Running circuit topology sanity checks...")
+        
+        from .circuit_sanity_checker import CircuitSanityChecker
+        checker = CircuitSanityChecker(self.graph)
+        
+        try:
+            # Run checks with raise_on_error=True to catch critical issues
+            result = checker.check_all(raise_on_error=True)
+            
+            # If we get here, no critical errors were found
+            if result['warnings']:
+                logging.warning("Circuit topology warnings detected:")
+                for warning in result['warnings']:
+                    logging.warning(f"  - {warning}")
+            
+            # Get constraint modifications for equation system
+            constraints = checker.get_constraint_modifications()
+            
+            if any(constraints.values()):
+                logging.info("Circuit constraints required:")
+                if constraints['zero_current_inductors']:
+                    logging.info(f"  - Zero current inductors: {constraints['zero_current_inductors']}")
+                if constraints['zero_voltage_inductors']:
+                    logging.info(f"  - Zero voltage inductors: {constraints['zero_voltage_inductors']}")
+                if constraints['zero_voltage_capacitors']:
+                    logging.info(f"  - Zero voltage capacitors: {constraints['zero_voltage_capacitors']}")
+                
+                # Store constraints for use by DAE model
+                self.circuit_constraints = constraints
+            else:
+                self.circuit_constraints = None
+            
+            logging.info("Circuit topology sanity checks passed")
+            
+        except Exception as e:
+            # Log the full error details but let the exception propagate
+            checker.log_results()
+            logging.error("Circuit topology sanity checks failed - cannot proceed with simulation")
+            raise
 
     def _get_switch_events(self):
         """
