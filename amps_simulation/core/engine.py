@@ -99,6 +99,8 @@ class Engine:
         - Floating nodes
         - Open circuit inductors (requiring i_L=0, v_L=0 constraints)
         - Short circuit capacitors (requiring v_C=0 constraints)
+        
+        Always raises exceptions on topology errors to ensure circuit validity.
         """
         logging.info("Running circuit topology sanity checks...")
         
@@ -139,6 +141,7 @@ class Engine:
             checker.log_results()
             logging.error("Circuit topology sanity checks failed - cannot proceed with simulation")
             raise
+
 
     def _get_switch_events(self):
         """
@@ -497,6 +500,11 @@ class Engine:
         # Update switch states in electrical model
         if self.switch_list:
             self.electrical_model.update_switch_states(t)
+            
+            # Run sanity checks for this switch configuration
+            # The graph topology has changed due to switch state updates
+            logging.debug(f"Running sanity checks for switch configuration: {switch_states}")
+            self._run_sanity_checks()
         
         # Get derivatives and output equations from DAE model
         derivatives = self.electrical_model.derivatives
