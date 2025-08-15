@@ -6,6 +6,7 @@ from scipy.integrate import solve_ivp
 import numpy as np
 from .components import Component
 from .dae_model import ElectricalDaeModel
+from .electrical_graph import ElectricalGraph
 from .engine_settings import EngineSettings
 from .control_orchestrator import ControlOrchestrator, ControlGraph
 
@@ -55,14 +56,16 @@ class Engine:
             if component is not None:
                 self.components_list.append(component)
         
-        self.electrical_model = ElectricalDaeModel(self.graph)
+        # Create electrical graph and DAE model
+        self.electrical_graph = ElectricalGraph(self.graph)
+        self.electrical_model = ElectricalDaeModel(self.electrical_graph)
         self.electrical_model.initialize()
 
         # Set up all necessary variables
         self.state_vars = tuple(self.electrical_model.state_vars)
         self.input_vars = tuple(self.electrical_model.input_vars)
         self.output_vars = tuple(self.electrical_model.output_vars)
-        self.switch_list = tuple(self.electrical_model.switch_list)
+        self.switch_list = tuple(self.electrical_graph.switch_list)
         
         # Build control orchestrator input function for sources only
         source_ports = self.control_graph.get_source_ports()

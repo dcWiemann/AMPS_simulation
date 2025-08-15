@@ -1,5 +1,6 @@
 import pytest
 from amps_simulation.core.dae_model import DaeModel, ElectricalDaeModel
+from amps_simulation.core.electrical_graph import ElectricalGraph
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import Resistor, ElecJunction, PowerSwitch
 from typing import Dict
@@ -96,7 +97,8 @@ def create_test_circuit():
 def test_electrical_dae_model_initialization():
     """Test initialization of ElectricalDaeModel."""
     G = create_test_circuit()
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     assert isinstance(model.graph, nx.Graph)
     assert model.derivatives == {}
     assert model.output_eqs == {}
@@ -105,9 +107,9 @@ def test_electrical_dae_model_initialization():
 def test_compute_incidence_matrix():
     """Test computation of incidence matrix."""
     G = create_test_circuit()
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
     
-    incidence_matrix = model.compute_incidence_matrix()
+    incidence_matrix = electrical_graph.compute_incidence_matrix()
     
     # Check matrix dimensions (3 nodes including ground, 2 components)
     assert incidence_matrix.shape == (3, 2)
@@ -116,7 +118,8 @@ def test_compute_incidence_matrix():
 def test_compute_kcl_equations():
     """Test computation of KCL equations."""
     G = create_test_circuit()
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     
     kcl_equations = model.compute_kcl_equations()
     
@@ -130,7 +133,8 @@ def test_compute_kcl_equations():
 def test_compute_kvl_equations():
     """Test computation of KVL equations."""
     G = create_test_circuit()
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     
     kvl_equations = model.compute_kvl_equations()
     
@@ -147,7 +151,8 @@ def test_compute_static_component_equations():
     with open('test_data/DaeModel_meters.json', 'r') as f:
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     
     static_eqs = model.compute_static_component_equations()
     
@@ -165,7 +170,8 @@ def test_compute_switch_equations():
     with open('test_data/DaeModel_meters.json', 'r') as f:
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     
     switch_eqs = model.compute_switch_equations()
     print("switch_eqs off:", switch_eqs)
@@ -193,7 +199,8 @@ def test_compute_circuit_equations():
         if isinstance(edge[2]['component'], PowerSwitch):
             edge[2]['component'].is_on = False
 
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
 
     circuit_eqs = model.compute_circuit_equations()
     print("circuit_eqs: ", circuit_eqs)
@@ -232,7 +239,8 @@ def test_print_dae_model_components():
     with open('test_data/DaeModel_meters.json', 'r') as f:
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     model.initialize()
     for switch in model.switch_list:
         switch.is_on = True
@@ -262,7 +270,8 @@ def test_kcl_equations_exclude_ground():
     with open('test_data/DaeModel_kcl_minimal.json', 'r') as f:
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     
     # Get KCL equations
     kcl_equations = model.compute_kcl_equations()
@@ -281,7 +290,8 @@ def test_compute_derivatives():
     with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
-    model = ElectricalDaeModel(G)
+    electrical_graph = ElectricalGraph(G)
+    model = ElectricalDaeModel(electrical_graph)
     model.initialize()
     
     derivatives = model.compute_derivatives()

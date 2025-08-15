@@ -3,6 +3,7 @@ from typing import Dict, List, Any, Tuple
 import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter
+from amps_simulation.core.electrical_graph import ElectricalGraph
 from sympy import Matrix, Symbol, sympify, solve
 import logging
 
@@ -51,24 +52,32 @@ class ElectricalDaeModel(DaeModel):
         derivatives (Dict[str, float]): Dictionary mapping state variable names to their derivatives
         outputs (Dict[str, float]): Dictionary mapping output variable names to their values
     """
-    def __init__(self, graph: nx.Graph):
-        super().__init__(graph)
+    def __init__(self, electrical_graph: ElectricalGraph):
+        super().__init__(electrical_graph.graph)
+        self.electrical_graph = electrical_graph
         self.initialized = False
 
     def initialize(self):
-        # Initialize the model
+        # Initialize the electrical graph first
+        if not self.electrical_graph.initialized:
+            self.electrical_graph.initialize()
         
         # Find all circuit variables
         self.state_vars = self.find_state_vars()
         self.output_vars = self.find_output_vars()
         self.input_vars = self.find_input_vars()
-        self.junction_voltage_var_list, self.component_current_var_list, self.component_voltage_var_list = self.variable_lists()
-        # Find all equations that describe the circuit
-        self.incidence_matrix = self.compute_incidence_matrix()
+        
+        # Get graph structure from electrical_graph
+        self.junction_voltage_var_list = self.electrical_graph.junction_voltage_var_list
+        self.component_current_var_list = self.electrical_graph.component_current_var_list
+        self.component_voltage_var_list = self.electrical_graph.component_voltage_var_list
+        self.incidence_matrix = self.electrical_graph.incidence_matrix
+        self.switch_list = self.electrical_graph.switch_list
+        
+        # Compute circuit equations
         self.kcl_eqs = self.compute_kcl_equations()
         self.kvl_eqs = self.compute_kvl_equations()
         self.static_eqs = self.compute_static_component_equations()
-        self.switch_list = self.find_switches()
         self.switch_eqs = self.compute_switch_equations()
         self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
@@ -113,57 +122,6 @@ class ElectricalDaeModel(DaeModel):
                 input_vars.append(data['component'].input_var)
         return input_vars
     
-    def variable_lists(self) -> Tuple[List[Symbol], List[Symbol], List[Symbol]]:
-        """Get the lists of variables for the circuit.
-        
-        Returns:
-            Tuple[List[Symbol], List[Symbol], List[Symbol]]: Lists of node voltage variables, component current variables, and component voltage variables
-        """
-        nodelist = [node for node in self.graph.nodes()]
-        edgelist = list(self.graph.edges(data=True))
-
-        # Set ground voltage to 0
-        junction_voltage_var_list = []
-        for node in nodelist:
-            voltage_var = self.graph.nodes[node]['junction'].voltage_var
-            assert voltage_var is not None, "Voltage variable is None for component %s" % self.graph.nodes[node]['component'].comp_id
-            junction_voltage_var_list.append(voltage_var)
-                        
-        component_current_var_list = [data['component'].current_var for _, _, data in edgelist]
-        component_voltage_var_list = [data['component'].voltage_var for _, _, data in edgelist]
-
-        return junction_voltage_var_list, component_current_var_list, component_voltage_var_list
-
-    def compute_incidence_matrix(self) -> Tuple[Matrix, List[Symbol], List[Symbol], List[Symbol]]:
-        """Compute the incidence matrix of the graph.
-        
-        Returns:
-            Matrix: The incidence matrix of the graph
-            List[Symbol]: The node voltage variables (corresponds to the rows of the incidence matrix)
-            List[Symbol]: The component current variables (corresponds to the columns of the incidence matrix)
-            List[Symbol]: The component voltage variables
-        """
-        nodelist = [node for node in self.graph.nodes()]
-        edgelist = list(self.graph.edges(data=True))
-
-        # Create incidence matrix manually to handle edge directions
-        n_nodes = len(nodelist)
-        n_edges = len(edgelist)
-        incidence_matrix = np.zeros((n_nodes, n_edges))
-        
-        # Fill incidence matrix based on edge directions
-        for edge_idx, (source, target, data) in enumerate(edgelist):
-            source_idx = nodelist.index(source)
-            target_idx = nodelist.index(target)
-            
-            # Set +1 for source node and -1 for target node based on edge direction
-            incidence_matrix[source_idx, edge_idx] = 1
-            incidence_matrix[target_idx, edge_idx] = -1
-        
-        # Convert to SymPy Matrix
-        incidence_matrix = Matrix(incidence_matrix)
-        
-        return incidence_matrix
     
     def compute_kcl_equations(self) -> List[Symbol]:
         """Compute Kirchhoff's Current Law equations.
@@ -172,8 +130,8 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: List of KCL equations in symbolic form, excluding the ground node equation.
         """
         if self.initialized == False:
-            _, comp_current_vars, _ = self.variable_lists()
-            incidence_matrix = self.compute_incidence_matrix()
+            _, comp_current_vars, _ = self.electrical_graph.variable_lists()
+            incidence_matrix = self.electrical_graph.compute_incidence_matrix()
         else:
             comp_current_vars = self.component_current_var_list
             incidence_matrix = self.incidence_matrix
@@ -206,8 +164,8 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: List of KVL equations in symbolic form.
         """
         if self.initialized == False:
-            junction_voltage_var_list, _, comp_voltage_vars = self.variable_lists()
-            incidence_matrix = self.compute_incidence_matrix()
+            junction_voltage_var_list, _, comp_voltage_vars = self.electrical_graph.variable_lists()
+            incidence_matrix = self.electrical_graph.compute_incidence_matrix()
         else:
             junction_voltage_var_list = self.junction_voltage_var_list
             comp_voltage_vars = self.component_voltage_var_list
@@ -235,17 +193,6 @@ class ElectricalDaeModel(DaeModel):
                 static_eqs.append(component.get_comp_eq())
         return static_eqs
     
-    def find_switches(self) -> List[PowerSwitch]:
-        """Find the switches in the graph.
-        
-        Returns:
-            List[PowerSwitch]: List of switches
-        """
-        switch_list = []
-        for _, _, data in self.graph.edges(data=True):
-            if isinstance(data['component'], PowerSwitch):
-                switch_list.append(data['component'])
-        return switch_list
         
     def compute_switch_equations(self) -> List[Symbol]:
         """Compute the switch equations of the graph.
@@ -254,7 +201,7 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: The switch equations of the graph.
         """
         if self.initialized == False:
-            switch_list = self.find_switches()
+            switch_list = self.electrical_graph.find_switches()
         else:
             switch_list = self.switch_list
         
@@ -279,7 +226,7 @@ class ElectricalDaeModel(DaeModel):
             kvl_eqs = self.compute_kvl_equations()
             static_eqs = self.compute_static_component_equations()
             switch_eqs = self.compute_switch_equations()
-            junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.variable_lists()
+            junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
         else:
             input_vars = self.input_vars
             output_vars = self.output_vars
