@@ -18,3 +18,4 @@ notes/
 CLAUDE.md
 *.zip
 results/
+debug/test_results/
