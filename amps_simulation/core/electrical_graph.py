@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import networkx as nx
 from sympy import Matrix, Symbol
-from .components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter
+from .components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
 
 
 class ElectricalGraph:
@@ -37,6 +37,10 @@ class ElectricalGraph:
         
         # Component lists
         self.switch_list = None
+        self.diode_list = None
+        
+        # Initial state management
+        self.initial_state_values = None
         
         # Initialize flag
         self.initialized = False
@@ -55,6 +59,10 @@ class ElectricalGraph:
         
         # Find components
         self.switch_list = self.find_switches()
+        self.diode_list = self.find_diodes()
+        
+        # Initialize default state values
+        self.initial_state_values = self.compute_initial_state_values()
         
         self.initialized = True
     
@@ -117,3 +125,33 @@ class ElectricalGraph:
             if isinstance(data['component'], PowerSwitch):
                 switch_list.append(data['component'])
         return switch_list
+    
+    def find_diodes(self) -> List[Diode]:
+        """Find the diodes in the graph.
+        
+        Returns:
+            List[Diode]: List of diodes
+        """
+        diode_list = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Diode):
+                diode_list.append(data['component'])
+        return diode_list
+    
+    def compute_initial_state_values(self) -> np.ndarray:
+        """Compute default initial state values for the circuit.
+        
+        For now, this returns zeros for all state variables (inductors and capacitors).
+        In the future, this could be extended to compute steady-state initial conditions.
+        
+        Returns:
+            np.ndarray: Array of initial state values
+        """
+        # Count state variables (inductors and capacitors)
+        state_var_count = 0
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], (Inductor, Capacitor)):
+                state_var_count += 1
+        
+        # Return zeros for now (could be extended for steady-state calculation)
+        return np.zeros(state_var_count)

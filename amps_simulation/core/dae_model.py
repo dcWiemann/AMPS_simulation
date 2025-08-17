@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Tuple
 import numpy as np
 import networkx as nx
-from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter
+from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
 from amps_simulation.core.electrical_graph import ElectricalGraph
 from sympy import Matrix, Symbol, sympify, solve
 import logging
@@ -73,12 +73,14 @@ class ElectricalDaeModel(DaeModel):
         self.component_voltage_var_list = self.electrical_graph.component_voltage_var_list
         self.incidence_matrix = self.electrical_graph.incidence_matrix
         self.switch_list = self.electrical_graph.switch_list
+        self.diode_list = self.electrical_graph.diode_list
         
         # Compute circuit equations
         self.kcl_eqs = self.compute_kcl_equations()
         self.kvl_eqs = self.compute_kvl_equations()
         self.static_eqs = self.compute_static_component_equations()
         self.switch_eqs = self.compute_switch_equations()
+        self.diode_eqs = self.compute_diode_equations()
         self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
         self.output_eqs = self.compute_output_equations()
@@ -189,7 +191,7 @@ class ElectricalDaeModel(DaeModel):
         static_eqs = []
         for _, _, data in self.graph.edges(data=True):
             component = data['component']
-            if isinstance(component, (Resistor, Meter)):
+            if isinstance(component, (Resistor, Meter)):  # Exclude diodes - they are state-dependent
                 static_eqs.append(component.get_comp_eq())
         return static_eqs
     
@@ -210,6 +212,27 @@ class ElectricalDaeModel(DaeModel):
             switch_eqs.append(switch.get_comp_eq())
 
         return switch_eqs
+    
+    def compute_diode_equations(self) -> List[Symbol]:
+        """Compute the diode equations of the graph.
+        
+        Diode equations are state-dependent and applied based on conducting/blocking state:
+        - Conducting (is_on=True): voltage equation (v_D = 0)  
+        - Blocking (is_on=False): current equation (i_D = 0)
+        
+        Returns:
+            List[Symbol]: The diode equations of the graph.
+        """
+        if self.initialized == False:
+            diode_list = self.electrical_graph.find_diodes()
+        else:
+            diode_list = self.diode_list
+        
+        diode_eqs = []
+        for diode in diode_list:
+            diode_eqs.append(diode.get_comp_eq())
+
+        return diode_eqs
     
     def compute_circuit_equations(self) -> List[str]:
         """Solve the circuit variables.
@@ -243,8 +266,14 @@ class ElectricalDaeModel(DaeModel):
         logging.debug(f"output_vars: {output_vars}")
         logging.debug(f"state_vars: {state_vars}")
 
+        # Get diode equations when initialized
+        if self.initialized == False:
+            diode_eqs = self.compute_diode_equations()
+        else:
+            diode_eqs = self.diode_eqs
+        
         # Combine all equations
-        all_eqs = kcl_eqs + kvl_eqs + static_eqs + switch_eqs
+        all_eqs = kcl_eqs + kvl_eqs + static_eqs + switch_eqs + diode_eqs
         # Find vars to solve for:
         # Remove 0 (ground node) from junction_voltage_var_list
         junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
@@ -342,6 +371,7 @@ class ElectricalDaeModel(DaeModel):
         
         assert self.initialized == True, "Model must be initialized before updating switch states"
         self.switch_eqs = self.compute_switch_equations()
+        self.diode_eqs = self.compute_diode_equations()  # Ensure diode equations are current
         self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
         self.output_eqs = self.compute_output_equations()
@@ -350,3 +380,223 @@ class ElectricalDaeModel(DaeModel):
             return self.circuit_eqs, self.derivatives, switchmap
         else:
             return self.circuit_eqs, self.derivatives
+    
+    def compute_diode_lcp_matrices(self, state_values: np.ndarray, input_values: np.ndarray) -> Tuple[Matrix, Matrix]:
+        """Compute Linear Complementarity Problem matrices for diode state detection.
+        
+        Formulates the diode problem as: -v_D = M*i_D + q
+        where -v_D is the vector of negative diode voltages, i_D is the vector of diode currents,
+        M is the diode impedance matrix, and q is the offset vector.
+        
+        LCP constraints: -v_D ≥ 0, i_D ≥ 0, (-v_D)·i_D = 0
+        - Blocking: -v_D > 0 (i.e., v_D < 0, reverse bias), i_D = 0
+        - Conducting: -v_D = 0 (i.e., v_D = 0, forward bias), i_D > 0
+        
+        Args:
+            state_values: Current values of state variables (inductor currents, capacitor voltages)
+            input_values: Current values of input variables (source values)
+            
+        Returns:
+            Tuple[Matrix, Matrix]: (M matrix, q vector) for LCP formulation -v_D = M*i_D + q
+        """
+        assert self.initialized, "Model must be initialized before computing LCP matrices"
+        
+        if not self.diode_list:
+            # No diodes in circuit, return empty matrices
+            return Matrix([]), Matrix([])
+        
+        # Get diode current variables that we'll exclude from solving
+        diode_current_vars = [diode.current_var for diode in self.diode_list]
+        
+        # Get all equations EXCEPT diode equations (since we're solving for diode voltages)
+        kcl_eqs = self.kcl_eqs
+        kvl_eqs = self.kvl_eqs 
+        static_eqs = self.static_eqs  # Already excludes diodes
+        switch_eqs = self.switch_eqs
+        
+        # Combine equations without diode equations - this is the key for LCP
+        all_eqs = kcl_eqs + kvl_eqs + static_eqs + switch_eqs
+        
+        # Get all variables, excluding diode currents, state vars, and input vars
+        junction_voltage_var_list_cleaned = [var for var in self.junction_voltage_var_list if var != 0]
+        combined_vars = junction_voltage_var_list_cleaned + self.component_current_var_list + self.component_voltage_var_list
+        
+        # Exclude: input_vars, state_vars, and diode_current_vars
+        excluded = set(self.input_vars) | set(self.state_vars) | set(diode_current_vars)
+        vars_to_solve = [var for var in combined_vars if var not in excluded]
+        
+        logging.debug(f"LCP: Excluding {len(excluded)} variables (state/input/diode currents)")
+        logging.debug(f"LCP: Solving for {len(vars_to_solve)} variables")
+        logging.debug(f"LCP: Diode currents: {[str(var) for var in diode_current_vars]}")
+        
+        # Check equation/variable balance
+        if len(all_eqs) != len(vars_to_solve):
+            raise ValueError(f"LCP: Equation/variable mismatch: {len(all_eqs)} equations, {len(vars_to_solve)} variables")
+        
+        # Solve symbolically for all variables except diode currents
+        try:
+            solution = solve(all_eqs, vars_to_solve)
+            logging.debug(f"LCP: Found {len(solution)} solutions")
+        except Exception as e:
+            raise ValueError(f"LCP: Failed to solve circuit equations: {e}")
+        
+        # Extract diode voltage expressions
+        diode_voltage_vars = [diode.voltage_var for diode in self.diode_list]
+        diode_voltage_exprs = []
+        
+        for voltage_var in diode_voltage_vars:
+            if voltage_var in solution:
+                # Extract -v_D expression for LCP formulation (positive = blocking)
+                expr = -solution[voltage_var]  # Apply -1 factor for correct LCP signs
+                diode_voltage_exprs.append(expr)
+            else:
+                raise ValueError(f"LCP: Could not find solution for diode voltage {voltage_var}")
+        
+        # Create substitution dictionary for current state and input values
+        state_substitutions = {}
+        input_substitutions = {}
+        
+        # Map state variables to their current values
+        for i, state_var in enumerate(self.state_vars):
+            if i < len(state_values):
+                state_substitutions[state_var] = state_values[i]
+        
+        # Map input variables to their current values  
+        for i, input_var in enumerate(self.input_vars):
+            if i < len(input_values):
+                input_substitutions[input_var] = input_values[i]
+        
+        # Combine substitutions
+        substitutions = {**state_substitutions, **input_substitutions}
+        
+        # Extract M matrix and q vector by collecting coefficients
+        n_diodes = len(self.diode_list)
+        M_matrix = Matrix.zeros(n_diodes, n_diodes)
+        q_vector = Matrix.zeros(n_diodes, 1)
+        
+        for i, expr in enumerate(diode_voltage_exprs):
+            # Substitute state and input values
+            expr_substituted = expr.subs(substitutions)
+            
+            # Extract coefficients for each diode current
+            for j, diode_current_var in enumerate(diode_current_vars):
+                # Get coefficient of this diode current
+                coeff = expr_substituted.coeff(diode_current_var, 1)
+                if coeff is not None:
+                    M_matrix[i, j] = coeff
+            
+            # Get constant term (coefficient of diode currents set to 0)
+            constant_term = expr_substituted.subs({var: 0 for var in diode_current_vars})
+            q_vector[i] = constant_term
+        
+        logging.debug(f"LCP: Generated M matrix shape: {M_matrix.shape}")
+        logging.debug(f"LCP: Generated q vector shape: {q_vector.shape}")
+        
+        return M_matrix, q_vector
+    
+    def detect_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> List[bool]:
+        """Detect the conducting state of all diodes in the circuit.
+        
+        This is a modular interface that can be replaced with different detection algorithms:
+        - LCP solver (current implementation)
+        - Iterative methods
+        - Heuristic approaches
+        
+        Args:
+            state_values: Current values of state variables
+            input_values: Current values of input variables  
+            t: Current simulation time
+            
+        Returns:
+            List[bool]: List of diode conducting states (True = conducting, False = blocking)
+        """
+        if not self.diode_list:
+            return []
+        
+        # For now, use a simple LCP-based detection
+        # In the future, this can be replaced with more sophisticated solvers
+        return self._detect_diode_states_lcp(state_values, input_values)
+    
+    def _detect_diode_states_lcp(self, state_values: np.ndarray, input_values: np.ndarray) -> List[bool]:
+        """Detect diode states using Linear Complementarity Problem formulation.
+        
+        Solves the LCP: -v_D = M*i_D + q with complementarity constraints:
+        - -v_D >= 0, i_D >= 0, (-v_D) * i_D = 0
+        - If -v_D > 0: diode is reverse-biased (blocking), i_D = 0
+        - If i_D > 0: diode is forward-biased (conducting), -v_D = 0
+        
+        Args:
+            state_values: Current values of state variables
+            input_values: Current values of input variables
+            
+        Returns:
+            List[bool]: List of diode conducting states
+        """
+        try:
+            # Get LCP matrices
+            M_matrix, q_vector = self.compute_diode_lcp_matrices(state_values, input_values)
+            
+            if M_matrix.shape[0] == 0:
+                return []  # No diodes
+            
+            # Convert to numpy for numerical solving
+            M_np = np.array(M_matrix.tolist(), dtype=float)
+            q_np = np.array(q_vector.tolist(), dtype=float).flatten()
+            
+            # Simple LCP solver: try both conducting and blocking states for each diode
+            # This is a basic implementation - could be replaced with proper LCP solver
+            n_diodes = len(self.diode_list)
+            conducting_states = []
+            
+            for i in range(n_diodes):
+                # Test blocking state: i_D = 0, check if -v_D > 0
+                i_D_blocking = np.zeros(n_diodes)
+                minus_v_D_blocking = M_np @ i_D_blocking + q_np
+                
+                if minus_v_D_blocking[i] > 0:
+                    # Diode can be in blocking state (-v_D > 0 means v_D < 0, reverse bias)
+                    conducting_states.append(False)
+                    logging.debug(f"Diode {self.diode_list[i].comp_id}: blocking, -v_D = {minus_v_D_blocking[i]:.6f}")
+                else:
+                    # Diode must be conducting (-v_D <= 0 violates blocking condition)
+                    conducting_states.append(True)
+                    logging.debug(f"Diode {self.diode_list[i].comp_id}: conducting, -v_D would be {minus_v_D_blocking[i]:.6f}")
+            
+            return conducting_states
+            
+        except Exception as e:
+            logging.warning(f"LCP diode state detection failed: {e}")
+            # Fallback: assume all diodes are blocking
+            return [False] * len(self.diode_list)
+    
+    def update_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> None:
+        """Update the conducting states of all diodes and recompute circuit equations.
+        
+        Args:
+            state_values: Current values of state variables
+            input_values: Current values of input variables
+            t: Current simulation time
+        """
+        if not self.diode_list:
+            return
+        
+        # Detect new diode states
+        new_states = self.detect_diode_states(state_values, input_values, t)
+        
+        # Update diode components
+        states_changed = False
+        for i, (diode, new_state) in enumerate(zip(self.diode_list, new_states)):
+            if diode.is_on != new_state:
+                diode.is_on = new_state
+                states_changed = True
+                logging.debug(f"Diode {diode.comp_id} state changed to {'conducting' if new_state else 'blocking'}")
+        
+        # Recompute circuit equations if any diode state changed
+        if states_changed:
+            # Recompute diode equations (state-dependent)
+            self.diode_eqs = self.compute_diode_equations()
+            # Recompute all circuit variables
+            self.circuit_eqs = self.compute_circuit_equations()
+            self.derivatives = self.compute_derivatives()
+            self.output_eqs = self.compute_output_equations()
+            logging.debug("Circuit equations recomputed due to diode state changes")

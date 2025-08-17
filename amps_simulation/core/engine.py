@@ -34,6 +34,7 @@ class Engine:
         self.state_vars = {}  # Dictionary of state variables
         self.input_vars = {}  # Dictionary of input variables
         self.switch_list = None  # Tuple of power switches
+        self.diode_list = None   # Tuple of diodes
         self.switch_events = None  # List of switch events
         # Simulation settings
         self.engine_settings = EngineSettings()
@@ -66,6 +67,7 @@ class Engine:
         self.input_vars = tuple(self.electrical_model.input_vars)
         self.output_vars = tuple(self.electrical_model.output_vars)
         self.switch_list = tuple(self.electrical_graph.switch_list)
+        self.diode_list = tuple(self.electrical_graph.diode_list)
         
         # Build control orchestrator input function for sources only
         source_ports = self.control_graph.get_source_ports()
@@ -399,20 +401,34 @@ class Engine:
         
         # Generate outputs using out = Cy + Du
         if len(self.output_vars) > 0:
-            # Get the final switch combination to determine C and D matrices
+            # Get the final switch and diode combination to determine C and D matrices
             final_time = solution.t[-1]
+            final_state = solution.y[:, -1]
+            final_input = input_function(final_time)
+            
             if self.switch_list:
                 final_switch_states = tuple(
                     switch.set_switch_state(final_time) for switch in self.switch_list
                 )
             else:
                 final_switch_states = ()
+            
+            if self.diode_list:
+                final_diode_states = tuple(
+                    self.electrical_model.detect_diode_states(final_state, final_input, final_time)
+                )
+            else:
+                final_diode_states = ()
                 
-            if final_switch_states in switchmap:
-                A, B, C, D, _ = switchmap[final_switch_states]
+            final_combined_states = (final_switch_states, final_diode_states)
+                
+            if final_combined_states in switchmap:
+                A, B, C, D, _ = switchmap[final_combined_states]
             else:
                 # Compute final state space model if not cached
-                A, B, C, D = self._compute_state_space_for_switches(final_switch_states, final_time)
+                A, B, C, D = self._compute_state_space_for_states(
+                    final_switch_states, final_diode_states, final_time, final_state, final_input
+                )
             
             # Convert symbolic matrices to numeric if needed
             if hasattr(C, 'subs'):
@@ -453,12 +469,12 @@ class Engine:
         return result
     
     def _get_ode_function_for_time(self, t, y, switchmap, input_function):
-        """Get ODE function for given time t, checking switch states and using cache.
+        """Get ODE function for given time t, checking switch and diode states and using cache.
         
         Args:
             t: Current time
             y: Current state vector
-            switchmap: Dictionary caching switch combinations -> (A, B, C, D, ode_func)
+            switchmap: Dictionary caching switch/diode combinations -> (A, B, C, D, ode_func)
             input_function: Function to get input vector u(t)
             
         Returns:
@@ -472,21 +488,34 @@ class Engine:
             )
         else:
             current_switch_states = ()
-            
-        # Check if this switch combination is already cached
-        if current_switch_states in switchmap:
-            A, B, C, D, ode_function = switchmap[current_switch_states]
-            # logging.debug(f"Using cached ODE function for switch states: {current_switch_states}")
+        
+        # Get current input values (needed for both diodes and state space computation)
+        u = input_function(t)
+        
+        # Determine current diode states based on current circuit state
+        if self.diode_list:
+            # Detect diode states using LCP formulation
+            current_diode_states = tuple(self.electrical_model.detect_diode_states(y, u, t))
         else:
-            # Compute new DAE model for this switch combination
-            A, B, C, D = self._compute_state_space_for_switches(current_switch_states, t)
+            current_diode_states = ()
+        
+        # Combine switch and diode states for cache key
+        combined_states = (current_switch_states, current_diode_states)
+            
+        # Check if this combination is already cached
+        if combined_states in switchmap:
+            A, B, C, D, ode_function = switchmap[combined_states]
+            # logging.debug(f"Using cached ODE function for states: switches={current_switch_states}, diodes={current_diode_states}")
+        else:
+            # Compute new DAE model for this switch/diode combination
+            A, B, C, D = self._compute_state_space_for_states(current_switch_states, current_diode_states, t, y, u)
             
             # Create ODE function from state space matrices
             ode_function = self._create_state_space_ode(A, B, input_function)
             
             # Cache the result
-            switchmap[current_switch_states] = (A, B, C, D, ode_function)
-            logging.debug(f"Computed new DAE model for switch states: {current_switch_states}")
+            switchmap[combined_states] = (A, B, C, D, ode_function)
+            logging.debug(f"Computed new DAE model for states: switches={current_switch_states}, diodes={current_diode_states}")
             
         return ode_function(t, y)
     
@@ -506,6 +535,45 @@ class Engine:
             
             # Run sanity checks for this switch configuration
             # The graph topology has changed due to switch state updates
+            logging.debug(f"Running sanity checks for switch configuration: {switch_states}")
+            self._run_sanity_checks()
+        
+        # Get derivatives and output equations from DAE model
+        derivatives = self.electrical_model.derivatives
+        output_eqs = self.electrical_model.output_eqs
+        
+        # Sort equations to match variable order
+        sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+        sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
+        
+        # Compute state space matrices
+        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+        
+        return A, B, C, D
+    
+    def _compute_state_space_for_states(self, switch_states, diode_states, t, y, u):
+        """Compute state space matrices for given switch and diode combination.
+        
+        Args:
+            switch_states: Tuple of switch states (True/False for each switch)
+            diode_states: Tuple of diode states (True/False for each diode)
+            t: Current time
+            y: Current state vector
+            u: Current input vector
+            
+        Returns:
+            A, B, C, D: State space matrices
+        """
+        # Update switch states in electrical model
+        if self.switch_list:
+            self.electrical_model.update_switch_states(t)
+        
+        # Update diode states in electrical model
+        if self.diode_list:
+            self.electrical_model.update_diode_states(y, u, t)
+            
+        # Run sanity checks for this switch/diode configuration
+        if self.switch_list or self.diode_list:
             logging.debug(f"Running sanity checks for switch configuration: {switch_states}")
             self._run_sanity_checks()
         
