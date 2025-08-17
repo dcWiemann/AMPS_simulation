@@ -1,1 +1,5 @@
 pytest
+numpy
+scipy
+sympy
+networkx

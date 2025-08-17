@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
 from amps_simulation.core.electrical_graph import ElectricalGraph
+from amps_simulation.core.lcp_solver import DiodeLCPSolver
 from sympy import Matrix, Symbol, sympify, solve
 import logging
 
@@ -56,6 +57,9 @@ class ElectricalDaeModel(DaeModel):
         super().__init__(electrical_graph.graph)
         self.electrical_graph = electrical_graph
         self.initialized = False
+        
+        # Initialize LCP solver for diode state detection
+        self.lcp_solver = DiodeLCPSolver(tolerance=1e-10)
 
     def initialize(self):
         # Initialize the electrical graph first
@@ -525,6 +529,8 @@ class ElectricalDaeModel(DaeModel):
         - If -v_D > 0: diode is reverse-biased (blocking), i_D = 0
         - If i_D > 0: diode is forward-biased (conducting), -v_D = 0
         
+        Uses the integrated LCP solver for robust solution.
+        
         Args:
             state_values: Current values of state variables
             input_values: Current values of input variables
@@ -543,24 +549,20 @@ class ElectricalDaeModel(DaeModel):
             M_np = np.array(M_matrix.tolist(), dtype=float)
             q_np = np.array(q_vector.tolist(), dtype=float).flatten()
             
-            # Simple LCP solver: try both conducting and blocking states for each diode
-            # This is a basic implementation - could be replaced with proper LCP solver
-            n_diodes = len(self.diode_list)
-            conducting_states = []
+            # Get diode names for logging
+            diode_names = [diode.comp_id for diode in self.diode_list]
             
-            for i in range(n_diodes):
-                # Test blocking state: i_D = 0, check if -v_D > 0
-                i_D_blocking = np.zeros(n_diodes)
-                minus_v_D_blocking = M_np @ i_D_blocking + q_np
-                
-                if minus_v_D_blocking[i] > 0:
-                    # Diode can be in blocking state (-v_D > 0 means v_D < 0, reverse bias)
-                    conducting_states.append(False)
-                    logging.debug(f"Diode {self.diode_list[i].comp_id}: blocking, -v_D = {minus_v_D_blocking[i]:.6f}")
-                else:
-                    # Diode must be conducting (-v_D <= 0 violates blocking condition)
-                    conducting_states.append(True)
-                    logging.debug(f"Diode {self.diode_list[i].comp_id}: conducting, -v_D would be {minus_v_D_blocking[i]:.6f}")
+            # Use integrated LCP solver for robust solution
+            conducting_states, info = self.lcp_solver.detect_diode_states(M_np, q_np, diode_names)
+            
+            # Log solver results
+            if info["converged"]:
+                logging.debug(f"LCP solver converged in {info['pivots']} pivots")
+                logging.debug(f"Complementarity: {info['complementarity']:.2e}")
+            else:
+                logging.warning(f"LCP solver did not converge after {info['pivots']} pivots")
+                if info['last_violation']:
+                    logging.warning(f"Last violation: {info['last_violation']}")
             
             return conducting_states
             
