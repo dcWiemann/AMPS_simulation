@@ -24,7 +24,7 @@ class EngineSettings(BaseModel):
         description="The numerical solver to use for the simulation"
     )
     max_step_size: float = Field(
-        default=float('inf'),
+        default=1e-3,
         description="Maximum step size for the solver in seconds"
     )
     init_step_size: float = Field(

@@ -378,6 +378,20 @@ class Engine:
             events = self.switch_events
             logging.debug(f"Using {len(events)} switch events")
             
+        # Apply engine settings to solver parameters
+        solver_kwargs = {
+            'max_step': self.engine_settings.max_step_size,
+            'rtol': self.engine_settings.rel_tol,
+            'atol': self.engine_settings.abs_tol,
+        }
+        
+        # Add initial step size if specified
+        if self.engine_settings.init_step_size is not None:
+            solver_kwargs['first_step'] = self.engine_settings.init_step_size
+            
+        # Merge with any user-provided kwargs (user kwargs take precedence)
+        solver_kwargs.update(kwargs)
+        
         # Run simulation with event handling
         solution = solve_ivp(
             fun=lambda t, y: self._get_ode_function_for_time(t, y, switchmap, input_function),
@@ -385,7 +399,7 @@ class Engine:
             y0=current_state,
             method=method,
             events=events,
-            **kwargs
+            **solver_kwargs
         )
         
         if not solution.success:

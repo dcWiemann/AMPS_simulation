@@ -97,10 +97,14 @@ class ParserJson(CircuitParser):
                 kwargs["inductance"] = data.get("value")
             elif ctype == "voltage-source":
                 # Use "voltage" field if present, otherwise "value" field, otherwise default to 0
-                kwargs["voltage"] = data.get("voltage", data.get("value", 0.0))
+                value = data.get("voltage", data.get("value", 0.0))
+                # If value is a string, it's a control signal, use 0.0 as placeholder for the component
+                kwargs["voltage"] = 0.0 if isinstance(value, str) else value
             elif ctype == "current-source":
                 # Use "current" field if present, otherwise "value" field, otherwise default to 0  
-                kwargs["current"] = data.get("current", data.get("value", 0.0))
+                value = data.get("current", data.get("value", 0.0))
+                # If value is a string, it's a control signal, use 0.0 as placeholder for the component
+                kwargs["current"] = 0.0 if isinstance(value, str) else value
             elif ctype == "switch":
                 kwargs["switch_time"] = data.get("value")
                 kwargs["is_on"] = False # default is off
