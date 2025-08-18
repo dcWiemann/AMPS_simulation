@@ -42,13 +42,15 @@ class Engine:
         self.ground_node = None
         self.initialized = False
 
-    def initialize(self) -> None:
+    def initialize(self, initial_conditions=None, initial_inputs=None) -> None:
         """
         Initialize all variables needed for simulation.
         This method should be called before running any simulation.
+        
+        Args:
+            initial_conditions: Initial state values for diode state detection
+            initial_inputs: Initial input values for diode state detection
         """
-        # Run circuit sanity checks before initialization
-        self._run_sanity_checks()
         
         # Create components list from edge data
         self.components_list = []
@@ -60,7 +62,7 @@ class Engine:
         # Create electrical graph and DAE model
         self.electrical_graph = ElectricalGraph(self.graph)
         self.electrical_model = ElectricalDaeModel(self.electrical_graph)
-        self.electrical_model.initialize()
+        self.electrical_model.initialize(initial_conditions, initial_inputs)
 
         # Set up all necessary variables
         self.state_vars = tuple(self.electrical_model.state_vars)
@@ -91,6 +93,7 @@ class Engine:
 
         # Set initialized flag to True
         self.initialized = True
+
         
     def _run_sanity_checks(self) -> None:
         """

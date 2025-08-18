@@ -1,0 +1,227 @@
+{
+  "nodes": [
+    {
+      "id": "V9",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 170,
+        "y": 190
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Voltage Source",
+        "componentType": "voltage-source",
+        "value": 5,
+        "rotation": 0
+      },
+      "increment": 9,
+      "abbreviation": "V"
+    },
+    {
+      "id": "R14",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 330,
+        "y": 110
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 4,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 76,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 2,
+        "rotation": 0
+      },
+      "increment": 14,
+      "abbreviation": "R"
+    },
+    {
+      "id": "D7",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 460,
+        "y": 110
+      },
+      "data": {
+        "svgPath": "/svg/diode.svg",
+        "terminals": [
+          {
+            "id": "1",
+            "position": "right",
+            "x": 40,
+            "y": 4,
+            "type": "target"
+          },
+          {
+            "id": "0",
+            "position": "left",
+            "x": 40,
+            "y": 76,
+            "type": "source"
+          }
+        ],
+        "label": "Diode",
+        "componentType": "diode",
+        "value": 0,
+        "rotation": 90
+      },
+      "increment": 7,
+      "abbreviation": "D"
+    },
+    {
+      "id": "C3",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 590,
+        "y": 190
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.1,
+        "rotation": 0
+      },
+      "increment": 3,
+      "abbreviation": "C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "vueflow__edge-R140-V90",
+      "type": "step",
+      "source": "R14",
+      "target": "V9",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {
+        "sourceHandle": "0",
+        "targetHandle": "0"
+      },
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 330,
+      "sourceY": 150,
+      "targetX": 210,
+      "targetY": 190
+    },
+    {
+      "id": "vueflow__edge-D70-R141",
+      "type": "step",
+      "source": "D7",
+      "target": "R14",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 460,
+      "sourceY": 150,
+      "targetX": 410,
+      "targetY": 150
+    },
+    {
+      "id": "vueflow__edge-C30-D71",
+      "type": "step",
+      "source": "C3",
+      "target": "D7",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 630,
+      "sourceY": 190,
+      "targetX": 539.9999186197916,
+      "targetY": 150
+    },
+    {
+      "id": "vueflow__edge-V91-C31",
+      "type": "step",
+      "source": "V9",
+      "target": "C3",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 210,
+      "sourceY": 270,
+      "targetX": 630,
+      "targetY": 270
+    }
+  ],
+  "position": [
+    125.09947273918635,
+    47.84200559465663
+  ],
+  "zoom": 0.7499999999999999,
+  "viewport": {
+    "x": 125.09947273918635,
+    "y": 47.84200559465663,
+    "zoom": 0.7499999999999999
+  }
+}
