@@ -114,6 +114,15 @@ class ElectricalDaeModel(DaeModel):
         """
         logging.debug(f"Circuit solver: {len(equations)} equations, {len(vars_to_solve)} variables")
         
+        # Log equations and variables for debugging
+        logging.debug("Equations to solve:")
+        for i, eq in enumerate(equations):
+            logging.debug(f"  [{i}] {eq}")
+        
+        logging.debug("Variables to solve for:")
+        for i, var in enumerate(vars_to_solve):
+            logging.debug(f"  [{i}] {var}")
+        
         # Check equation/variable balance
         if len(equations) != len(vars_to_solve):
             raise ValueError(f"Equation/variable mismatch: {len(equations)} equations, {len(vars_to_solve)} variables")
@@ -123,7 +132,18 @@ class ElectricalDaeModel(DaeModel):
         
         logging.debug(f"Circuit solver: Found {len(solution)} solutions")
         
+        # Log the solutions found
+        if solution:
+            logging.debug("Solutions found:")
+            for var, expr in solution.items():
+                logging.debug(f"  {var} = {expr}")
+        
         if len(solution) != len(vars_to_solve):
+            # Log which variables have no solution
+            solved_vars = set(solution.keys())
+            unsolved_vars = [var for var in vars_to_solve if var not in solved_vars]
+            if unsolved_vars:
+                logging.debug(f"Variables without solutions: {unsolved_vars}")
             raise ValueError(f"Did not find a solution for every variable: {len(solution)} solutions, {len(vars_to_solve)} variables")
         
         return solution
