@@ -102,30 +102,17 @@ class ElectricalDaeModel(DaeModel):
         self.output_eqs = self.compute_output_equations()
         self.initialized = True
     
-    def _solve_circuit_equations(self, equations: List, exclude_vars: set) -> Dict:
+    def _solve_circuit_equations(self, equations: List, vars_to_solve: List) -> Dict:
         """Generic circuit equation solver (DRY - used by both circuit solving and LCP).
         
         Args:
             equations: List of equations to solve
-            exclude_vars: Set of variables to exclude from solving
+            vars_to_solve: List of variables to solve for
             
         Returns:
             Dictionary mapping variables to their symbolic expressions
         """
-        # Get all variables from electrical graph
-        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
-        
-        # Remove ground node (0) from junction voltage variables
-        junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
-        
-        # Combine all variables
-        combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
-        
-        # Remove excluded variables
-        vars_to_solve = [var for var in combined_vars if var not in exclude_vars]
-        
         logging.debug(f"Circuit solver: {len(equations)} equations, {len(vars_to_solve)} variables")
-        logging.debug(f"Excluded variables: {len(exclude_vars)}")
         
         # Check equation/variable balance
         if len(equations) != len(vars_to_solve):
@@ -373,11 +360,21 @@ class ElectricalDaeModel(DaeModel):
         logging.debug(f"Full circuit: input_vars={[str(v) for v in input_vars]}")
         logging.debug(f"Full circuit: state_vars={[str(v) for v in state_vars]}")
         
-        # Exclude only input_vars and state_vars (include diode currents in full circuit)
+        # Get all variables from electrical graph
+        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
+        
+        # Remove ground node (0) from junction voltage variables
+        junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
+        
+        # Combine all variables
+        combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
+        
+        # Remove excluded variables (input_vars and state_vars only)
         excluded = set(input_vars) | set(state_vars)
+        vars_to_solve = [var for var in combined_vars if var not in excluded]
         
         # Use generic solver (DRY)
-        return self._solve_circuit_equations(equations, excluded)
+        return self._solve_circuit_equations(equations, vars_to_solve)
     
 
     def compute_derivatives(self) -> List[Symbol]:
@@ -479,15 +476,47 @@ class ElectricalDaeModel(DaeModel):
         
         # Get equations EXCEPT diode equations (since we're solving for diode voltages)
         equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs
+        logging.debug(f"LCP: Base equations count: KCL={len(self.kcl_eqs)}, KVL={len(self.kvl_eqs)}, Static={len(self.static_eqs)}, Switch={len(self.switch_eqs)}")
+        
+        # Add initial condition equations: state_var = state_value, input_var = input_value
+        initial_condition_count = 0
+        for i, state_var in enumerate(self.state_vars):
+            if i < len(state_values):
+                equations.append(state_var - state_values[i])
+                initial_condition_count += 1
+                logging.debug(f"LCP: Added state equation: {state_var} = {state_values[i]}")
+        for i, input_var in enumerate(self.input_vars):
+            if i < len(input_values):
+                equations.append(input_var - input_values[i])
+                initial_condition_count += 1
+                logging.debug(f"LCP: Added input equation: {input_var} = {input_values[i]}")
+        
+        logging.debug(f"LCP: Added {initial_condition_count} initial condition equations")
+        logging.debug(f"LCP: Total equations before solving: {len(equations)}")
         
         # Get diode current variables to exclude from solving
         diode_current_vars = [diode.current_var for diode in self.electrical_graph.diode_list]
+        logging.debug(f"LCP: Diode current vars to exclude: {[str(v) for v in diode_current_vars]}")
         
-        # Exclude: input_vars, state_vars, and diode_current_vars
-        excluded = set(self.input_vars) | set(self.state_vars) | set(diode_current_vars)
+        # Get all variables from electrical graph
+        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
+        
+        # Remove ground node (0) from junction voltage variables
+        junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
+        
+        logging.debug(f"LCP: Variable counts: Junction={len(junction_voltage_var_list_cleaned)}, Current={len(component_current_var_list)}, Voltage={len(component_voltage_var_list)}")
+        
+        # Combine all variables
+        combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
+        logging.debug(f"LCP: Total combined variables: {len(combined_vars)}")
+        
+        # Remove excluded variables (only diode_current_vars)
+        excluded = set(diode_current_vars)
+        vars_to_solve = [var for var in combined_vars if var not in excluded]
+        logging.debug(f"LCP: Variables to solve: {len(vars_to_solve)} (excluded {len(excluded)} diode currents)")
         
         # Solve circuit without diodes using generic solver
-        solution = self._solve_circuit_equations(equations, excluded)
+        solution = self._solve_circuit_equations(equations, vars_to_solve)
         
         # Extract diode voltage expressions in correct order
         diode_voltage_exprs = self._extract_diode_voltage_expressions(solution)
@@ -495,32 +524,20 @@ class ElectricalDaeModel(DaeModel):
         # Apply -1 factor for LCP formulation: -v_D = M*i_D + q (positive = blocking)
         diode_voltage_exprs = [-expr for expr in diode_voltage_exprs]
         
-        # Create substitution dictionary for current state and input values
-        substitutions = {}
-        for i, state_var in enumerate(self.state_vars):
-            if i < len(state_values):
-                substitutions[state_var] = state_values[i]
-        for i, input_var in enumerate(self.input_vars):
-            if i < len(input_values):
-                substitutions[input_var] = input_values[i]
-        
         # Extract M matrix and q vector by collecting coefficients
         n_diodes = len(self.electrical_graph.diode_list)
         M_matrix = Matrix.zeros(n_diodes, n_diodes)
         q_vector = Matrix.zeros(n_diodes, 1)
         
         for i, expr in enumerate(diode_voltage_exprs):
-            # Substitute state and input values
-            expr_substituted = expr.subs(substitutions)
-            
             # Extract coefficients for each diode current (maintain order)
             for j, diode_current_var in enumerate(diode_current_vars):
-                coeff = expr_substituted.coeff(diode_current_var, 1)
+                coeff = expr.coeff(diode_current_var, 1)
                 if coeff is not None:
                     M_matrix[i, j] = coeff
             
-            # Get constant term
-            constant_term = expr_substituted.subs({var: 0 for var in diode_current_vars})
+            # Get constant term (expression with all diode currents set to zero)
+            constant_term = expr.subs({var: 0 for var in diode_current_vars})
             q_vector[i] = constant_term
         
         logging.debug(f"LCP: Generated M matrix shape: {M_matrix.shape}")
