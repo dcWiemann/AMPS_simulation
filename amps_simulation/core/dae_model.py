@@ -7,6 +7,7 @@ from amps_simulation.core.electrical_graph import ElectricalGraph
 from amps_simulation.core.lcp_solver import DiodeLCPSolver
 from sympy import Matrix, Symbol, sympify, solve
 import logging
+import itertools
 
 class DaeModel(ABC):
     """Abstract base class for Differential-Algebraic Equation (DAE) models.
@@ -53,6 +54,9 @@ class ElectricalDaeModel(DaeModel):
         derivatives (Dict[str, float]): Dictionary mapping state variable names to their derivatives
         outputs (Dict[str, float]): Dictionary mapping output variable names to their values
     """
+    # Configurable tolerances for diode state checks
+    diode_current_tol = 1e-6
+    diode_voltage_tol = 1e-6
     def __init__(self, electrical_graph: ElectricalGraph):
         super().__init__(electrical_graph.graph)
         self.electrical_graph = electrical_graph
@@ -85,14 +89,13 @@ class ElectricalDaeModel(DaeModel):
         self.static_eqs = self.compute_static_component_equations()
         self.switch_eqs = self.compute_switch_equations()
         
-        # Initialize diode modes using LCP if we have diodes and initial values
+        # Initialize diode modes using iterative approach if we have diodes and initial values
         if self.electrical_graph.diode_list and initial_state_values is not None:
-            # Use the clean LCP-based diode mode detection
-            M, q = self.compute_diode_lcp_matrices(initial_state_values, initial_input_values or np.zeros(len(self.input_vars)))
-            # Convert sympy matrices to numpy arrays for LCP solver
-            M_np = np.array(M.tolist(), dtype=float)
-            q_np = np.array(q.tolist(), dtype=float).flatten()
-            conducting_states = self._solve_lcp(M_np, q_np)
+            # Use the iterative diode state detection approach
+            conducting_states = self._detect_diode_states_iterative(
+                initial_state_values, 
+                initial_input_values or np.zeros(len(self.input_vars))
+            )
             self._initialize_diode_modes(conducting_states)
         
         # Compute diode equations with proper modes
@@ -147,6 +150,56 @@ class ElectricalDaeModel(DaeModel):
             raise ValueError(f"Did not find a solution for every variable: {len(solution)} solutions, {len(vars_to_solve)} variables")
         
         return solution
+
+    def _solve_circuit_equations_safe(self, equations: List, vars_to_solve: List) -> Dict:
+        """Safe circuit equation solver that handles cases where sympy.solve() returns empty list.
+        
+        Args:
+            equations: List of equations to solve
+            vars_to_solve: List of variables to solve for
+            
+        Returns:
+            Dictionary mapping variables to their symbolic expressions, or None if no solution exists
+        """
+        logging.debug(f"Safe circuit solver: {len(equations)} equations, {len(vars_to_solve)} variables")
+        
+        # Check equation/variable balance
+        if len(equations) != len(vars_to_solve):
+            logging.debug(f"Equation/variable mismatch: {len(equations)} equations, {len(vars_to_solve)} variables")
+            return None
+        
+        try:
+            # Solve the equations
+            solution = solve(equations, vars_to_solve)
+            
+            # Handle different return types from sympy.solve()
+            if isinstance(solution, dict):
+                # Normal case: solution is a dictionary
+                if len(solution) == len(vars_to_solve):
+                    logging.debug(f"Safe solver: Found complete solution with {len(solution)} variables")
+                    return solution
+                else:
+                    logging.debug(f"Safe solver: Incomplete solution - {len(solution)} solutions for {len(vars_to_solve)} variables")
+                    return None
+            elif isinstance(solution, list):
+                # sympy returned a list (usually empty when no solution exists)
+                if len(solution) == 0:
+                    logging.debug("Safe solver: No solution found (empty list returned)")
+                    return None
+                elif len(solution) == 1 and isinstance(solution[0], dict):
+                    # Sometimes sympy returns [solution_dict]
+                    logging.debug("Safe solver: Found solution in list format")
+                    return solution[0]
+                else:
+                    logging.debug(f"Safe solver: Unexpected list format with {len(solution)} items")
+                    return None
+            else:
+                logging.debug(f"Safe solver: Unexpected solution type: {type(solution)}")
+                return None
+                
+        except Exception as e:
+            logging.debug(f"Safe solver: Exception during solving: {e}")
+            return None
 
     def _extract_diode_voltage_expressions(self, solution: Dict) -> List:
         """Extract diode voltage expressions in ElectricalGraph.diode_list order.
@@ -393,8 +446,11 @@ class ElectricalDaeModel(DaeModel):
         excluded = set(input_vars) | set(state_vars)
         vars_to_solve = [var for var in combined_vars if var not in excluded]
         
-        # Use generic solver (DRY)
-        return self._solve_circuit_equations(equations, vars_to_solve)
+        # Use safe solver that handles empty solutions
+        solution = self._solve_circuit_equations_safe(equations, vars_to_solve)
+        if solution is None:
+            raise ValueError(f"Could not solve circuit equations: {len(equations)} equations, {len(vars_to_solve)} variables")
+        return solution
     
 
     def compute_derivatives(self) -> List[Symbol]:
@@ -536,7 +592,25 @@ class ElectricalDaeModel(DaeModel):
         logging.debug(f"LCP: Variables to solve: {len(vars_to_solve)} (excluded {len(excluded)} diode currents)")
         
         # Solve circuit without diodes using generic solver
+        print("\n" + "="*80)
+        print("LCP FORMULATION DEBUG - EQUATIONS, VARIABLES, AND SOLUTIONS")
+        print("="*80)
+        
+        print(f"\nEQUATIONS ({len(equations)} total):")
+        for i, eq in enumerate(equations):
+            print(f"  [{i:2d}] {eq} = 0")
+        
+        print(f"\nVARIABLES TO SOLVE ({len(vars_to_solve)} total):")
+        for i, var in enumerate(vars_to_solve):
+            print(f"  [{i:2d}] {var}")
+        
         solution = self._solve_circuit_equations(equations, vars_to_solve)
+        
+        print(f"\nSOLUTIONS ({len(solution)} total):")
+        for var, expr in solution.items():
+            print(f"  {var} = {expr}")
+        
+        print("="*80)
         
         # Extract diode voltage expressions in correct order
         diode_voltage_exprs = self._extract_diode_voltage_expressions(solution)
@@ -584,9 +658,8 @@ class ElectricalDaeModel(DaeModel):
         if not self.diode_list:
             return []
         
-        # For now, use a simple LCP-based detection
-        # In the future, this can be replaced with more sophisticated solvers
-        return self._detect_diode_states_lcp(state_values, input_values)
+        # Use iterative diode state detection approach
+        return self._detect_diode_states_iterative(state_values, input_values)
     
     def _detect_diode_states_lcp(self, state_values: np.ndarray, input_values: np.ndarray) -> List[bool]:
         """Detect diode states using Linear Complementarity Problem formulation.
@@ -637,6 +710,173 @@ class ElectricalDaeModel(DaeModel):
             logging.warning(f"LCP diode state detection failed: {e}")
             # Fallback: assume all diodes are blocking
             return [False] * len(self.diode_list)
+    
+    def _detect_diode_states_iterative(self, state_values: np.ndarray, input_values: np.ndarray, max_iterations: int = 100) -> List[bool]:
+        """Detect diode states using iterative approach.
+        
+        Algorithm:
+        1. Start with all diodes blocking (i_D = 0)
+        2. Solve circuit equations with current diode assumptions  
+        3. Check if resulting diode currents/voltages are consistent
+        4. Update diode states if inconsistencies found
+        5. Repeat until convergence or max iterations reached
+        
+        Args:
+            state_values: Current values of state variables
+            input_values: Current values of input variables
+            max_iterations: Maximum number of iterations to try
+            
+        Returns:
+            List[bool]: List of diode conducting states (True = conducting, False = blocking)
+        """
+        if not self.diode_list:
+            return []
+        
+        # Input validation
+        if state_values is None or len(state_values) != len(self.state_vars):
+            logging.error(f"Invalid state_values: expected {len(self.state_vars)} values, got {len(state_values) if state_values is not None else None}")
+            return [False] * len(self.diode_list)
+        
+        if input_values is None or len(input_values) != len(self.input_vars):
+            logging.error(f"Invalid input_values: expected {len(self.input_vars)} values, got {len(input_values) if input_values is not None else None}")
+            return [False] * len(self.diode_list)
+        
+        if max_iterations <= 0:
+            logging.error(f"Invalid max_iterations: {max_iterations}")
+            return [False] * len(self.diode_list)
+        
+        # # Initialize all diodes as blocking
+        # current_states = [False] * len(self.diode_list)
+        
+        # Get all possible combinations of diode states
+        all_combinations = list(itertools.product([True, False], repeat=len(self.diode_list)))
+        
+        # Initialize diodes with first combination
+        current_states = all_combinations[0]
+        visited_combinations = [current_states]
+
+        logging.debug(f"Starting iterative diode detection with {len(self.diode_list)} diodes")
+        
+        for iteration in range(max_iterations):
+            logging.debug(f"Iteration {iteration + 1}: Current states = {current_states}")
+            
+            # Set diode modes based on current assumptions
+            for diode, is_conducting in zip(self.diode_list, current_states):
+                diode.is_on = is_conducting
+
+            # Recompute diode equations with current states
+            diode_eqs = self.compute_diode_equations()
+            
+            # Try to solve circuit with current diode assumptions
+            try:
+                # Get all equations including current diode equations
+                equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs + diode_eqs
+                
+                # Add initial condition equations
+                for i, state_var in enumerate(self.state_vars):
+                    if i < len(state_values):
+                        equations.append(state_var - state_values[i])
+                for i, input_var in enumerate(self.input_vars):
+                    if i < len(input_values):
+                        equations.append(input_var - input_values[i])
+                
+                # Get all variables except diode currents for blocking diodes and diode voltages for conducting diodes
+                junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
+                junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
+                combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
+                
+                # Remove state/input vars and variables constrained by diode equations
+                # excluded = set(self.state_vars) | set(self.input_vars)
+                # for diode, is_conducting in zip(self.diode_list, current_states):
+                #     if is_conducting:
+                #         # Conducting diode: voltage is constrained (v_D = 0), current is free
+                #         excluded.add(diode.voltage_var)
+                #     else:
+                #         # Blocking diode: current is constrained (i_D = 0), voltage is free  
+                #         excluded.add(diode.current_var)
+                
+                # vars_to_solve = [var for var in combined_vars if var not in excluded]
+                vars_to_solve = combined_vars
+
+                # Attempt to solve
+                solution = self._solve_circuit_equations_safe(equations, vars_to_solve)
+                
+                if solution is None:
+                    current_states = all_combinations[iteration + 1]
+                    visited_combinations.append(current_states)
+                    continue
+                
+                # Check solution consistency
+                new_states = current_states
+                states_changed = False
+                
+                for i, diode in enumerate(self.diode_list):
+                    # Check if diode current is negative (not allowed)
+                    if diode.current_var in solution:
+                        i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars, 
+                                                                                                              list(state_values) + list(input_values))}))
+                        if i_diode_val < -self.diode_current_tol:  # Small tolerance for numerical errors
+                            logging.debug(f"Diode {diode.comp_id}: negative current {i_diode_val:.6f} while conducting → switch to blocking")
+                            new_states[i] = not current_states[i]
+                            states_changed = True
+                            continue
+                    # Check if diode voltage is positive (not allowed)
+                    elif diode.voltage_var in solution:
+                        v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                               list(state_values) + list(input_values))}))
+                        if v_diode_val > self.diode_voltage_tol:  # Small tolerance for numerical errors
+                            logging.debug(f"Diode {diode.comp_id}: positive voltage {v_diode_val:.6f} while blocking → switch to conducting")
+                            new_states[i] = not current_states[i]
+                            states_changed = True   
+                            continue
+
+                    if current_states[i]:  # Currently conducting
+                        # Check if voltage is negative (reverse bias means should be blocking)
+                        if diode.voltage_var in solution:
+                            v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                               list(state_values) + list(input_values))}))
+                            if v_diode_val < -self.diode_voltage_tol:  # Small tolerance for numerical errors
+                                logging.debug(f"Diode {diode.comp_id}: negative voltage {v_diode_val:.6f} while conducting → switch to blocking")
+                                new_states[i] = not current_states[i]
+                                states_changed = True
+                                continue
+                    else:  # Currently blocking
+                        # Check if current is positive (forward bias means should be conducting)
+                        if diode.current_var in solution:
+                            i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                               list(state_values) + list(input_values))}))
+                            if i_diode_val > self.diode_current_tol:  # Small tolerance for numerical errors
+                                logging.debug(f"Diode {diode.comp_id}: positive current {i_diode_val:.6f} while blocking → switch to conducting")
+                                new_states[i] = not current_states[i]
+                                states_changed = True
+                                continue
+                
+                if not states_changed:
+                    # Converged!
+                    logging.debug(f"Iterative diode detection converged in {iteration + 1} iterations")
+                    logging.debug(f"Final states: {[f'{diode.comp_id}={'CONDUCTING' if state else 'BLOCKING'}' for diode, state in zip(self.diode_list, current_states)]}")
+                    return current_states
+                
+                # Update states for next iteration
+                current_states = new_states
+                if current_states not in visited_combinations:
+                    visited_combinations.append(current_states)
+                else:
+                    logging.warning(f"Degeneracy detected after {iteration + 1} iterations. Diode states: {current_states}")
+                
+            except Exception as e:
+                logging.debug(f"Iteration {iteration + 1}: Exception during solving: {e}")
+                # Try different diode state combination
+                if iteration == 0:
+                    current_states = [True] * len(self.diode_list)  # Try all conducting
+                else:
+                    # For now, just return all blocking as fallback
+                    logging.warning(f"Iterative diode detection failed after {iteration + 1} iterations: {e}")
+                    return [False] * len(self.diode_list)
+        
+        # Max iterations reached
+        logging.warning(f"Iterative diode detection did not converge after {max_iterations} iterations")
+        return current_states  # Return best attempt
     
     def update_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> None:
         """Update the conducting states of all diodes and recompute circuit equations.
