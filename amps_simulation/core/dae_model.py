@@ -92,7 +92,7 @@ class ElectricalDaeModel(DaeModel):
         # Initialize diode modes using iterative approach if we have diodes and initial values
         if self.electrical_graph.diode_list and initial_state_values is not None:
             # Use the iterative diode state detection approach
-            conducting_states = self._detect_diode_states_iterative(
+            conducting_states = self.detect_diode_states(
                 initial_state_values, 
                 initial_input_values or np.zeros(len(self.input_vars))
             )
@@ -784,18 +784,7 @@ class ElectricalDaeModel(DaeModel):
                 junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
                 junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
                 combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
-                
-                # Remove state/input vars and variables constrained by diode equations
-                # excluded = set(self.state_vars) | set(self.input_vars)
-                # for diode, is_conducting in zip(self.diode_list, current_states):
-                #     if is_conducting:
-                #         # Conducting diode: voltage is constrained (v_D = 0), current is free
-                #         excluded.add(diode.voltage_var)
-                #     else:
-                #         # Blocking diode: current is constrained (i_D = 0), voltage is free  
-                #         excluded.add(diode.current_var)
-                
-                # vars_to_solve = [var for var in combined_vars if var not in excluded]
+
                 vars_to_solve = combined_vars
 
                 # Attempt to solve
