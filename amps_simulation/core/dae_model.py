@@ -796,49 +796,68 @@ class ElectricalDaeModel(DaeModel):
                     continue
                 
                 # Check solution consistency
-                new_states = current_states
+                new_states = list(current_states)
                 states_changed = False
                 
                 for i, diode in enumerate(self.diode_list):
                     # Check if diode current is negative (not allowed)
-                    if diode.current_var in solution:
-                        i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars, 
-                                                                                                              list(state_values) + list(input_values))}))
-                        if i_diode_val < -self.diode_current_tol:  # Small tolerance for numerical errors
-                            logging.debug(f"Diode {diode.comp_id}: negative current {i_diode_val:.6f} while conducting → switch to blocking")
-                            new_states[i] = not current_states[i]
-                            states_changed = True
-                            continue
+                    if diode.current_var not in solution:
+                        logging.debug(f"Diode {diode.comp_id}: current variable {diode.current_var} not in solution, skipping consistency check")
+                        new_states = all_combinations[iteration + 1]
+                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
+                        states_changed = True
+                        continue
+                    
+                    if diode.voltage_var not in solution:
+                        logging.debug(f"Diode {diode.comp_id}: voltage variable {diode.voltage_var} not in solution, skipping consistency check")
+                        new_states = all_combinations[iteration + 1]
+                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
+                        states_changed = True
+                        continue
+
+                    
+                    i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars, 
+                                                                                                            list(state_values) + list(input_values))}))
+                    if i_diode_val < -self.diode_current_tol:  # Small tolerance for numerical errors
+                        logging.debug(f"Diode {diode.comp_id}: negative current {i_diode_val:.6f} while conducting, switch to blocking")
+                        new_states[i] = not current_states[i]     
+                        # Check if new combination has been visited
+                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
+                        states_changed = True
+                        continue
                     # Check if diode voltage is positive (not allowed)
-                    elif diode.voltage_var in solution:
-                        v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
-                                                                                                               list(state_values) + list(input_values))}))
-                        if v_diode_val > self.diode_voltage_tol:  # Small tolerance for numerical errors
-                            logging.debug(f"Diode {diode.comp_id}: positive voltage {v_diode_val:.6f} while blocking → switch to conducting")
-                            new_states[i] = not current_states[i]
-                            states_changed = True   
-                            continue
+                    v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                            list(state_values) + list(input_values))}))
+                    if v_diode_val > self.diode_voltage_tol:  # Small tolerance for numerical errors
+                        logging.debug(f"Diode {diode.comp_id}: positive voltage {v_diode_val:.6f} while blocking, switch to conducting")
+                        new_states[i] = not current_states[i]
+                        # Check if new combination has been visited
+                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
+                        states_changed = True   
+                        continue
 
                     if current_states[i]:  # Currently conducting
                         # Check if voltage is negative (reverse bias means should be blocking)
-                        if diode.voltage_var in solution:
-                            v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
-                                                                                                               list(state_values) + list(input_values))}))
-                            if v_diode_val < -self.diode_voltage_tol:  # Small tolerance for numerical errors
-                                logging.debug(f"Diode {diode.comp_id}: negative voltage {v_diode_val:.6f} while conducting → switch to blocking")
-                                new_states[i] = not current_states[i]
-                                states_changed = True
-                                continue
+                        v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                            list(state_values) + list(input_values))}))
+                        if v_diode_val < -self.diode_voltage_tol:  # Small tolerance for numerical errors
+                            logging.debug(f"Diode {diode.comp_id}: negative voltage {v_diode_val:.6f} while conducting, switch to blocking")
+                            new_states[i] = not current_states[i]
+                            # Check if new combination has been visited
+                            new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
+                            states_changed = True
+                            continue
                     else:  # Currently blocking
                         # Check if current is positive (forward bias means should be conducting)
-                        if diode.current_var in solution:
-                            i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
-                                                                                                               list(state_values) + list(input_values))}))
-                            if i_diode_val > self.diode_current_tol:  # Small tolerance for numerical errors
-                                logging.debug(f"Diode {diode.comp_id}: positive current {i_diode_val:.6f} while blocking → switch to conducting")
-                                new_states[i] = not current_states[i]
-                                states_changed = True
-                                continue
+                        i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                            list(state_values) + list(input_values))}))
+                        if i_diode_val > self.diode_current_tol:  # Small tolerance for numerical errors
+                            logging.debug(f"Diode {diode.comp_id}: positive current {i_diode_val:.6f} while blocking, switch to conducting")
+                            new_states[i] = not current_states[i]
+                            # Check if new combination has been visited
+                            new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
+                            states_changed = True
+                            continue
                 
                 if not states_changed:
                     # Converged!
@@ -867,6 +886,31 @@ class ElectricalDaeModel(DaeModel):
         logging.warning(f"Iterative diode detection did not converge after {max_iterations} iterations")
         return current_states  # Return best attempt
     
+    def _check_diode_states_visited(self, new_states: List[bool], visited: List[List[bool]], iteration: int, all_combinations: List[List[bool]]) -> List[bool]:
+        """Check if the new diode states have been visited before. If so, try the next combination.
+        Args:
+            new_states: Newly detected diode states
+            visited: List of previously visited diode state combinations
+            iteration: Current iteration number
+            all_combinations: All possible diode state combinations
+        Returns:
+            List[bool]: Updated diode states
+        """
+        if new_states not in visited:
+            return new_states
+        else:
+            new_combination_found = False
+            j = iteration + 1
+            while not new_combination_found and j < len(all_combinations):
+                new_states = all_combinations[j]  # Try next combination
+                j += 1
+                if new_states not in visited:
+                    new_combination_found = True
+                    return new_states
+            if not new_combination_found:
+                logging.warning("No valid diode conduction mode found. Stopping iteration.")
+                return new_states
+
     def update_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> None:
         """Update the conducting states of all diodes and recompute circuit equations.
         
