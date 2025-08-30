@@ -9,7 +9,7 @@ def test_engine_settings_default_values():
     assert settings.start_time == 0.0
     assert settings.time_span == 1.0
     assert settings.solver == 'RK45'
-    assert settings.max_step_size == float('inf')
+    assert settings.max_step_size == 1e-3
     assert settings.init_step_size == None
     assert settings.rel_tol == 1e-3
     assert settings.abs_tol == 1e-6
