@@ -6,8 +6,8 @@ from .parser import CircuitParser, ParserJson
 # Import from engine.py
 from .engine import Engine
 
-# Import from dae_model.py
-from .dae_model import ElectricalDaeModel
+# Import from dae_system.py
+from .dae_system import ElectricalDaeSystem
 
 # Define what should be available when someone imports from amps_simulation.core
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     'CircuitParser',
     'ParserJson', 
     'Engine',
-    'ElectricalDaeModel',
+    'ElectricalDaeSystem',
 ]

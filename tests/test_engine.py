@@ -7,7 +7,7 @@ import numpy as np
 from amps_simulation.core.engine import Engine
 from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, CurrentSource, PowerSwitch, Component
 from amps_simulation.core.parser import ParserJson
-from amps_simulation.core.dae_model import ElectricalDaeModel
+from amps_simulation.core.dae_system import ElectricalDaeSystem
 from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.control_orchestrator import ControlGraph
 
@@ -252,7 +252,7 @@ def test_compute_state_space_model():
     
     # Create model and get equations
     electrical_model = ElectricalModel(graph)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     model.initialize()
     derivatives = model.get_derivatives()
     output_eqs = model.output_eqs

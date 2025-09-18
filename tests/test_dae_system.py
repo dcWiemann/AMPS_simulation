@@ -1,5 +1,5 @@
 import pytest
-from amps_simulation.core.dae_model import DaeModel, ElectricalDaeModel
+from amps_simulation.core.dae_system import DaeModel, ElectricalDaeSystem
 from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import Resistor, ElecJunction, PowerSwitch
@@ -95,10 +95,10 @@ def create_test_circuit():
 
 
 def test_electrical_dae_model_initialization():
-    """Test initialization of ElectricalDaeModel."""
+    """Test initialization of ElectricalDaeSystem."""
     G = create_test_circuit()
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     assert isinstance(model.graph, nx.Graph)
     assert model.derivatives == {}
     assert model.output_eqs == {}
@@ -119,7 +119,7 @@ def test_compute_kcl_equations():
     """Test computation of KCL equations."""
     G = create_test_circuit()
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     
     kcl_equations = model.compute_kcl_equations()
     
@@ -134,7 +134,7 @@ def test_compute_kvl_equations():
     """Test computation of KVL equations."""
     G = create_test_circuit()
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     
     kvl_equations = model.compute_kvl_equations()
     
@@ -152,7 +152,7 @@ def test_compute_static_component_equations():
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     
     static_eqs = model.compute_static_component_equations()
     
@@ -171,7 +171,7 @@ def test_compute_switch_equations():
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     
     switch_eqs = model.compute_switch_equations()
     print("switch_eqs off:", switch_eqs)
@@ -200,7 +200,7 @@ def test_compute_circuit_equations():
             edge[2]['component'].is_on = False
 
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
 
     circuit_eqs = model.compute_circuit_equations()
     print("circuit_eqs: ", circuit_eqs)
@@ -240,7 +240,7 @@ def test_print_dae_model_components():
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     model.initialize()
     for switch in model.switch_list:
         switch.is_on = True
@@ -271,7 +271,7 @@ def test_kcl_equations_exclude_ground():
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     
     # Get KCL equations
     kcl_equations = model.compute_kcl_equations()
@@ -291,7 +291,7 @@ def test_compute_derivatives():
         circuit_json = json.load(f)
     G, _ = parser.parse(circuit_json)
     electrical_model = ElectricalModel(G)
-    model = ElectricalDaeModel(electrical_model)
+    model = ElectricalDaeSystem(electrical_model)
     model.initialize()
     
     derivatives = model.compute_derivatives()

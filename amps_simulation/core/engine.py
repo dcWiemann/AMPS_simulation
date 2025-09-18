@@ -5,7 +5,7 @@ import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
 from .components import Component
-from .dae_model import ElectricalDaeModel
+from .dae_system import ElectricalDaeSystem
 from .electrical_model import ElectricalModel
 from .engine_settings import EngineSettings
 from .control_orchestrator import ControlOrchestrator, ControlGraph
@@ -62,7 +62,7 @@ class Engine:
         
         # Create electrical graph and DAE model
         self.electrical_model = ElectricalModel(self.graph)
-        self.electrical_dae_model = ElectricalDaeModel(self.electrical_model)
+        self.electrical_dae_model = ElectricalDaeSystem(self.electrical_model)
         self.electrical_dae_model.initialize(initial_conditions, initial_inputs)
 
         # Set up all necessary variables

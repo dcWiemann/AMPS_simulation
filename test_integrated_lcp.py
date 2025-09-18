@@ -90,7 +90,7 @@ def test_dae_model_integration():
     print("\n=== Test 3: DAE Model Integration ===")
     
     try:
-        from amps_simulation.core.dae_model import ElectricalDaeModel
+        from amps_simulation.core.dae_system import ElectricalDaeSystem
         from amps_simulation.core.electrical_model import ElectricalModel
         import networkx as nx
         
@@ -103,7 +103,7 @@ def test_dae_model_integration():
         electrical_model = ElectricalModel(graph)
         
         # Create DAE model
-        dae_model = ElectricalDaeModel(electrical_model)
+        dae_model = ElectricalDaeSystem(electrical_model)
         
         # Check that LCP solver is initialized
         assert hasattr(dae_model, 'lcp_solver'), "LCP solver not initialized"

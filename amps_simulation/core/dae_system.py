@@ -44,7 +44,7 @@ class DaeModel(ABC):
         return self.output_eqs
     
 
-class ElectricalDaeModel(DaeModel):
+class ElectricalDaeSystem(DaeModel):
     """DAE model for electrical systems.
     
     This class extends the DaeModel class to handle electrical systems.
