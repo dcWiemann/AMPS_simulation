@@ -862,7 +862,8 @@ class ElectricalDaeModel(DaeModel):
                 if not states_changed:
                     # Converged!
                     logging.debug(f"Iterative diode detection converged in {iteration + 1} iterations")
-                    logging.debug(f"Final states: {[f'{diode.comp_id}={'CONDUCTING' if state else 'BLOCKING'}' for diode, state in zip(self.diode_list, current_states)]}")
+                    states_str = [f'{diode.comp_id}={"CONDUCTING" if state else "BLOCKING"}' for diode, state in zip(self.diode_list, current_states)]
+                    logging.debug(f"Final states: {states_str}")
                     return current_states
                 
                 # Update states for next iteration
