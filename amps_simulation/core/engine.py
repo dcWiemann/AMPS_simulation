@@ -9,6 +9,7 @@ from .dae_model import ElectricalDaeModel
 from .electrical_graph import ElectricalGraph
 from .engine_settings import EngineSettings
 from .control_orchestrator import ControlOrchestrator, ControlGraph
+from .circuit_sanity_checker import CircuitSanityChecker
 
 class Engine:
     """
@@ -112,7 +113,6 @@ class Engine:
         """
         logging.info("Running circuit topology sanity checks...")
         
-        from .circuit_sanity_checker import CircuitSanityChecker
         checker = CircuitSanityChecker(self.graph)
         
         try:
