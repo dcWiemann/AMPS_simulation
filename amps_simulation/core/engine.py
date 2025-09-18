@@ -62,13 +62,13 @@ class Engine:
         
         # Create electrical graph and DAE model
         self.electrical_model = ElectricalModel(self.graph)
-        self.electrical_dae_model = ElectricalDaeSystem(self.electrical_model)
-        self.electrical_dae_model.initialize(initial_conditions, initial_inputs)
+        self.electrical_dae_system = ElectricalDaeSystem(self.electrical_model)
+        self.electrical_dae_system.initialize(initial_conditions, initial_inputs)
 
         # Set up all necessary variables
-        self.state_vars = tuple(self.electrical_dae_model.state_vars)
-        self.input_vars = tuple(self.electrical_dae_model.input_vars)
-        self.output_vars = tuple(self.electrical_dae_model.output_vars)
+        self.state_vars = tuple(self.electrical_dae_system.state_vars)
+        self.input_vars = tuple(self.electrical_dae_system.input_vars)
+        self.output_vars = tuple(self.electrical_dae_system.output_vars)
         self.switch_list = tuple(self.electrical_model.switch_list)
         self.diode_list = tuple(self.electrical_model.diode_list)
         
@@ -137,7 +137,7 @@ class Engine:
                 if constraints['zero_voltage_capacitors']:
                     logging.info(f"  - Zero voltage capacitors: {constraints['zero_voltage_capacitors']}")
                 
-                # Store constraints for use by DAE model
+                # Store constraints for use by DAE system
                 self.circuit_constraints = constraints
             else:
                 self.circuit_constraints = None
@@ -432,7 +432,7 @@ class Engine:
             
             if self.diode_list:
                 final_diode_states = tuple(
-                    self.electrical_dae_model.detect_diode_states(final_state, final_input, final_time)
+                    self.electrical_dae_system.detect_diode_states(final_state, final_input, final_time)
                 )
             else:
                 final_diode_states = ()
@@ -512,7 +512,7 @@ class Engine:
         # Determine current diode states based on current circuit state
         if self.diode_list:
             # Detect diode states using LCP formulation
-            current_diode_states = tuple(self.electrical_dae_model.detect_diode_states(y, u, t))
+            current_diode_states = tuple(self.electrical_dae_system.detect_diode_states(y, u, t))
         else:
             current_diode_states = ()
         
@@ -548,7 +548,7 @@ class Engine:
         """
         # Update switch states in electrical model
         if self.switch_list:
-            self.electrical_dae_model.update_switch_states(t)
+            self.electrical_dae_system.update_switch_states(t)
             
             # Run sanity checks for this switch configuration
             # The graph topology has changed due to switch state updates
@@ -556,8 +556,8 @@ class Engine:
             self._run_sanity_checks()
         
         # Get derivatives and output equations from DAE model
-        derivatives = self.electrical_dae_model.derivatives
-        output_eqs = self.electrical_dae_model.output_eqs
+        derivatives = self.electrical_dae_system.derivatives
+        output_eqs = self.electrical_dae_system.output_eqs
         
         # Sort equations to match variable order
         sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
@@ -583,11 +583,11 @@ class Engine:
         """
         # Update switch states in electrical model
         if self.switch_list:
-            self.electrical_dae_model.update_switch_states(t)
+            self.electrical_dae_system.update_switch_states(t)
         
         # Update diode states in electrical model
         if self.diode_list:
-            self.electrical_dae_model.update_diode_states(y, u, t)
+            self.electrical_dae_system.update_diode_states(y, u, t)
             
         # Run sanity checks for this switch/diode configuration
         if self.switch_list or self.diode_list:
@@ -595,8 +595,8 @@ class Engine:
             self._run_sanity_checks()
         
         # Get derivatives and output equations from DAE model
-        derivatives = self.electrical_dae_model.derivatives
-        output_eqs = self.electrical_dae_model.output_eqs
+        derivatives = self.electrical_dae_system.derivatives
+        output_eqs = self.electrical_dae_system.output_eqs
         
         # Sort equations to match variable order
         sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)

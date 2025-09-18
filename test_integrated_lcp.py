@@ -85,7 +85,7 @@ def test_diode_lcp_solver():
         print(f"Test 2 FAILED: {e}")
         return False
 
-def test_dae_model_integration():
+def test_dae_system_integration():
     """Test LCP solver integration with DAE model."""
     print("\n=== Test 3: DAE Model Integration ===")
     
@@ -103,14 +103,14 @@ def test_dae_model_integration():
         electrical_model = ElectricalModel(graph)
         
         # Create DAE model
-        dae_model = ElectricalDaeSystem(electrical_model)
+        dae_system = ElectricalDaeSystem(electrical_model)
         
         # Check that LCP solver is initialized
-        assert hasattr(dae_model, 'lcp_solver'), "LCP solver not initialized"
-        assert dae_model.lcp_solver is not None, "LCP solver is None"
+        assert hasattr(dae_system, 'lcp_solver'), "LCP solver not initialized"
+        assert dae_system.lcp_solver is not None, "LCP solver is None"
         
         print("DAE model successfully created with LCP solver")
-        print(f"LCP solver type: {type(dae_model.lcp_solver).__name__}")
+        print(f"LCP solver type: {type(dae_system.lcp_solver).__name__}")
         
         success = True
         print(f"Test 3: {'PASSED' if success else 'FAILED'}")
@@ -165,7 +165,7 @@ def main():
     tests = [
         test_lcp_solver_basic,
         test_diode_lcp_solver,
-        test_dae_model_integration,
+        test_dae_system_integration,
         test_edge_cases,
     ]
     

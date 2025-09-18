@@ -50,17 +50,17 @@
 <text xml:space="preserve" text-anchor="middle" x="399.41" y="-368.06" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">core.</text>
 <text xml:space="preserve" text-anchor="middle" x="399.41" y="-356.06" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">components</text>
 </g>
-<!-- amps_simulation_core_dae_model -->
+<!-- amps_simulation_core_dae_system -->
 <g id="node5" class="node">
-<title>amps_simulation_core_dae_model</title><style>.edge>path:hover{stroke-width:8}</style>
+<title>amps_simulation_core_dae_system</title><style>.edge>path:hover{stroke-width:8}</style>
 <ellipse fill="#993333" stroke="black" cx="437.41" cy="-273.34" rx="65.41" ry="31.11"/>
 <text xml:space="preserve" text-anchor="middle" x="437.41" y="-281.84" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">amps_simulation.</text>
 <text xml:space="preserve" text-anchor="middle" x="437.41" y="-269.84" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">core.</text>
-<text xml:space="preserve" text-anchor="middle" x="437.41" y="-257.84" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">dae_model</text>
+<text xml:space="preserve" text-anchor="middle" x="437.41" y="-257.84" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">dae_system</text>
 </g>
-<!-- amps_simulation_core_components&#45;&gt;amps_simulation_core_dae_model -->
+<!-- amps_simulation_core_components&#45;&gt;amps_simulation_core_dae_system -->
 <g id="edge3" class="edge">
-<title>amps_simulation_core_components&#45;&gt;amps_simulation_core_dae_model</title><style>.edge>path:hover{stroke-width:8}</style>
+<title>amps_simulation_core_components&#45;&gt;amps_simulation_core_dae_system</title><style>.edge>path:hover{stroke-width:8}</style>
 <path fill="none" stroke="black" d="M411.22,-340.64C414.44,-332.5 417.98,-323.54 421.39,-314.91"/>
 <polygon fill="#c82323" stroke="black" points="424.63,-316.23 425.04,-305.65 418.12,-313.66 424.63,-316.23"/>
 </g>
@@ -99,9 +99,9 @@
 <text xml:space="preserve" text-anchor="middle" x="623.41" y="-368.06" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">core.</text>
 <text xml:space="preserve" text-anchor="middle" x="623.41" y="-356.06" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#ffffff">control_signal</text>
 </g>
-<!-- amps_simulation_core_dae_model&#45;&gt;amps_simulation_core_engine -->
+<!-- amps_simulation_core_dae_system&#45;&gt;amps_simulation_core_engine -->
 <g id="edge6" class="edge">
-<title>amps_simulation_core_dae_model&#45;&gt;amps_simulation_core_engine</title><style>.edge>path:hover{stroke-width:8}</style>
+<title>amps_simulation_core_dae_system&#45;&gt;amps_simulation_core_engine</title><style>.edge>path:hover{stroke-width:8}</style>
 <path fill="none" stroke="black" d="M387.38,-252.88C377.79,-249.26 367.81,-245.57 358.41,-242.23 313.37,-226.21 262.18,-209.31 222.87,-196.61"/>
 <polygon fill="#993333" stroke="black" points="224.14,-193.34 213.55,-193.61 221.99,-200 224.14,-193.34"/>
 </g>
@@ -273,9 +273,9 @@
 <ellipse fill="#26d953" stroke="black" cx="554.41" cy="-533.3" rx="33.52" ry="18"/>
 <text xml:space="preserve" text-anchor="middle" x="554.41" y="-529.8" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#000000">networkx</text>
 </g>
-<!-- networkx&#45;&gt;amps_simulation_core_dae_model -->
+<!-- networkx&#45;&gt;amps_simulation_core_dae_system -->
 <g id="edge23" class="edge">
-<title>networkx&#45;&gt;amps_simulation_core_dae_model</title><style>.edge>path:hover{stroke-width:8}</style>
+<title>networkx&#45;&gt;amps_simulation_core_dae_system</title><style>.edge>path:hover{stroke-width:8}</style>
 <path fill="none" stroke="black" d="M550.12,-515.17C543.21,-486.07 530.41,-425.01 530.41,-372.56"/>
 <path fill="none" stroke="black" d="M530.41,-370.56C529.15,-343.25 509.39,-320.71 488.41,-304.33"/>
 <polygon fill="#26d953" stroke="black" points="490.74,-301.7 480.61,-298.59 486.59,-307.34 490.74,-301.7"/>
@@ -298,9 +298,9 @@
 <ellipse fill="#06f9f9" stroke="black" cx="792.41" cy="-718.93" rx="27.21" ry="18"/>
 <text xml:space="preserve" text-anchor="middle" x="792.41" y="-715.43" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#000000">numpy</text>
 </g>
-<!-- numpy&#45;&gt;amps_simulation_core_dae_model -->
+<!-- numpy&#45;&gt;amps_simulation_core_dae_system -->
 <g id="edge26" class="edge">
-<title>numpy&#45;&gt;amps_simulation_core_dae_model</title><style>.edge>path:hover{stroke-width:8}</style>
+<title>numpy&#45;&gt;amps_simulation_core_dae_system</title><style>.edge>path:hover{stroke-width:8}</style>
 <path fill="none" stroke="black" d="M303.41,-608.93C276.61,-595.59 309.52,-365.82 325.41,-340.45 337.04,-321.88 355.95,-307.89 374.95,-297.67"/>
 <polygon fill="#06f9f9" stroke="black" points="376.46,-300.83 383.81,-293.21 373.3,-294.58 376.46,-300.83"/>
 </g>
@@ -429,9 +429,9 @@
 <polygon fill="#f906bc" stroke="black" points="454.19,-399.15 444.02,-396.2 450.13,-404.85 454.19,-399.15"/>
 <path fill="none" stroke="black" d="M825.66,-598.63C819.55,-596.09 812.82,-593.62 806.41,-591.93 742.54,-575.13 559.7,-600.98 511.41,-555.93 478.88,-525.59 503.41,-500.77 492.41,-457.68"/>
 </g>
-<!-- sympy&#45;&gt;amps_simulation_core_dae_model -->
+<!-- sympy&#45;&gt;amps_simulation_core_dae_system -->
 <g id="edge43" class="edge">
-<title>sympy&#45;&gt;amps_simulation_core_dae_model</title><style>.edge>path:hover{stroke-width:8}</style>
+<title>sympy&#45;&gt;amps_simulation_core_dae_system</title><style>.edge>path:hover{stroke-width:8}</style>
 <path fill="none" stroke="black" d="M492.41,-455.68C476.28,-406.34 490.28,-389.54 473.41,-340.45 470.33,-331.49 466.1,-322.3 461.63,-313.73"/>
 <polygon fill="#f906bc" stroke="black" points="464.71,-312.06 456.84,-304.97 458.57,-315.42 464.71,-312.06"/>
 </g>

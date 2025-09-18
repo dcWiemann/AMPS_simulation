@@ -94,7 +94,7 @@ def create_test_circuit():
     return graph
 
 
-def test_electrical_dae_model_initialization():
+def test_electrical_dae_system_initialization():
     """Test initialization of ElectricalDaeSystem."""
     G = create_test_circuit()
     electrical_model = ElectricalModel(G)
