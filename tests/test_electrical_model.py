@@ -216,3 +216,169 @@ def test_electrical_model_integration():
     assert len(electrical_model.junction_voltage_var_list) == n_nodes
     assert len(electrical_model.component_current_var_list) == n_edges
     assert len(electrical_model.component_voltage_var_list) == n_edges
+
+
+# Tests for new programmatic API
+
+def test_electrical_model_empty_constructor():
+    """Test ElectricalModel can be created without graph parameter."""
+    from amps_simulation.core.components import Component, ElecJunction
+    Component.clear_registry()
+    ElecJunction.clear_registry()
+
+    em = ElectricalModel()
+    assert em.graph is not None
+    assert isinstance(em.graph, nx.MultiDiGraph)
+    assert len(em.graph.nodes()) == 0
+    assert len(em.graph.edges()) == 0
+
+
+def test_add_node_basic():
+    """Test adding nodes to empty ElectricalModel."""
+    from amps_simulation.core.components import Component, ElecJunction
+    Component.clear_registry()
+    ElecJunction.clear_registry()
+
+    em = ElectricalModel()
+
+    # Add regular node
+    em.add_node(1)
+    assert 1 in em.graph.nodes()
+    assert em.graph.nodes[1]['junction'].junction_id == 1
+    assert em.graph.nodes[1]['junction'].is_ground == False
+
+    # Add ground node
+    em.add_node(0, is_ground=True)
+    assert 0 in em.graph.nodes()
+    assert em.graph.nodes[0]['junction'].junction_id == 0
+    assert em.graph.nodes[0]['junction'].is_ground == True
+
+
+def test_add_component_list_format():
+    """Test adding components with list format terminals."""
+    from amps_simulation.core.components import Component, Resistor, ElecJunction
+    Component.clear_registry()
+    ElecJunction.clear_registry()
+
+    em = ElectricalModel()
+    R1 = Resistor('R1', 10)
+
+    # Add component with list format
+    em.add_component(R1, [1, 0])
+
+    # Check nodes were auto-created
+    assert 1 in em.graph.nodes()
+    assert 0 in em.graph.nodes()
+
+    # Check edge was created
+    assert em.graph.has_edge(1, 0)
+    edge_data = em.graph.get_edge_data(1, 0)
+    assert len(edge_data) == 1  # One edge between these nodes
+    assert edge_data[0]['component'] == R1
+
+
+def test_add_component_kwargs_format():
+    """Test adding components with named terminal arguments."""
+    from amps_simulation.core.components import Component, Capacitor, ElecJunction
+    Component.clear_registry()
+    ElecJunction.clear_registry()
+
+    em = ElectricalModel()
+    C1 = Capacitor('C1', 1e-4)
+
+    # Add component with named terminals
+    em.add_component(C1, p=3, n=0)
+
+    # Check nodes were auto-created
+    assert 3 in em.graph.nodes()
+    assert 0 in em.graph.nodes()
+
+    # Check edge was created
+    assert em.graph.has_edge(3, 0)
+    edge_data = em.graph.get_edge_data(3, 0)
+    assert edge_data[0]['component'] == C1
+
+
+def test_component_positional_constructors():
+    """Test component constructors with positional arguments."""
+    from amps_simulation.core.components import Component, Resistor, Capacitor, Inductor, VoltageSource, Diode
+    Component.clear_registry()
+
+    # Test Resistor
+    R1 = Resistor('R1', 10)
+    assert R1.comp_id == 'R1'
+    assert R1.resistance == 10
+
+    # Test Capacitor
+    C1 = Capacitor('C1', 1e-4)
+    assert C1.comp_id == 'C1'
+    assert C1.capacitance == 1e-4
+
+    # Test Inductor
+    L1 = Inductor('L1', 1e-2)
+    assert L1.comp_id == 'L1'
+    assert L1.inductance == 1e-2
+
+    # Test VoltageSource
+    V1 = VoltageSource('V1', 12)
+    assert V1.comp_id == 'V1'
+    assert V1.voltage == 12
+
+    # Test Diode
+    D1 = Diode('D1')
+    assert D1.comp_id == 'D1'
+    assert D1.is_on == False  # Default value
+
+
+def test_programmatic_api_example():
+    """Test complete example matching API documentation."""
+    from amps_simulation.core.components import Component, Resistor, Capacitor, VoltageSource, Inductor, Diode, ElecJunction
+    Component.clear_registry()
+    ElecJunction.clear_registry()
+
+    # Create model and components
+    em = ElectricalModel()
+
+    R1 = Resistor('R1', 10)
+    C1 = Capacitor('C1', 1e-4)
+    V1 = VoltageSource('V1', 12)
+    L1 = Inductor('L1', 1e-2)
+    D1 = Diode('D1')
+
+    # Build circuit
+    em.add_node(0, is_ground=True)
+    em.add_component(V1, [1, 0])
+    em.add_component(L1, [2, 3])
+    em.add_component(R1, [3, 0])
+    em.add_component(C1, p=3, n=0)
+    em.add_component(D1, [0, 2])
+
+    # Verify structure
+    assert len(em.graph.nodes()) == 4  # nodes 0, 1, 2, 3
+    assert len(em.graph.edges()) == 5  # 5 components
+
+    # Check ground node
+    assert em.graph.nodes[0]['junction'].is_ground == True
+
+    # Check components are connected correctly
+    assert em.graph.has_edge(1, 0)  # V1
+    assert em.graph.has_edge(2, 3)  # L1
+    assert em.graph.has_edge(3, 0)  # R1
+    assert em.graph.has_edge(3, 0)  # C1 (parallel to R1)
+    assert em.graph.has_edge(0, 2)  # D1
+
+
+def test_backward_compatibility():
+    """Test that existing graph-based constructor still works."""
+    from amps_simulation.core.components import Component, ElecJunction
+    Component.clear_registry()
+    ElecJunction.clear_registry()
+
+    # Create graph manually (old way)
+    graph = create_simple_test_circuit()
+    em = ElectricalModel(graph)
+
+    # Should still work
+    assert em.graph is not None
+    assert len(em.graph.nodes()) > 0
+    assert len(em.graph.edges()) > 0

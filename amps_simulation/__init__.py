@@ -1,4 +1,5 @@
-from .core import CircuitParser, ParserJson, Engine, ElectricalDaeSystem
+from .core import CircuitParser, ParserJson, Engine, ElectricalDaeSystem, ElectricalModel
+from .core.components import Resistor, Capacitor, Inductor, VoltageSource, CurrentSource, Diode, PowerSwitch
 from .run_simulation import run_simulation
 
 __version__ = "0.1.0"
@@ -7,7 +8,15 @@ __version__ = "0.1.0"
 __all__ = [
     'CircuitParser',
     'ParserJson',
-    'Engine', 
+    'Engine',
     'ElectricalDaeSystem',
+    'ElectricalModel',
+    'Resistor',
+    'Capacitor',
+    'Inductor',
+    'VoltageSource',
+    'CurrentSource',
+    'Diode',
+    'PowerSwitch',
     'run_simulation'
 ]

@@ -1,8 +1,8 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional, Union
 import numpy as np
 import networkx as nx
 from sympy import Matrix, Symbol
-from .components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
+from .components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode, Component, ElecJunction
 
 
 class ElectricalModel:
@@ -18,14 +18,14 @@ class ElectricalModel:
     Separates graph structure concerns from mathematical DAE model computation.
     """
     
-    def __init__(self, graph: nx.MultiDiGraph):
+    def __init__(self, graph: Optional[nx.MultiDiGraph] = None):
         """
         Initialize the ElectricalModel.
-        
+
         Args:
-            graph: NetworkX MultiDiGraph representing the circuit
+            graph: NetworkX MultiDiGraph representing the circuit. If None, creates empty graph.
         """
-        self.graph = graph
+        self.graph = graph if graph is not None else nx.MultiDiGraph()
         
         # Graph topology properties
         self.incidence_matrix = None
@@ -155,3 +155,72 @@ class ElectricalModel:
         
         # Return zeros for now (could be extended for steady-state calculation)
         return np.zeros(state_var_count)
+
+    def add_node(self, node_id: int, is_ground: bool = False) -> None:
+        """
+        Add an electrical junction node to the circuit.
+
+        Args:
+            node_id: Unique integer identifier for the node
+            is_ground: Whether this node should be treated as ground reference
+        """
+        if node_id in self.graph.nodes:
+            # Node already exists, update ground status if needed
+            existing_junction = self.graph.nodes[node_id]['junction']
+            if is_ground:
+                existing_junction.is_ground = True
+        else:
+            # Create new junction and add node
+            junction = ElecJunction(junction_id=node_id, is_ground=is_ground)
+            self.graph.add_node(node_id, junction=junction)
+
+    def add_component(self, component: Component, terminals: Union[List[int], Dict[str, int], None] = None, **kwargs) -> None:
+        """
+        Add a component to the circuit with specified terminal connections.
+
+        Args:
+            component: The component instance to add
+            terminals: Terminal connections as list [node1, node2] or dict {"p": node1, "n": node2}
+            **kwargs: Additional named terminal connections (e.g. p=1, n=0)
+        """
+        # Parse terminal connections
+        if isinstance(terminals, list):
+            # List format: [node1, node2]
+            if len(terminals) != 2:
+                raise ValueError(f"List format requires exactly 2 terminals, got {len(terminals)}")
+            node1, node2 = terminals
+        elif isinstance(terminals, dict):
+            # Dict format: {"p": node1, "n": node2}
+            terminal_dict = terminals.copy()
+            terminal_dict.update(kwargs)  # Merge with any additional kwargs
+
+            # For now, handle common 2-terminal case
+            if "p" in terminal_dict and "n" in terminal_dict:
+                node1, node2 = terminal_dict["p"], terminal_dict["n"]
+            elif len(terminal_dict) == 2:
+                # Take first two values for 2-terminal components
+                nodes = list(terminal_dict.values())
+                node1, node2 = nodes[0], nodes[1]
+            else:
+                raise ValueError(f"Unsupported terminal configuration: {terminal_dict}")
+        elif terminals is None:
+            # kwargs only (e.g. p=1, n=0)
+            if len(kwargs) != 2:
+                raise ValueError(f"Expected 2 terminal connections, got {len(kwargs)}")
+            if "p" in kwargs and "n" in kwargs:
+                node1, node2 = kwargs["p"], kwargs["n"]
+            else:
+                # Take first two values
+                nodes = list(kwargs.values())
+                node1, node2 = nodes[0], nodes[1]
+        else:
+            raise ValueError(f"Unsupported terminals parameter: {terminals}")
+
+        # Auto-create nodes if they don't exist
+        if node1 not in self.graph.nodes:
+            self.add_node(node1)
+        if node2 not in self.graph.nodes:
+            self.add_node(node2)
+
+        # Add component as edge between the two nodes
+        self.graph.add_edge(node1, node2, component=component)

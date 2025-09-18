@@ -28,8 +28,8 @@ class Component(BaseModel, ABC):
             raise ValueError(f"Component ID '{v}' is already in use")
         return v
     
-    def __init__(self, **data):
-        super().__init__(**data)
+    def model_post_init(self, __context) -> None:
+        """Post-initialization to handle registry insertion."""
         self._registry[self.comp_id] = self
     
     def __hash__(self):
@@ -82,17 +82,21 @@ class Meter(Component):
 class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms")
-    
+
+    def __init__(self, comp_id: str, resistance: float, **data):
+        """Initialize resistor with positional arguments support."""
+        super().__init__(comp_id=comp_id, resistance=resistance, **data)
+
     @property
     def is_short_circuit(self) -> bool:
         """Resistor is short circuit if R = 0."""
         return self.resistance == 0.0
-    
+
     @property
     def is_open_circuit(self) -> bool:
         """Resistor is open circuit if R approaches infinity."""
         return self.resistance == float('inf')
-    
+
     def get_comp_eq(self) -> Symbol:
         """Returns the symbolic equation for Ohm's law.
         
@@ -105,7 +109,11 @@ class Resistor(Component):
 class Capacitor(Component):
     """Capacitor component."""
     capacitance: float = Field(..., description="Capacitance value in farads", ge=0)
-    
+
+    def __init__(self, comp_id: str, capacitance: float, **data):
+        """Initialize capacitor with positional arguments support."""
+        super().__init__(comp_id=comp_id, capacitance=capacitance, **data)
+
     @property
     def is_short_circuit(self) -> bool:
         """Capacitor is short circuit if C approaches infinity."""
@@ -134,7 +142,11 @@ class Capacitor(Component):
 class Inductor(Component):
     """Inductor component."""
     inductance: float = Field(..., description="Inductance value in henries", ge=0)
-    
+
+    def __init__(self, comp_id: str, inductance: float, **data):
+        """Initialize inductor with positional arguments support."""
+        super().__init__(comp_id=comp_id, inductance=inductance, **data)
+
     @property
     def is_short_circuit(self) -> bool:
         """Inductor is short circuit if L = 0."""
@@ -207,7 +219,11 @@ class PowerSwitch(Component):
 class Diode(Component):
     """Diode component."""
     is_on: bool = Field(False, description="Whether the diode is conducting")
-    
+
+    def __init__(self, comp_id: str, **data):
+        """Initialize diode with positional arguments support."""
+        super().__init__(comp_id=comp_id, **data)
+
     @property
     def is_short_circuit(self) -> bool:
         """Diode is short circuit when forward-biased and conducting."""
@@ -239,8 +255,13 @@ class VoltageSource(Source):
         """Voltage source is short circuit if voltage = 0."""
         return self.voltage == 0.0
 
-    def __init__(self, **data):
-        super().__init__(**data)
+    def __init__(self, comp_id: str, voltage: float, **data):
+        """Initialize voltage source with positional arguments support."""
+        super().__init__(comp_id=comp_id, voltage=voltage, **data)
+
+    def model_post_init(self, __context) -> None:
+        """Set input_var after initialization."""
+        super().model_post_init(__context)  # Call parent's post_init
         self.input_var = self.voltage_var
         # control_port_name should be set by the parser if needed
 
@@ -259,8 +280,13 @@ class CurrentSource(Source):
         """Current source is open circuit if current = 0."""
         return self.current == 0.0
 
-    def __init__(self, **data):
-        super().__init__(**data)
+    def __init__(self, comp_id: str, current: float, **data):
+        """Initialize current source with positional arguments support."""
+        super().__init__(comp_id=comp_id, current=current, **data)
+
+    def model_post_init(self, __context) -> None:
+        """Set input_var after initialization."""
+        super().model_post_init(__context)  # Call parent's post_init
         self.input_var = self.current_var
         # control_port_name should be set by the parser if needed
 
