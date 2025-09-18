@@ -524,7 +524,7 @@ class Engine:
             A, B, C, D, ode_function = switchmap[combined_states]
             # logging.debug(f"Using cached ODE function for states: switches={current_switch_states}, diodes={current_diode_states}")
         else:
-            # Compute new DAE model for this switch/diode combination
+            # Compute new DAE system for this switch/diode combination
             A, B, C, D = self._compute_state_space_for_states(current_switch_states, current_diode_states, t, y, u)
             
             # Create ODE function from state space matrices
@@ -546,7 +546,7 @@ class Engine:
         Returns:
             A, B, C, D: State space matrices
         """
-        # Update switch states in electrical model
+        # Update switch states in electrical dae system
         if self.switch_list:
             self.electrical_dae_system.update_switch_states(t)
             
@@ -555,7 +555,7 @@ class Engine:
             logging.debug(f"Running sanity checks for switch configuration: {switch_states}")
             self._run_sanity_checks()
         
-        # Get derivatives and output equations from DAE model
+        # Get derivatives and output equations from DAE system
         derivatives = self.electrical_dae_system.derivatives
         output_eqs = self.electrical_dae_system.output_eqs
         
@@ -581,11 +581,11 @@ class Engine:
         Returns:
             A, B, C, D: State space matrices
         """
-        # Update switch states in electrical model
+        # Update switch states in electrical dae system
         if self.switch_list:
             self.electrical_dae_system.update_switch_states(t)
         
-        # Update diode states in electrical model
+        # Update diode states in electrical dae system
         if self.diode_list:
             self.electrical_dae_system.update_diode_states(y, u, t)
             
