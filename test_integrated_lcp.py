@@ -91,7 +91,7 @@ def test_dae_model_integration():
     
     try:
         from amps_simulation.core.dae_model import ElectricalDaeModel
-        from amps_simulation.core.electrical_graph import ElectricalGraph
+        from amps_simulation.core.electrical_model import ElectricalModel
         import networkx as nx
         
         # Create minimal graph
@@ -100,10 +100,10 @@ def test_dae_model_integration():
         graph.add_node(1, junction=type('obj', (object,), {'is_ground': False})())
         
         # Create electrical graph
-        electrical_graph = ElectricalGraph(graph)
+        electrical_model = ElectricalModel(graph)
         
         # Create DAE model
-        dae_model = ElectricalDaeModel(electrical_graph)
+        dae_model = ElectricalDaeModel(electrical_model)
         
         # Check that LCP solver is initialized
         assert hasattr(dae_model, 'lcp_solver'), "LCP solver not initialized"

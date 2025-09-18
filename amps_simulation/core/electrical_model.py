@@ -5,11 +5,11 @@ from sympy import Matrix, Symbol
 from .components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
 
 
-class ElectricalGraph:
+class ElectricalModel:
     """
-    Class for managing electrical circuit graph structure and topology.
-    
-    This class handles the electrical circuit graph representation, including:
+    Class for managing electrical circuit model structure and topology.
+
+    This class handles the electrical circuit model representation, including:
     - Circuit topology and incidence matrix
     - Component discovery and management (switches, etc.)
     - Variable lists for nodes and components
@@ -20,7 +20,7 @@ class ElectricalGraph:
     
     def __init__(self, graph: nx.MultiDiGraph):
         """
-        Initialize the ElectricalGraph.
+        Initialize the ElectricalModel.
         
         Args:
             graph: NetworkX MultiDiGraph representing the circuit

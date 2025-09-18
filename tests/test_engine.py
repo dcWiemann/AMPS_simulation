@@ -8,7 +8,7 @@ from amps_simulation.core.engine import Engine
 from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, CurrentSource, PowerSwitch, Component
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.dae_model import ElectricalDaeModel
-from amps_simulation.core.electrical_graph import ElectricalGraph
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.control_orchestrator import ControlGraph
 
 def load_test_circuit(filename):
@@ -251,8 +251,8 @@ def test_compute_state_space_model():
     engine.initialize()
     
     # Create model and get equations
-    electrical_graph = ElectricalGraph(graph)
-    model = ElectricalDaeModel(electrical_graph)
+    electrical_model = ElectricalModel(graph)
+    model = ElectricalDaeModel(electrical_model)
     model.initialize()
     derivatives = model.get_derivatives()
     output_eqs = model.output_eqs

@@ -3,7 +3,7 @@ from typing import Dict, List, Any, Tuple
 import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
-from amps_simulation.core.electrical_graph import ElectricalGraph
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.lcp_solver import DiodeLCPSolver
 from sympy import Matrix, Symbol, sympify, solve
 import logging
@@ -57,9 +57,9 @@ class ElectricalDaeModel(DaeModel):
     # Configurable tolerances for diode state checks
     diode_current_tol = 1e-6
     diode_voltage_tol = 1e-6
-    def __init__(self, electrical_graph: ElectricalGraph):
-        super().__init__(electrical_graph.graph)
-        self.electrical_graph = electrical_graph
+    def __init__(self, electrical_model: ElectricalModel):
+        super().__init__(electrical_model.graph)
+        self.electrical_model = electrical_model
         self.initialized = False
         
         # Initialize LCP solver for diode state detection
@@ -67,21 +67,21 @@ class ElectricalDaeModel(DaeModel):
 
     def initialize(self, initial_state_values=None, initial_input_values=None):
         # Initialize the electrical graph first
-        if not self.electrical_graph.initialized:
-            self.electrical_graph.initialize()
+        if not self.electrical_model.initialized:
+            self.electrical_model.initialize()
         
         # Find all circuit variables
         self.state_vars = self.find_state_vars()
         self.output_vars = self.find_output_vars()
         self.input_vars = self.find_input_vars()
         
-        # Get graph structure from electrical_graph
-        self.junction_voltage_var_list = self.electrical_graph.junction_voltage_var_list
-        self.component_current_var_list = self.electrical_graph.component_current_var_list
-        self.component_voltage_var_list = self.electrical_graph.component_voltage_var_list
-        self.incidence_matrix = self.electrical_graph.incidence_matrix
-        self.switch_list = self.electrical_graph.switch_list
-        self.diode_list = self.electrical_graph.diode_list
+        # Get graph structure from electrical_model
+        self.junction_voltage_var_list = self.electrical_model.junction_voltage_var_list
+        self.component_current_var_list = self.electrical_model.component_current_var_list
+        self.component_voltage_var_list = self.electrical_model.component_voltage_var_list
+        self.incidence_matrix = self.electrical_model.incidence_matrix
+        self.switch_list = self.electrical_model.switch_list
+        self.diode_list = self.electrical_model.diode_list
         
         # Compute circuit equations (order matters!)
         self.kcl_eqs = self.compute_kcl_equations()
@@ -90,7 +90,7 @@ class ElectricalDaeModel(DaeModel):
         self.switch_eqs = self.compute_switch_equations()
         
         # Initialize diode modes using iterative approach if we have diodes and initial values
-        if self.electrical_graph.diode_list and initial_state_values is not None:
+        if self.electrical_model.diode_list and initial_state_values is not None:
             # Use the iterative diode state detection approach
             conducting_states = self.detect_diode_states(
                 initial_state_values, 
@@ -202,7 +202,7 @@ class ElectricalDaeModel(DaeModel):
             return None
 
     def _extract_diode_voltage_expressions(self, solution: Dict) -> List:
-        """Extract diode voltage expressions in ElectricalGraph.diode_list order.
+        """Extract diode voltage expressions in ElectricalModel.diode_list order.
         
         Args:
             solution: Dictionary mapping variables to their symbolic expressions
@@ -212,8 +212,8 @@ class ElectricalDaeModel(DaeModel):
         """
         diode_voltage_exprs = []
         
-        # Iterate through diodes in ElectricalGraph order to maintain consistency
-        for diode in self.electrical_graph.diode_list:
+        # Iterate through diodes in ElectricalModel order to maintain consistency
+        for diode in self.electrical_model.diode_list:
             voltage_var = diode.voltage_var
             
             if voltage_var in solution:
@@ -227,7 +227,7 @@ class ElectricalDaeModel(DaeModel):
         return diode_voltage_exprs
 
     def _solve_lcp(self, M: np.ndarray, q: np.ndarray) -> List[bool]:
-        """Solve LCP and return diode modes in ElectricalGraph.diode_list order.
+        """Solve LCP and return diode modes in ElectricalModel.diode_list order.
         
         Args:
             M: LCP matrix
@@ -236,8 +236,8 @@ class ElectricalDaeModel(DaeModel):
         Returns:
             List of diode conducting states (True = conducting) in consistent order
         """
-        # Get diode names in ElectricalGraph order for logging
-        diode_names = [diode.comp_id for diode in self.electrical_graph.diode_list]
+        # Get diode names in ElectricalModel order for logging
+        diode_names = [diode.comp_id for diode in self.electrical_model.diode_list]
         
         # Solve LCP
         conducting_states, info = self.lcp_solver.detect_diode_states(M, q, diode_names)
@@ -252,13 +252,13 @@ class ElectricalDaeModel(DaeModel):
         """Update diode component modes based on LCP solution.
         
         Args:
-            conducting_states: List of diode conducting states in ElectricalGraph.diode_list order
+            conducting_states: List of diode conducting states in ElectricalModel.diode_list order
         """
-        if len(conducting_states) != len(self.electrical_graph.diode_list):
-            raise ValueError(f"Conducting states length {len(conducting_states)} != diode count {len(self.electrical_graph.diode_list)}")
+        if len(conducting_states) != len(self.electrical_model.diode_list):
+            raise ValueError(f"Conducting states length {len(conducting_states)} != diode count {len(self.electrical_model.diode_list)}")
         
         # Update diode modes in order
-        for diode, is_conducting in zip(self.electrical_graph.diode_list, conducting_states):
+        for diode, is_conducting in zip(self.electrical_model.diode_list, conducting_states):
             diode.is_on = is_conducting
             logging.debug(f"Set diode {diode.comp_id}: {'CONDUCTING' if is_conducting else 'BLOCKING'}")
 
@@ -308,8 +308,8 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: List of KCL equations in symbolic form, excluding the ground node equation.
         """
         if self.initialized == False:
-            _, comp_current_vars, _ = self.electrical_graph.variable_lists()
-            incidence_matrix = self.electrical_graph.compute_incidence_matrix()
+            _, comp_current_vars, _ = self.electrical_model.variable_lists()
+            incidence_matrix = self.electrical_model.compute_incidence_matrix()
         else:
             comp_current_vars = self.component_current_var_list
             incidence_matrix = self.incidence_matrix
@@ -342,8 +342,8 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: List of KVL equations in symbolic form.
         """
         if self.initialized == False:
-            junction_voltage_var_list, _, comp_voltage_vars = self.electrical_graph.variable_lists()
-            incidence_matrix = self.electrical_graph.compute_incidence_matrix()
+            junction_voltage_var_list, _, comp_voltage_vars = self.electrical_model.variable_lists()
+            incidence_matrix = self.electrical_model.compute_incidence_matrix()
         else:
             junction_voltage_var_list = self.junction_voltage_var_list
             comp_voltage_vars = self.component_voltage_var_list
@@ -379,7 +379,7 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: The switch equations of the graph.
         """
         if self.initialized == False:
-            switch_list = self.electrical_graph.find_switches()
+            switch_list = self.electrical_model.find_switches()
         else:
             switch_list = self.switch_list
         
@@ -400,7 +400,7 @@ class ElectricalDaeModel(DaeModel):
             List[Symbol]: The diode equations of the graph.
         """
         if self.initialized == False:
-            diode_list = self.electrical_graph.find_diodes()
+            diode_list = self.electrical_model.find_diodes()
         else:
             diode_list = self.diode_list
         
@@ -434,7 +434,7 @@ class ElectricalDaeModel(DaeModel):
         logging.debug(f"Full circuit: state_vars={[str(v) for v in state_vars]}")
         
         # Get all variables from electrical graph
-        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
+        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
         
         # Remove ground node (0) from junction voltage variables
         junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
@@ -546,7 +546,7 @@ class ElectricalDaeModel(DaeModel):
         Returns:
             Tuple[Matrix, Matrix]: (M matrix, q vector) for LCP formulation -v_D = M*i_D + q
         """
-        if not self.electrical_graph.diode_list:
+        if not self.electrical_model.diode_list:
             # No diodes in circuit, return empty matrices
             return Matrix([]), Matrix([])
         
@@ -571,11 +571,11 @@ class ElectricalDaeModel(DaeModel):
         logging.debug(f"LCP: Total equations before solving: {len(equations)}")
         
         # Get diode current variables to exclude from solving
-        diode_current_vars = [diode.current_var for diode in self.electrical_graph.diode_list]
+        diode_current_vars = [diode.current_var for diode in self.electrical_model.diode_list]
         logging.debug(f"LCP: Diode current vars to exclude: {[str(v) for v in diode_current_vars]}")
         
         # Get all variables from electrical graph
-        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
+        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
         
         # Remove ground node (0) from junction voltage variables
         junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
@@ -619,7 +619,7 @@ class ElectricalDaeModel(DaeModel):
         diode_voltage_exprs = [-expr for expr in diode_voltage_exprs]
         
         # Extract M matrix and q vector by collecting coefficients
-        n_diodes = len(self.electrical_graph.diode_list)
+        n_diodes = len(self.electrical_model.diode_list)
         M_matrix = Matrix.zeros(n_diodes, n_diodes)
         q_vector = Matrix.zeros(n_diodes, 1)
         
@@ -781,7 +781,7 @@ class ElectricalDaeModel(DaeModel):
                         equations.append(input_var - input_values[i])
                 
                 # Get all variables except diode currents for blocking diodes and diode voltages for conducting diodes
-                junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_graph.variable_lists()
+                junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
                 junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
                 combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
 

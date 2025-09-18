@@ -56,7 +56,7 @@ class ParserJson(CircuitParser):
         connections = circuit_json["edges"]
         
         self.components_list = self._create_circuit_components(components)
-        self._create_electrical_graph(connections, components)
+        self._create_electrical_model(connections, components)
         self._create_control_graph(components)
         
         return self.graph, self.control_graph
@@ -296,7 +296,7 @@ class ParserJson(CircuitParser):
                     component=comp
                 )
 
-    def _create_electrical_graph(self, connections: list, components: list) -> None:
+    def _create_electrical_model(self, connections: list, components: list) -> None:
         """
         Create an electrical graph from the circuit connections and components.
 

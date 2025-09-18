@@ -2,7 +2,7 @@ import pytest
 import json
 import networkx as nx
 import sympy
-from amps_simulation.core.electrical_graph import ElectricalGraph
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import PowerSwitch
 
@@ -53,44 +53,44 @@ def create_simple_test_circuit():
     return graph
 
 
-def test_electrical_graph_initialization():
-    """Test basic initialization of ElectricalGraph."""
+def test_electrical_model_initialization():
+    """Test basic initialization of ElectricalModel."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
     # Check initial state
-    assert electrical_graph.graph is graph
-    assert electrical_graph.initialized is False
-    assert electrical_graph.incidence_matrix is None
-    assert electrical_graph.junction_voltage_var_list is None
-    assert electrical_graph.component_current_var_list is None
-    assert electrical_graph.component_voltage_var_list is None
-    assert electrical_graph.switch_list is None
+    assert electrical_model.graph is graph
+    assert electrical_model.initialized is False
+    assert electrical_model.incidence_matrix is None
+    assert electrical_model.junction_voltage_var_list is None
+    assert electrical_model.component_current_var_list is None
+    assert electrical_model.component_voltage_var_list is None
+    assert electrical_model.switch_list is None
 
 
-def test_electrical_graph_initialize():
-    """Test initialization method of ElectricalGraph."""
+def test_electrical_model_initialize():
+    """Test initialization method of ElectricalModel."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
     # Initialize
-    electrical_graph.initialize()
+    electrical_model.initialize()
     
     # Check that initialization completed
-    assert electrical_graph.initialized is True
-    assert electrical_graph.incidence_matrix is not None
-    assert electrical_graph.junction_voltage_var_list is not None
-    assert electrical_graph.component_current_var_list is not None
-    assert electrical_graph.component_voltage_var_list is not None
-    assert electrical_graph.switch_list is not None
+    assert electrical_model.initialized is True
+    assert electrical_model.incidence_matrix is not None
+    assert electrical_model.junction_voltage_var_list is not None
+    assert electrical_model.component_current_var_list is not None
+    assert electrical_model.component_voltage_var_list is not None
+    assert electrical_model.switch_list is not None
 
 
 def test_compute_incidence_matrix():
     """Test computation of incidence matrix."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
-    incidence_matrix = electrical_graph.compute_incidence_matrix()
+    incidence_matrix = electrical_model.compute_incidence_matrix()
     
     # Check matrix dimensions (3 nodes including ground, 2 components)
     assert incidence_matrix.shape == (3, 2)
@@ -108,9 +108,9 @@ def test_compute_incidence_matrix():
 def test_variable_lists():
     """Test variable lists computation."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
-    junction_voltage_vars, component_current_vars, component_voltage_vars = electrical_graph.variable_lists()
+    junction_voltage_vars, component_current_vars, component_voltage_vars = electrical_model.variable_lists()
     
     # Check that lists have correct lengths
     assert len(junction_voltage_vars) == 3  # 3 nodes
@@ -126,9 +126,9 @@ def test_variable_lists():
 def test_find_switches_empty():
     """Test finding switches in circuit with no switches."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
-    switches = electrical_graph.find_switches()
+    switches = electrical_model.find_switches()
     
     # Should find no switches
     assert len(switches) == 0
@@ -143,8 +143,8 @@ def test_find_switches_with_switch():
         circuit_json = json.load(f)
     graph, _ = parser.parse(circuit_json)
     
-    electrical_graph = ElectricalGraph(graph)
-    switches = electrical_graph.find_switches()
+    electrical_model = ElectricalModel(graph)
+    switches = electrical_model.find_switches()
     
     # Should find switches
     assert len(switches) > 0
@@ -154,65 +154,65 @@ def test_find_switches_with_switch():
 def test_initialize_sets_all_properties():
     """Test that initialize() properly sets all properties."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
     # Initialize
-    electrical_graph.initialize()
+    electrical_model.initialize()
     
     # Verify all properties are set
-    assert electrical_graph.incidence_matrix is not None
-    assert electrical_graph.junction_voltage_var_list is not None
-    assert electrical_graph.component_current_var_list is not None 
-    assert electrical_graph.component_voltage_var_list is not None
-    assert electrical_graph.switch_list is not None
-    assert electrical_graph.initialized is True
+    assert electrical_model.incidence_matrix is not None
+    assert electrical_model.junction_voltage_var_list is not None
+    assert electrical_model.component_current_var_list is not None 
+    assert electrical_model.component_voltage_var_list is not None
+    assert electrical_model.switch_list is not None
+    assert electrical_model.initialized is True
     
     # Verify properties have expected types
-    assert hasattr(electrical_graph.incidence_matrix, 'shape')  # Matrix-like
-    assert isinstance(electrical_graph.junction_voltage_var_list, list)
-    assert isinstance(electrical_graph.component_current_var_list, list)
-    assert isinstance(electrical_graph.component_voltage_var_list, list)
-    assert isinstance(electrical_graph.switch_list, list)
+    assert hasattr(electrical_model.incidence_matrix, 'shape')  # Matrix-like
+    assert isinstance(electrical_model.junction_voltage_var_list, list)
+    assert isinstance(electrical_model.component_current_var_list, list)
+    assert isinstance(electrical_model.component_voltage_var_list, list)
+    assert isinstance(electrical_model.switch_list, list)
 
 
 def test_multiple_initializations():
     """Test that multiple calls to initialize() don't cause issues."""
     graph = create_simple_test_circuit()
-    electrical_graph = ElectricalGraph(graph)
+    electrical_model = ElectricalModel(graph)
     
     # Initialize multiple times
-    electrical_graph.initialize()
-    first_incidence_matrix = electrical_graph.incidence_matrix
+    electrical_model.initialize()
+    first_incidence_matrix = electrical_model.incidence_matrix
     
-    electrical_graph.initialize()
-    second_incidence_matrix = electrical_graph.incidence_matrix
+    electrical_model.initialize()
+    second_incidence_matrix = electrical_model.incidence_matrix
     
     # Should get consistent results
-    assert electrical_graph.initialized is True
+    assert electrical_model.initialized is True
     # Matrices should be equivalent (though potentially different objects)
     assert first_incidence_matrix.shape == second_incidence_matrix.shape
 
 
-def test_electrical_graph_integration():
-    """Test ElectricalGraph integration with more complex circuit."""
+def test_electrical_model_integration():
+    """Test ElectricalModel integration with more complex circuit."""
     # Load a more complex circuit
     parser = ParserJson()
     with open('test_data/DaeModel_circuit_var_solution.json', 'r') as f:
         circuit_json = json.load(f)
     graph, _ = parser.parse(circuit_json)
     
-    electrical_graph = ElectricalGraph(graph)
-    electrical_graph.initialize()
+    electrical_model = ElectricalModel(graph)
+    electrical_model.initialize()
     
     # Verify initialization worked
-    assert electrical_graph.initialized is True
+    assert electrical_model.initialized is True
     
     # Check dimensions make sense
     n_nodes = len(list(graph.nodes()))
     n_edges = len(list(graph.edges()))
     
-    assert electrical_graph.incidence_matrix.shape[0] == n_nodes
-    assert electrical_graph.incidence_matrix.shape[1] == n_edges
-    assert len(electrical_graph.junction_voltage_var_list) == n_nodes
-    assert len(electrical_graph.component_current_var_list) == n_edges
-    assert len(electrical_graph.component_voltage_var_list) == n_edges
+    assert electrical_model.incidence_matrix.shape[0] == n_nodes
+    assert electrical_model.incidence_matrix.shape[1] == n_edges
+    assert len(electrical_model.junction_voltage_var_list) == n_nodes
+    assert len(electrical_model.component_current_var_list) == n_edges
+    assert len(electrical_model.component_voltage_var_list) == n_edges
