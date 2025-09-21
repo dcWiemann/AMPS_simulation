@@ -70,10 +70,10 @@ class ElectricalDaeSystem(DaeSystem):
         if not self.electrical_model.initialized:
             self.electrical_model.initialize()
         
-        # Find all circuit variables
-        self.state_vars = self.find_state_vars()
-        self.output_vars = self.find_output_vars()
-        self.input_vars = self.find_input_vars()
+        # Get circuit variables from electrical model
+        self.state_vars = self.electrical_model.state_vars
+        self.output_vars = self.electrical_model.output_vars
+        self.input_vars = self.electrical_model.input_vars
         
         # Get graph structure from electrical_model
         self.junction_voltage_var_list = self.electrical_model.junction_voltage_var_list
@@ -262,43 +262,6 @@ class ElectricalDaeSystem(DaeSystem):
             diode.is_on = is_conducting
             logging.debug(f"Set diode {diode.comp_id}: {'CONDUCTING' if is_conducting else 'BLOCKING'}")
 
-    def find_state_vars(self) -> List[Symbol]:
-        """Find the state variables in the graph.
-        
-        Returns:
-            List[Symbol]: List of state variables
-        """
-        state_vars = []
-        for _, _, data in self.graph.edges(data=True):
-            if isinstance(data['component'], Inductor):
-                state_vars.append(data['component'].current_var)
-            elif isinstance(data['component'], Capacitor):
-                state_vars.append(data['component'].voltage_var)
-        return state_vars
-    
-    def find_output_vars(self) -> List[Symbol]:
-        """Find the output variables in the graph.
-        
-        Returns:
-            List[Symbol]: List of output variables
-        """
-        output_vars = []
-        for _, _, data in self.graph.edges(data=True):  # Correctly unpack edge data
-            if isinstance(data['component'], Meter):
-                output_vars.append(data['component'].output_var)
-        return output_vars
-
-    def find_input_vars(self) -> List[Symbol]:
-        """Find the input variables in the graph.
-        
-        Returns:
-            List[Symbol]: List of input variables
-        """
-        input_vars = []
-        for _, _, data in self.graph.edges(data=True):  # Correctly unpack edge data
-            if isinstance(data['component'], Source):
-                input_vars.append(data['component'].input_var)
-        return input_vars
     
     
     def compute_kcl_equations(self) -> List[Symbol]:
@@ -424,11 +387,16 @@ class ElectricalDaeSystem(DaeSystem):
             state_vars = self.state_vars
         else:
             # Compute equations during initialization
-            equations = (self.compute_kcl_equations() + self.compute_kvl_equations() + 
-                        self.compute_static_component_equations() + self.compute_switch_equations() + 
+            equations = (self.compute_kcl_equations() + self.compute_kvl_equations() +
+                        self.compute_static_component_equations() + self.compute_switch_equations() +
                         self.compute_diode_equations())
-            input_vars = self.find_input_vars()
-            state_vars = self.find_state_vars()
+            # If electrical model isn't initialized, compute the variables directly
+            if self.electrical_model.initialized:
+                input_vars = self.electrical_model.input_vars
+                state_vars = self.electrical_model.state_vars
+            else:
+                input_vars = self.electrical_model.find_input_vars()
+                state_vars = self.electrical_model.find_state_vars()
         
         logging.debug(f"Full circuit: input_vars={[str(v) for v in input_vars]}")
         logging.debug(f"Full circuit: state_vars={[str(v) for v in state_vars]}")
@@ -480,17 +448,6 @@ class ElectricalDaeSystem(DaeSystem):
         return derivatives
     
 
-    def find_output_vars(self) -> List[Symbol]:
-        """Find the outputs in the graph.
-        
-        Returns:
-            List[Symbol]: List of outputs
-        """
-        outputs = []
-        for _, _, data in self.graph.edges(data=True):
-            if isinstance(data['component'], Meter):
-                outputs.append(data['component'].output_var)
-        return outputs
     
     def compute_output_equations(self) -> Dict[Symbol, Symbol]:
         """Compute the outputs of the circuit.
@@ -499,7 +456,10 @@ class ElectricalDaeSystem(DaeSystem):
             Dict[Symbol, Symbol]: Dictionary mapping output variables to their expressions
         """
         if self.initialized == False:
-            outputs = self.find_output_vars()
+            if self.electrical_model.initialized:
+                outputs = self.electrical_model.output_vars
+            else:
+                outputs = self.electrical_model.find_output_vars()
         else:
             outputs = self.output_vars
         

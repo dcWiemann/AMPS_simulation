@@ -38,7 +38,12 @@ class ElectricalModel:
         # Component lists
         self.switch_list = None
         self.diode_list = None
-        
+
+        # Circuit variable lists
+        self.state_vars = None
+        self.input_vars = None
+        self.output_vars = None
+
         # Initial state management
         self.initial_state_values = None
         
@@ -60,7 +65,12 @@ class ElectricalModel:
         # Find components
         self.switch_list = self.find_switches()
         self.diode_list = self.find_diodes()
-        
+
+        # Find circuit variables
+        self.state_vars = self.find_state_vars()
+        self.input_vars = self.find_input_vars()
+        self.output_vars = self.find_output_vars()
+
         # Initialize default state values
         self.initial_state_values = self.compute_initial_state_values()
         
@@ -224,3 +234,41 @@ class ElectricalModel:
 
         # Add component as edge between the two nodes
         self.graph.add_edge(node1, node2, component=component)
+
+    def find_state_vars(self) -> List[Symbol]:
+        """Find the state variables in the graph.
+
+        Returns:
+            List[Symbol]: List of state variables
+        """
+        state_vars = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Inductor):
+                state_vars.append(data['component'].current_var)
+            elif isinstance(data['component'], Capacitor):
+                state_vars.append(data['component'].voltage_var)
+        return state_vars
+
+    def find_output_vars(self) -> List[Symbol]:
+        """Find the output variables in the graph.
+
+        Returns:
+            List[Symbol]: List of output variables
+        """
+        output_vars = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Meter):
+                output_vars.append(data['component'].output_var)
+        return output_vars
+
+    def find_input_vars(self) -> List[Symbol]:
+        """Find the input variables in the graph.
+
+        Returns:
+            List[Symbol]: List of input variables
+        """
+        input_vars = []
+        for _, _, data in self.graph.edges(data=True):
+            if isinstance(data['component'], Source):
+                input_vars.append(data['component'].input_var)
+        return input_vars

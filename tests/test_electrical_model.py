@@ -162,9 +162,12 @@ def test_initialize_sets_all_properties():
     # Verify all properties are set
     assert electrical_model.incidence_matrix is not None
     assert electrical_model.junction_voltage_var_list is not None
-    assert electrical_model.component_current_var_list is not None 
+    assert electrical_model.component_current_var_list is not None
     assert electrical_model.component_voltage_var_list is not None
     assert electrical_model.switch_list is not None
+    assert electrical_model.state_vars is not None
+    assert electrical_model.input_vars is not None
+    assert electrical_model.output_vars is not None
     assert electrical_model.initialized is True
     
     # Verify properties have expected types
@@ -173,6 +176,9 @@ def test_initialize_sets_all_properties():
     assert isinstance(electrical_model.component_current_var_list, list)
     assert isinstance(electrical_model.component_voltage_var_list, list)
     assert isinstance(electrical_model.switch_list, list)
+    assert isinstance(electrical_model.state_vars, list)
+    assert isinstance(electrical_model.input_vars, list)
+    assert isinstance(electrical_model.output_vars, list)
 
 
 def test_multiple_initializations():
