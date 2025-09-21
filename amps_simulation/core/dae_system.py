@@ -9,7 +9,7 @@ from sympy import Matrix, Symbol, sympify, solve
 import logging
 import itertools
 
-class DaeModel(ABC):
+class DaeSystem(ABC):
     """Abstract base class for Differential-Algebraic Equation (DAE) models.
     
     This class defines the interface that all DAE models must implement.
@@ -44,10 +44,10 @@ class DaeModel(ABC):
         return self.output_eqs
     
 
-class ElectricalDaeSystem(DaeModel):
+class ElectricalDaeSystem(DaeSystem):
     """DAE model for electrical systems.
     
-    This class extends the DaeModel class to handle electrical systems.
+    This class extends the DaeSystem class to handle electrical systems.
     It includes methods for evaluating the model and updating the state.
 
     Attributes:

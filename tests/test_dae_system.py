@@ -1,5 +1,5 @@
 import pytest
-from amps_simulation.core.dae_system import DaeModel, ElectricalDaeSystem
+from amps_simulation.core.dae_system import DaeSystem, ElectricalDaeSystem
 from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.components import Resistor, ElecJunction, PowerSwitch
@@ -12,11 +12,11 @@ from sympy.abc import t
 import json
 
 
-class SimpleDaeModel(DaeModel):
-    """A simple concrete implementation of DaeModel for testing purposes."""
+class SimpleDaeSystem(DaeSystem):
+    """A simple concrete implementation of DaeSystem for testing purposes."""
     
     def evaluate(self, t: float, states: Dict[str, float], inputs: Dict[str, float]) -> None:
-        """Implement a simple DAE model: dx/dt = -x + u, y = x."""
+        """Implement a simple DAE system: dx/dt = -x + u, y = x."""
         x = states.get('x', 0.0)
         u = inputs.get('u', 0.0)
         
@@ -24,18 +24,18 @@ class SimpleDaeModel(DaeModel):
         self.output_eqs['y'] = x
 
 
-def test_dae_model_initialization():
-    """Test that a DAE model initializes with empty dictionaries."""
-    G = nx.Graph()  # Create an empty graph for the simple model
-    model = SimpleDaeModel(G)
+def test_dae_system_initialization():
+    """Test that a DAE system initializes with empty dictionaries."""
+    G = nx.Graph()  # Create an empty graph for the simple system
+    model = SimpleDaeSystem(G)
     assert model.derivatives == {}
     assert model.output_eqs == {}
 
 
-def test_dae_model_getters():
+def test_dae_system_getters():
     """Test the getter methods for derivatives and outputs."""
-    G = nx.Graph()  # Create an empty graph for the simple model
-    model = SimpleDaeModel(G)
+    G = nx.Graph()  # Create an empty graph for the simple system
+    model = SimpleDaeSystem(G)
     states = {'x': 1.0}
     inputs = {'u': 2.0}
     
