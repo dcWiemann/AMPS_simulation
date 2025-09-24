@@ -488,6 +488,39 @@ class ElectricalDaeSystem(DaeSystem):
         else:
             return self.circuit_eqs, self.derivatives
     
+    def _add_shunt_resistors_to_diodes(self, R_shunt: float) -> ElectricalModel:
+        """Add shunt resistors to all diodes in the electrical model for numerical stability.
+
+        Args:
+            R_shunt: Resistance value of the shunt resistors in ohms
+
+        Returns:
+            ElectricalModel: New electrical model with shunt resistors added in parallel to diodes
+        """
+        # Create a new electrical model with the same graph structure
+        import copy
+        shunt_model = ElectricalModel(copy.deepcopy(self.electrical_model.graph))
+
+        # Collect all edges with diodes first to avoid "dictionary changed size during iteration"
+        diode_edges = []
+        for source_node, target_node, edge_data in shunt_model.graph.edges(data=True):
+            component = edge_data.get('component')
+            if isinstance(component, Diode):
+                diode_edges.append((source_node, target_node, component))
+
+        # Now add shunt resistors for each diode
+        for source_node, target_node, component in diode_edges:
+            # Create a unique resistor ID based on the diode ID
+            resistor_id = f"{component.comp_id}_shunt"
+
+            # Add shunt resistor in parallel to the diode using the same terminals
+            shunt_resistor = Resistor(comp_id=resistor_id, resistance=R_shunt)
+            shunt_model.add_component(shunt_resistor, p=source_node, n=target_node)
+            logging.debug(f"Added shunt resistor {resistor_id} with R={R_shunt}Ω across diode {component.comp_id}")
+
+        return shunt_model
+
+
     def compute_diode_lcp_matrices(self, state_values: np.ndarray, input_values: np.ndarray) -> Tuple[Matrix, Matrix]:
         """Compute Linear Complementarity Problem matrices for diode state detection.
         
