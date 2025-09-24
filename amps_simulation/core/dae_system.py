@@ -12,8 +12,8 @@ import itertools
 class DaeSystem(ABC):
     """Abstract base class for Differential-Algebraic Equation (DAE) models.
     
-    This class defines the interface that all DAE models must implement.
-    A DAE model consists of differential equations (derivatives) and algebraic equations (outputs).
+    This class defines the interface that all DAE systems must implement.
+    A DAE system consists of differential equations (derivatives) and algebraic equations (outputs).
     
     Attributes:
         derivatives (Dict[str, float]): Dictionary mapping state variable names to their derivatives
@@ -21,7 +21,7 @@ class DaeSystem(ABC):
     """
     
     def __init__(self, graph: nx.Graph):
-        """Initialize the DAE model with empty derivatives and outputs dictionaries."""
+        """Initialize the DAE system with empty derivatives and outputs dictionaries."""
         self.graph = graph
         self.derivatives: Dict[str, float] = {}
         self.output_eqs: Dict[Symbol, Symbol] = {}
@@ -45,7 +45,7 @@ class DaeSystem(ABC):
     
 
 class ElectricalDaeSystem(DaeSystem):
-    """DAE model for electrical systems.
+    """DAE system for electrical systems.
     
     This class extends the DaeSystem class to handle electrical systems.
     It includes methods for evaluating the model and updating the state.

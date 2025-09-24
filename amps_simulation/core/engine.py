@@ -60,7 +60,7 @@ class Engine:
             if component is not None:
                 self.components_list.append(component)
         
-        # Create electrical graph and DAE model
+        # Create electrical graph and DAE system
         self.electrical_model = ElectricalModel(self.graph)
         self.electrical_dae_system = ElectricalDaeSystem(self.electrical_model)
         self.electrical_dae_system.initialize(initial_conditions, initial_inputs)
@@ -338,7 +338,7 @@ class Engine:
         
         This method handles switching circuits by:
         1. Generating input function from control orchestrator
-        2. Checking switch combinations and computing DAE models as needed
+        2. Checking switch combinations and computing DAE systems as needed
         3. Creating callable functions for solve_ivp that return dx/dt
         4. Using switchmap to cache models for different switch combinations
         5. Using switch events to interrupt simulation when switches change
@@ -532,7 +532,7 @@ class Engine:
             
             # Cache the result
             switchmap[combined_states] = (A, B, C, D, ode_function)
-            logging.debug(f"Computed new DAE model for states: switches={current_switch_states}, diodes={current_diode_states}")
+            logging.debug(f"Computed new DAE system for states: switches={current_switch_states}, diodes={current_diode_states}")
             
         return ode_function(t, y)
     
@@ -594,7 +594,7 @@ class Engine:
             logging.debug(f"Running sanity checks for switch configuration: {switch_states}")
             self._run_sanity_checks()
         
-        # Get derivatives and output equations from DAE model
+        # Get derivatives and output equations from DAE system
         derivatives = self.electrical_dae_system.derivatives
         output_eqs = self.electrical_dae_system.output_eqs
         
