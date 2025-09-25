@@ -264,49 +264,62 @@ class ElectricalDaeSystem(DaeSystem):
 
     
     
-    def compute_kcl_equations(self) -> List[Symbol]:
+    def compute_kcl_equations(self, electrical_model=None) -> List[Symbol]:
         """Compute Kirchhoff's Current Law equations.
-        
+
+        Args:
+            electrical_model: Optional electrical model to use instead of self.electrical_model
+
         Returns:
             List[Symbol]: List of KCL equations in symbolic form, excluding the ground node equation.
         """
-        if self.initialized == False:
-            _, comp_current_vars, _ = self.electrical_model.variable_lists()
-            incidence_matrix = self.electrical_model.compute_incidence_matrix()
+        # Use provided electrical model or default to self.electrical_model
+        model = electrical_model if electrical_model is not None else self.electrical_model
+
+        if self.initialized == False or electrical_model is not None:
+            _, comp_current_vars, _ = model.variable_lists()
+            incidence_matrix = model.compute_incidence_matrix()
+            graph = model.graph
         else:
             comp_current_vars = self.component_current_var_list
             incidence_matrix = self.incidence_matrix
-        
+            graph = self.graph
+
         # Create current vector and multiply with incidence matrix
         current_vector = Matrix(comp_current_vars)
         kcl_equations = incidence_matrix * current_vector
-        
+
         # Find the ground node index (where voltage_var is None)
         ground_node_idx = None
-        for i, node in enumerate(self.graph.nodes()):
-            if self.graph.nodes[node]['junction'].is_ground:
+        for i, node in enumerate(graph.nodes()):
+            if graph.nodes[node]['junction'].is_ground:
                 ground_node_idx = i
                 break
-        
+
         # Remove the ground node equation if found
         if ground_node_idx is not None:
             kcl_equations = [eq for i, eq in enumerate(kcl_equations) if i != ground_node_idx]
-        
+
         # Convert kcl_eqs to a list if it is a MutableDenseMatrix
         if isinstance(kcl_equations, Matrix):
             kcl_equations = list(kcl_equations)
-        
+
         return kcl_equations
     
-    def compute_kvl_equations(self) -> List[Symbol]:
+    def compute_kvl_equations(self, electrical_model=None) -> List[Symbol]:
         """Compute Kirchhoff's Voltage Law equations.
-        
+
+        Args:
+            electrical_model: Optional electrical model to use. If None, uses self.electrical_model.
+
         Returns:
             List[Symbol]: List of KVL equations in symbolic form.
         """
-        if self.initialized == False:
-            junction_voltage_var_list, _, comp_voltage_vars = self.electrical_model.variable_lists()
-            incidence_matrix = self.electrical_model.compute_incidence_matrix()
+        model = electrical_model if electrical_model is not None else self.electrical_model
+
+        if self.initialized == False or electrical_model is not None:
+            junction_voltage_var_list, _, comp_voltage_vars = model.variable_lists()
+            incidence_matrix = model.compute_incidence_matrix()
         else:
             junction_voltage_var_list = self.junction_voltage_var_list
             comp_voltage_vars = self.component_voltage_var_list
@@ -321,31 +334,42 @@ class ElectricalDaeSystem(DaeSystem):
         
         return kvl_eqs
     
-    def compute_static_component_equations(self) -> List[Symbol]:
+    def compute_static_component_equations(self, electrical_model=None) -> List[Symbol]:
         """Compute the static component equations of the graph.
-        
+
+        Args:
+            electrical_model: Optional electrical model to use. If None, uses self.electrical_model.
+
         Returns:
             List[Symbol]: The static component equations of the graph.
         """
+        model = electrical_model if electrical_model is not None else self.electrical_model
+        graph = model.graph if electrical_model is not None else self.graph
+
         static_eqs = []
-        for _, _, data in self.graph.edges(data=True):
+        for _, _, data in graph.edges(data=True):
             component = data['component']
             if isinstance(component, (Resistor, Meter)):  # Exclude diodes - they are state-dependent
                 static_eqs.append(component.get_comp_eq())
         return static_eqs
     
         
-    def compute_switch_equations(self) -> List[Symbol]:
+    def compute_switch_equations(self, electrical_model=None) -> List[Symbol]:
         """Compute the switch equations of the graph.
-        
+
+        Args:
+            electrical_model: Optional electrical model to use. If None, uses self.electrical_model.
+
         Returns:
             List[Symbol]: The switch equations of the graph.
         """
-        if self.initialized == False:
-            switch_list = self.electrical_model.find_switches()
+        model = electrical_model if electrical_model is not None else self.electrical_model
+
+        if self.initialized == False or electrical_model is not None:
+            switch_list = model.find_switches()
         else:
             switch_list = self.switch_list
-        
+
         switch_eqs = []
         for switch in switch_list:
             switch_eqs.append(switch.get_comp_eq())
@@ -543,18 +567,36 @@ class ElectricalDaeSystem(DaeSystem):
             # No diodes in circuit, return empty matrices
             return Matrix([]), Matrix([])
         
+        # Set up equations of shunt model (diodes + shunt resistors)
+        shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e6)  # 1 Megaohm shunt resistors
+        shunt_model.initialize()
+        shunt_kcl = self.compute_kcl_equations(shunt_model)
+        shunt_kvl = self.compute_kvl_equations(shunt_model)
+        shunt_static = self.compute_static_component_equations(shunt_model)
+        shunt_switch = self.compute_switch_equations()  # Use self.electrical_model for switches
+
         # Get equations EXCEPT diode equations (since we're solving for diode voltages)
-        equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs
-        logging.debug(f"LCP: Base equations count: KCL={len(self.kcl_eqs)}, KVL={len(self.kvl_eqs)}, Static={len(self.static_eqs)}, Switch={len(self.switch_eqs)}")
+        equations = shunt_kcl + shunt_kvl + shunt_static + shunt_switch
+        logging.debug(f"LCP: Shunt model equations count: KCL={len(shunt_kcl)}, KVL={len(shunt_kvl)}, Static={len(shunt_static)}, Switch={len(shunt_switch)}")
+        # equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs
+        # logging.debug(f"LCP: Base equations count: KCL={len(self.kcl_eqs)}, KVL={len(self.kvl_eqs)}, Static={len(self.static_eqs)}, Switch={len(self.switch_eqs)}")
         
         # Add initial condition equations: state_var = state_value, input_var = input_value
+        # Get variables from electrical model (works without DAE initialization)
+        if self.initialized:
+            state_vars = self.state_vars
+            input_vars = self.input_vars
+        else:
+            state_vars = self.electrical_model.state_vars
+            input_vars = self.electrical_model.input_vars
+
         initial_condition_count = 0
-        for i, state_var in enumerate(self.state_vars):
+        for i, state_var in enumerate(state_vars):
             if i < len(state_values):
                 equations.append(state_var - state_values[i])
                 initial_condition_count += 1
                 logging.debug(f"LCP: Added state equation: {state_var} = {state_values[i]}")
-        for i, input_var in enumerate(self.input_vars):
+        for i, input_var in enumerate(input_vars):
             if i < len(input_values):
                 equations.append(input_var - input_values[i])
                 initial_condition_count += 1
@@ -566,9 +608,9 @@ class ElectricalDaeSystem(DaeSystem):
         # Get diode current variables to exclude from solving
         diode_current_vars = [diode.current_var for diode in self.electrical_model.diode_list]
         logging.debug(f"LCP: Diode current vars to exclude: {[str(v) for v in diode_current_vars]}")
-        
-        # Get all variables from electrical graph
-        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
+
+        # Get all variables from shunt model graph (not original electrical model)
+        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = shunt_model.variable_lists()
         
         # Remove ground node (0) from junction voltage variables
         junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
@@ -627,6 +669,8 @@ class ElectricalDaeSystem(DaeSystem):
             constant_term = expr.subs({var: 0 for var in diode_current_vars})
             q_vector[i] = constant_term
         
+        logging.debug(f"LCP: Generated M matrix:\n{M_matrix}")
+        logging.debug(f"LCP: Generated q vector:\n{q_vector}")
         logging.debug(f"LCP: Generated M matrix shape: {M_matrix.shape}")
         logging.debug(f"LCP: Generated q vector shape: {q_vector.shape}")
         
