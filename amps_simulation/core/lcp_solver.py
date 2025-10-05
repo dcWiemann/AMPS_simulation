@@ -169,6 +169,8 @@ class LCPSolver:
         }
         
         if converged:
+            verification = self.verify_solution(M, q, active)
+            info.update(verification)
             self.logger.debug(f"LCP converged in {pivots} pivots")
             self.logger.debug(f"Final active set: {np.sum(active)}/{n} active")
             self.logger.debug(f"Complementarity: {info['complementarity']:.2e}")
@@ -236,6 +238,7 @@ class DiodeLCPSolver(LCPSolver):
     """
     
     def detect_diode_states(self, M: Union[np.ndarray, csr_matrix], q: np.ndarray,
+                           initial_active: Optional[np.ndarray] = None, 
                            diode_names: Optional[list] = None) -> Tuple[list, Dict]:
         """
         Detect diode conducting states using LCP formulation.
@@ -250,7 +253,7 @@ class DiodeLCPSolver(LCPSolver):
             - conducting_states: List of boolean values (True = conducting)
             - info: Solver diagnostics
         """
-        active_set, info = self.solve(M, q)
+        active_set, info = self.solve(M, q, initial_active=initial_active)
         conducting_states = active_set.tolist()
         
         # Enhanced logging for diode context

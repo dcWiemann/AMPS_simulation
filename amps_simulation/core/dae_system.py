@@ -88,6 +88,9 @@ class ElectricalDaeSystem(DaeSystem):
         self.kvl_eqs = self.compute_kvl_equations()
         self.static_eqs = self.compute_static_component_equations()
         self.switch_eqs = self.compute_switch_equations()
+
+        # Attributes for diode mode detection
+        self.shunt_model = None
         
         # Initialize diode modes using iterative approach if we have diodes and initial values
         if self.electrical_model.diode_list and initial_state_values is not None:
@@ -568,7 +571,7 @@ class ElectricalDaeSystem(DaeSystem):
             return Matrix([]), Matrix([])
         
         # Set up equations of shunt model (diodes + shunt resistors)
-        shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e6)  # 1 Megaohm shunt resistors
+        shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e2)  # shunt resistors
         shunt_model.initialize()
         shunt_kcl = self.compute_kcl_equations(shunt_model)
         shunt_kvl = self.compute_kvl_equations(shunt_model)
@@ -678,25 +681,33 @@ class ElectricalDaeSystem(DaeSystem):
     
     def detect_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> List[bool]:
         """Detect the conducting state of all diodes in the circuit.
-        
+
         This is a modular interface that can be replaced with different detection algorithms:
         - LCP solver (current implementation)
         - Iterative methods
         - Heuristic approaches
-        
+
         Args:
             state_values: Current values of state variables
-            input_values: Current values of input variables  
+            input_values: Current values of input variables
             t: Current simulation time
-            
+
         Returns:
             List[bool]: List of diode conducting states (True = conducting, False = blocking)
         """
-        if not self.diode_list:
+        # Get diode list from electrical model (works whether DAE system is initialized or not)
+        diode_list = self.electrical_model.diode_list if self.initialized else self.electrical_model.find_diodes()
+
+        logging.debug(f"Detect diode states: Found {len(diode_list)} diodes")
+        for diode in diode_list:
+            logging.debug(f"  Diode {diode.comp_id}: currently {'conducting' if diode.is_on else 'blocking'}")
+
+        if not diode_list:
+            logging.debug("No diodes found in circuit, returning empty list")
             return []
-        
-        # Use iterative diode state detection approach
-        return self._detect_diode_states_iterative(state_values, input_values)
+
+        # Use iterative or lcp diode state detection approach
+        return self._detect_diode_states_lcp(state_values, input_values)
     
     def _detect_diode_states_lcp(self, state_values: np.ndarray, input_values: np.ndarray) -> List[bool]:
         """Detect diode states using Linear Complementarity Problem formulation.
@@ -719,15 +730,13 @@ class ElectricalDaeSystem(DaeSystem):
             # Get LCP matrices
             M_matrix, q_vector = self.compute_diode_lcp_matrices(state_values, input_values)
             
-            if M_matrix.shape[0] == 0:
-                return []  # No diodes
-            
             # Convert to numpy for numerical solving
             M_np = np.array(M_matrix.tolist(), dtype=float)
             q_np = np.array(q_vector.tolist(), dtype=float).flatten()
             
             # Get diode names for logging
-            diode_names = [diode.comp_id for diode in self.diode_list]
+            diode_list = self.electrical_model.diode_list if self.initialized else self.electrical_model.find_diodes()
+            diode_names = [diode.comp_id for diode in diode_list]
             
             # Use integrated LCP solver for robust solution
             conducting_states, info = self.lcp_solver.detect_diode_states(M_np, q_np, diode_names)
@@ -746,7 +755,8 @@ class ElectricalDaeSystem(DaeSystem):
         except Exception as e:
             logging.warning(f"LCP diode state detection failed: {e}")
             # Fallback: assume all diodes are blocking
-            return [False] * len(self.diode_list)
+            diode_list = self.electrical_model.diode_list if self.initialized else self.electrical_model.find_diodes()
+            return [False] * len(diode_list)
     
     def _detect_diode_states_iterative(self, state_values: np.ndarray, input_values: np.ndarray, max_iterations: int = 100) -> List[bool]:
         """Detect diode states using iterative approach.

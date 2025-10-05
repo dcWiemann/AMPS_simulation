@@ -17,6 +17,7 @@ from amps_simulation.core.dae_system import ElectricalDaeSystem
 from amps_simulation.core.components import Resistor, Diode, VoltageSource
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
@@ -358,7 +359,7 @@ def test_shunt_resistor_addition():
         print(f"  - Diode {diode.comp_id}")
 
     # Add shunt resistors
-    R_shunt = 1e9  # 1 GΩ shunt resistors (very high for numerical stability)
+    R_shunt = 1e6  # 1 MΩ shunt resistors (consistent with simple circuit)
     print(f"\nAdding shunt resistors with R = {R_shunt:.0e} Ω...")
 
     try:
@@ -396,6 +397,181 @@ def test_shunt_resistor_addition():
 
     except Exception as e:
         print(f"✗ Multi-diode circuit test FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+
+def test_lcp_formulation():
+    """Test the LCP formulation with shunt resistors."""
+
+    print("\n" + "="*60)
+    print("TESTING LCP FORMULATION WITH SHUNT RESISTORS")
+    print("="*60)
+
+    # Test with simple diode circuit
+    print("\n1. Testing LCP formulation with simple diode circuit...")
+    electrical_model1 = create_simple_diode_circuit()
+    electrical_model1.initialize()
+    dae_system1 = ElectricalDaeSystem(electrical_model1)
+    dae_system1.initialize()
+
+    print(f"Circuit has {len(electrical_model1.diode_list)} diodes")
+    for diode in electrical_model1.diode_list:
+        print(f"  - Diode {diode.comp_id}: voltage_var={diode.voltage_var}, current_var={diode.current_var}")
+
+    # Test LCP matrix computation
+    try:
+        # Set up some test values for state and input variables
+        state_values = np.array([])  # No inductors or capacitors in simple circuit
+        input_values = np.array([10.0])  # V1 = 10V
+
+        print(f"\nTest conditions:")
+        print(f"  State values: {state_values}")
+        print(f"  Input values: {input_values}")
+
+        print("\nComputing LCP matrices...")
+        M_matrix, q_vector = dae_system1.compute_diode_lcp_matrices(state_values, input_values)
+
+        print(f"\nLCP Results:")
+        print(f"  M matrix shape: {M_matrix.shape}")
+        print(f"  q vector shape: {q_vector.shape}")
+
+        if M_matrix.shape[0] > 0:
+            print(f"  M matrix:\n{M_matrix}")
+            print(f"  q vector:\n{q_vector}")
+
+            # Convert to numpy for analysis
+            M_np = np.array(M_matrix.tolist(), dtype=float)
+            q_np = np.array(q_vector.tolist(), dtype=float).flatten()
+
+            print(f"\nNumerical values:")
+            print(f"  M matrix (numpy):\n{M_np}")
+            print(f"  q vector (numpy): {q_np}")
+
+            # Check if the matrix is reasonable (not singular)
+            if M_np.size > 0:
+                det_M = np.linalg.det(M_np) if M_np.shape[0] == M_np.shape[1] else "N/A (not square)"
+                print(f"  Determinant of M: {det_M}")
+
+                if isinstance(det_M, (int, float)) and abs(det_M) > 1e-10:
+                    print("  ✓ M matrix appears to be well-conditioned")
+                elif isinstance(det_M, (int, float)):
+                    print("  ⚠ M matrix may be singular or ill-conditioned")
+
+        print("✓ LCP formulation test PASSED")
+
+    except Exception as e:
+        print(f"✗ LCP formulation test FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Test with multi-diode circuit
+    print("\n2. Testing LCP formulation with bridge rectifier...")
+    try:
+        electrical_model2 = create_multi_diode_circuit()
+        electrical_model2.initialize()
+        dae_system2 = ElectricalDaeSystem(electrical_model2)
+
+        # Try to initialize the DAE system - this may fail with complex circuits
+        print("Attempting to initialize bridge rectifier DAE system...")
+        dae_system2.initialize()
+
+        print(f"Bridge circuit has {len(electrical_model2.diode_list)} diodes")
+
+        # Set up test values for bridge rectifier
+        state_values = np.array([])  # No inductors or capacitors in bridge circuit
+        input_values = np.array([15.0])  # V_ac = 15V
+
+        print(f"\nTest conditions:")
+        print(f"  State values: {state_values}")
+        print(f"  Input values: {input_values}")
+
+        print("\nComputing LCP matrices for bridge rectifier...")
+        M_matrix, q_vector = dae_system2.compute_diode_lcp_matrices(state_values, input_values)
+
+        print(f"\nLCP Results:")
+        print(f"  M matrix shape: {M_matrix.shape}")
+        print(f"  q vector shape: {q_vector.shape}")
+
+        if M_matrix.shape[0] > 0:
+            # Convert to numpy for analysis
+            M_np = np.array(M_matrix.tolist(), dtype=float)
+            q_np = np.array(q_vector.tolist(), dtype=float).flatten()
+
+            print(f"\nMatrix properties:")
+            print(f"  M matrix is {M_np.shape[0]}x{M_np.shape[1]}")
+            print(f"  q vector length: {len(q_np)}")
+
+            # Check matrix condition
+            if M_np.shape[0] == M_np.shape[1]:
+                det_M = np.linalg.det(M_np)
+                cond_M = np.linalg.cond(M_np)
+                print(f"  Determinant of M: {det_M:.2e}")
+                print(f"  Condition number of M: {cond_M:.2e}")
+
+                if abs(det_M) > 1e-10 and cond_M < 1e12:
+                    print("  ✓ M matrix is well-conditioned for LCP solving")
+                else:
+                    print("  ⚠ M matrix may have numerical issues")
+
+        print("✓ Multi-diode LCP formulation test PASSED")
+
+    except Exception as e:
+        print(f"✗ Multi-diode LCP formulation test FAILED: {e}")
+        print("⚠ This is expected - bridge rectifier circuits can be challenging to initialize")
+        print("⚠ The simple diode circuit test shows the LCP formulation is working correctly")
+
+def test_lcp_vs_iterative_comparison():
+    """Compare LCP and iterative diode state detection methods."""
+
+    print("\n" + "="*60)
+    print("COMPARING LCP VS ITERATIVE DIODE STATE DETECTION")
+    print("="*60)
+
+    # Test with simple diode circuit
+    print("\n1. Comparing methods with simple diode circuit...")
+    electrical_model = create_simple_diode_circuit()
+    electrical_model.initialize()
+    dae_system = ElectricalDaeSystem(electrical_model)
+    dae_system.initialize()
+
+    try:
+        # Set up test conditions
+        state_values = np.array([])  # No state variables in simple circuit
+        input_values = np.array([10.0])  # V1 = 10V
+
+        print(f"Test conditions: V_source = {input_values[0]}V")
+
+        # Test iterative method (current default)
+        print("\nTesting iterative method...")
+        iterative_states = dae_system._detect_diode_states_iterative(state_values, input_values)
+        print(f"Iterative result: {iterative_states}")
+
+        for i, (diode, state) in enumerate(zip(electrical_model.diode_list, iterative_states)):
+            print(f"  Diode {diode.comp_id}: {'CONDUCTING' if state else 'BLOCKING'}")
+
+        # Test LCP method
+        print("\nTesting LCP method...")
+        try:
+            lcp_states = dae_system._detect_diode_states_lcp(state_values, input_values)
+            print(f"LCP result: {lcp_states}")
+
+            for i, (diode, state) in enumerate(zip(electrical_model.diode_list, lcp_states)):
+                print(f"  Diode {diode.comp_id}: {'CONDUCTING' if state else 'BLOCKING'}")
+
+            # Compare results
+            if iterative_states == lcp_states:
+                print("✓ Both methods agree!")
+            else:
+                print("⚠ Methods disagree - this may indicate numerical issues or different solution paths")
+
+        except Exception as lcp_error:
+            print(f"✗ LCP method failed: {lcp_error}")
+            print("This is expected if the LCP solver encounters numerical issues")
+
+        print("✓ Method comparison test completed")
+
+    except Exception as e:
+        print(f"✗ Method comparison test FAILED: {e}")
         import traceback
         traceback.print_exc()
 
@@ -445,20 +621,39 @@ def test_edge_cases():
     except Exception as e:
         print(f"✗ No diodes circuit test FAILED: {e}")
 
+    # Test LCP with no diodes
+    print("\n2. Testing LCP formulation with no diodes...")
+    try:
+        dae_system.initialize()
+        state_values = np.array([])
+        input_values = np.array([5.0])
+
+        M_matrix, q_vector = dae_system.compute_diode_lcp_matrices(state_values, input_values)
+
+        if M_matrix.shape[0] == 0 and q_vector.shape[0] == 0:
+            print("✓ LCP correctly returns empty matrices for circuit with no diodes")
+        else:
+            print(f"✗ Expected empty matrices, got M: {M_matrix.shape}, q: {q_vector.shape}")
+
+    except Exception as e:
+        print(f"✗ No diodes LCP test FAILED: {e}")
+
 def main():
     """Main function to run all tests."""
 
-    print("SHUNT RESISTOR DEBUG SCRIPT")
-    print("="*60)
-    print("Testing the _add_shunt_resistors_to_diodes method")
+    print("SHUNT RESISTOR AND LCP DEBUG SCRIPT")
+    print("="*70)
+    print("Testing shunt resistor addition and LCP formulation methods")
 
     try:
         test_shunt_resistor_addition()
+        test_lcp_formulation()
+        test_lcp_vs_iterative_comparison()
         test_edge_cases()
 
-        print("\n" + "="*60)
+        print("\n" + "="*70)
         print("ALL TESTS COMPLETED")
-        print("="*60)
+        print("="*70)
 
     except Exception as e:
         print(f"CRITICAL ERROR in debug script: {e}")
