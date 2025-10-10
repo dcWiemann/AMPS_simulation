@@ -296,3 +296,182 @@ class LCP:
         info['termination_reason'] = 'success'
 
         return w, z, info
+
+    # --- solution analysis methods ----------------------------------------
+
+    def is_P_matrix(self) -> bool:
+        """
+        Check if M is a P-matrix (all principal minors are positive).
+
+        A P-matrix guarantees unique solution for any q.
+
+        Returns:
+            bool: True if M is a P-matrix, False otherwise
+        """
+        n = self.n
+        M = self.M
+
+        # Check all 2^n - 1 principal minors (excluding empty set)
+        for mask in range(1, 2**n):
+            # Get indices of principal submatrix
+            indices = [i for i in range(n) if mask & (1 << i)]
+
+            # Extract principal submatrix
+            submatrix = M[np.ix_(indices, indices)]
+
+            # Check if determinant is positive
+            det = np.linalg.det(submatrix)
+            if det <= 1e-10:  # Use tolerance for numerical stability
+                return False
+
+        return True
+
+    def is_Q_matrix(self) -> bool:
+        """
+        Check if M is a Q-matrix (sufficient condition using principal minors).
+
+        A Q-matrix guarantees existence of solution for any q.
+        This implementation checks if all principal minors are non-negative,
+        which is a sufficient (but not necessary) condition.
+
+        Returns:
+            bool: True if sufficient Q-matrix conditions are met, False otherwise
+        """
+        n = self.n
+        M = self.M
+
+        # Check if all principal minors are non-negative
+        for mask in range(1, 2**n):
+            indices = [i for i in range(n) if mask & (1 << i)]
+            submatrix = M[np.ix_(indices, indices)]
+            det = np.linalg.det(submatrix)
+            if det < -1e-10:
+                return False
+
+        return True
+
+    def check_solution_uniqueness(self, verbose: bool = False) -> dict:
+        """
+        Check existence and uniqueness of LCP solution by:
+        1. Checking if M is a P-matrix (guarantees uniqueness)
+        2. Checking if M is a Q-matrix (guarantees existence)
+        3. Enumerating all 2^n complementary solutions
+
+        Args:
+            verbose: If True, print detailed information
+
+        Returns:
+            dict with keys:
+                'is_P_matrix': bool - M is a P-matrix (unique solution guaranteed)
+                'is_Q_matrix': bool - M is a Q-matrix (solution exists)
+                'num_solutions': int - number of valid complementary solutions found
+                'solutions': list of (w, z) tuples - all valid solutions
+                'is_unique': bool - True if exactly one solution exists
+        """
+        n = self.n
+        M = self.M
+        q = self.q
+
+        # Check matrix properties
+        is_P = self.is_P_matrix()
+        is_Q = self.is_Q_matrix()
+
+        if verbose:
+            print(f"Matrix analysis:")
+            print(f"  P-matrix (unique solution): {is_P}")
+            print(f"  Q-matrix (solution exists): {is_Q}")
+            print()
+
+        # Find all complementary solutions by checking all 2^n combinations
+        solutions = []
+
+        for mask in range(2**n):
+            # For each index i, if bit i is set, z_i is active (w_i = 0)
+            # Otherwise w_i is active (z_i = 0)
+            active_z = np.array([(mask & (1 << i)) != 0 for i in range(n)])
+
+            # Set up system: for active z_i, we have w_i = 0
+            # for inactive z_i, we have z_i = 0
+            # This gives us: w_active + M[:, inactive] * z_inactive = q
+            # where w_active are the w_i with z_i = 0
+
+            # Build the system
+            z_indices = [i for i in range(n) if active_z[i]]
+            w_indices = [i for i in range(n) if not active_z[i]]
+
+            if len(z_indices) == 0:
+                # All w active, all z = 0
+                w_sol = q.copy()
+                z_sol = np.zeros(n)
+            elif len(w_indices) == 0:
+                # All z active, all w = 0
+                # Solve M @ z = -q
+                try:
+                    z_sol = np.linalg.solve(M, -q)
+                    w_sol = np.zeros(n)
+                except np.linalg.LinAlgError:
+                    continue
+            else:
+                # Mixed case: solve for active z variables
+                # For rows where w_i = 0 (z_i active): M[i,:] @ z = -q[i]
+                # For rows where z_i = 0 (w_i active): already handled since z_i = 0
+                # We need to use rows corresponding to active z (where w = 0)
+                A = M[np.ix_(z_indices, z_indices)]
+                b = -q[z_indices]
+
+                try:
+                    z_active = np.linalg.solve(A, b)
+                except np.linalg.LinAlgError:
+                    continue
+
+                # Construct full solution
+                z_sol = np.zeros(n)
+                z_sol[z_indices] = z_active
+                w_sol = M @ z_sol + q
+
+            # Check if solution is valid (w >= 0, z >= 0, w*z = 0)
+            if (np.all(w_sol >= -self.tol) and
+                np.all(z_sol >= -self.tol) and
+                np.allclose(w_sol * z_sol, 0, atol=1e-10)):
+
+                # Verify w = M @ z + q
+                residual = w_sol - (M @ z_sol + q)
+                if np.max(np.abs(residual)) < 1e-10:
+                    # Clean up numerical noise
+                    w_sol[np.abs(w_sol) < self.tol] = 0.0
+                    z_sol[np.abs(z_sol) < self.tol] = 0.0
+                    solutions.append((w_sol.copy(), z_sol.copy()))
+
+                    if verbose:
+                        active_str = ''.join(['1' if active_z[i] else '0' for i in range(n)])
+                        print(f"Solution {len(solutions)}: active_z = {active_str}")
+                        print(f"  w = {w_sol}")
+                        print(f"  z = {z_sol}")
+                        print(f"  complementarity = {np.dot(w_sol, z_sol):.2e}")
+                        print()
+
+        # Remove duplicate solutions (can happen due to numerical tolerance)
+        unique_solutions = []
+        for w, z in solutions:
+            is_duplicate = False
+            for w_prev, z_prev in unique_solutions:
+                if np.allclose(w, w_prev, atol=1e-8) and np.allclose(z, z_prev, atol=1e-8):
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                unique_solutions.append((w, z))
+
+        result = {
+            'is_P_matrix': is_P,
+            'is_Q_matrix': is_Q,
+            'num_solutions': len(unique_solutions),
+            'solutions': unique_solutions,
+            'is_unique': len(unique_solutions) == 1
+        }
+
+        if verbose:
+            print(f"Summary:")
+            print(f"  Total complementary solutions found: {len(unique_solutions)}")
+            print(f"  Solution is unique: {result['is_unique']}")
+
+        return result
