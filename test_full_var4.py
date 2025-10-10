@@ -7,6 +7,7 @@ import json
 import logging
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.components import Component
 
 # Configure logging to see debug info
@@ -34,10 +35,11 @@ def test_full_var0():
     except Exception as e:
         print(f"[-] Parsing failed: {e}")
         return False
-    
-    # Create engine
+
+    # Create electrical model and engine
     try:
-        engine = Engine(graph, control_graph)
+        electrical_model = ElectricalModel(graph)
+        engine = Engine(electrical_model, control_graph)
         print("[+] Engine creation successful")
     except Exception as e:
         print(f"[-] Engine creation failed: {e}")

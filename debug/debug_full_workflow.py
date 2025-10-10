@@ -29,6 +29,7 @@ sys.path.insert(0, str(project_root))
 
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.components import Component
 from amps_simulation.core.circuit_sanity_checker import CircuitSanityChecker
 
@@ -149,9 +150,10 @@ class SimulationDebugger:
         """Initialize simulation engine with error handling."""
         start_time = time.time()
         logging.info("Initializing simulation engine...")
-        
+
         try:
-            engine = Engine(graph, control_graph)
+            electrical_model = ElectricalModel(graph)
+            engine = Engine(electrical_model, control_graph)
             engine.initialize()
             
             self.timing_data['initialize_engine'] = time.time() - start_time

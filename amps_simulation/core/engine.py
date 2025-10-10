@@ -13,20 +13,21 @@ from .circuit_sanity_checker import CircuitSanityChecker
 
 class Engine:
     """
-    Class for handling circuit simulation using a NetworkX graph structure.
-    
-    This class takes a NetworkX graph and handles the simulation of the circuit.
+    Class for handling circuit simulation using an ElectricalModel.
+
+    This class takes an ElectricalModel and handles the simulation of the circuit.
     """
     
-    def __init__(self, graph: nx.MultiDiGraph, control_graph: ControlGraph = None):
+    def __init__(self, electrical_model: ElectricalModel, control_graph: ControlGraph = None):
         """
         Initialize the Engine class.
-        
+
         Args:
-            graph: NetworkX MultiDiGraph representing the circuit
+            electrical_model: ElectricalModel representing the circuit
             control_graph: ControlGraph representing the control layer
         """
-        self.graph = graph
+        self.electrical_model = electrical_model
+        self.graph = electrical_model.graph  # Keep reference to graph for compatibility
         self.control_graph = control_graph or ControlGraph()
         self.control_orchestrator = ControlOrchestrator(self.control_graph)
         
@@ -59,9 +60,8 @@ class Engine:
             component = edge_data.get('component')
             if component is not None:
                 self.components_list.append(component)
-        
-        # Create electrical graph and DAE system
-        self.electrical_model = ElectricalModel(self.graph)
+
+        # Create DAE system from electrical model
         self.electrical_dae_system = ElectricalDaeSystem(self.electrical_model)
         self.electrical_dae_system.initialize(initial_conditions, initial_inputs)
 

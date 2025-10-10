@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.components import Component
 import logging
 
@@ -31,9 +32,10 @@ def test_rlc_simulation():
     circuit_data = load_test_circuit("test_rlc.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     print(f"State variables: {engine.state_vars}")

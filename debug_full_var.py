@@ -7,6 +7,7 @@ import json
 import logging
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.components import Component
 
 # Configure detailed logging
@@ -56,9 +57,10 @@ def debug_full_var1():
         if component:
             print(f"  {i}: {source} -> {target}: {component.comp_id} ({type(component).__name__})")
     
-    # Try to create engine
+    # Try to create electrical model and engine
     try:
-        engine = Engine(graph, control_graph)
+        electrical_model = ElectricalModel(graph)
+        engine = Engine(electrical_model, control_graph)
         print(f"\n5. ENGINE CREATION SUCCESS")
     except Exception as e:
         print(f"\n5. ENGINE CREATION FAILED: {e}")

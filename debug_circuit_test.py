@@ -7,6 +7,7 @@ import json
 import numpy as np
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.components import Component
 
 def test_circuit(filename):
@@ -24,9 +25,10 @@ def test_circuit(filename):
         # Parse circuit
         parser = ParserJson()
         graph, control_graph = parser.parse(circuit_data)
-        
-        # Create and initialize engine
-        engine = Engine(graph, control_graph)
+
+        # Create electrical model and initialize engine
+        electrical_model = ElectricalModel(graph)
+        engine = Engine(electrical_model, control_graph)
         engine.initialize()
         
         print(f"State vars: {engine.state_vars}")

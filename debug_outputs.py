@@ -7,6 +7,7 @@ import json
 import numpy as np
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
+from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.components import Component
 
 # Clear registry
@@ -19,7 +20,8 @@ with open("test_data/full_var0.json", 'r') as f:
 parser = ParserJson()
 graph, control_graph = parser.parse(circuit_data)
 
-engine = Engine(graph, control_graph)
+electrical_model = ElectricalModel(graph)
+engine = Engine(electrical_model, control_graph)
 engine.initialize()
 
 t_span = (0.0, 5.0)

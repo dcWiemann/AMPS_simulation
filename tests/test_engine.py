@@ -24,9 +24,10 @@ def test_initialize_rlc():
     circuit_data = load_test_circuit("test_rlc.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Test components list
@@ -53,9 +54,10 @@ def test_initialize_resistive():
     circuit_data = load_test_circuit("engine_resistive.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Test components list
@@ -78,9 +80,10 @@ def test_run_simulation_basic():
     circuit_data = load_test_circuit("test_rc.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Run simulation
@@ -109,9 +112,10 @@ def test_run_simulation_with_switch():
     circuit_data = load_test_circuit("engine_switch_meters.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Run simulation that spans the switch event
@@ -140,9 +144,10 @@ def test_run_simulation_with_outputs():
     circuit_data = load_test_circuit("engine_switch_meters.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
+
     Component.clear_registry()
-    engine = Engine(graph, control_graph)
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Run simulation
@@ -161,10 +166,11 @@ def test_run_simulation_no_states():
     circuit_data = load_test_circuit("engine_nostates.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
+
     Component.clear_registry()
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Verify this is indeed a no-states circuit
@@ -202,10 +208,11 @@ def test_switch_events():
     circuit_data = load_test_circuit("engine_switch_meters.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
+
     Component.clear_registry()
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Test that switch events were created
@@ -245,9 +252,10 @@ def test_compute_state_space_model():
     circuit_data = load_test_circuit("test_rlc.json")
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
-    
-    # Create engine instance and initialize
-    engine = Engine(graph, control_graph)
+
+    # Create electrical model and engine instance
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
     
     # Create model and get equations
@@ -303,8 +311,9 @@ def test_engine_control_orchestrator_integration():
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
 
-    # Create engine with control graph
-    engine = Engine(graph, control_graph)
+    # Create electrical model and engine with control graph
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
 
     # Verify ControlOrchestrator was created
@@ -340,8 +349,9 @@ def test_engine_no_control_sources():
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
 
-    # Create engine with empty control graph
-    engine = Engine(graph, control_graph)
+    # Create electrical model and engine with empty control graph
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
 
     # Should still have ControlOrchestrator
@@ -374,7 +384,8 @@ def test_engine_multiple_source_control():
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
 
-    engine = Engine(graph, control_graph)
+    electrical_model = ElectricalModel(graph)
+    engine = Engine(electrical_model, control_graph)
     engine.initialize()
 
     # Should have control input function for multiple sources
