@@ -4,7 +4,7 @@ import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
 from amps_simulation.core.electrical_model import ElectricalModel
-from amps_simulation.core.lcp_solver import DiodeLCPSolver
+from amps_simulation.core.lcp import LCP
 from sympy import Matrix, Symbol, sympify, solve
 import logging
 import itertools
@@ -61,9 +61,6 @@ class ElectricalDaeSystem(DaeSystem):
         super().__init__(electrical_model.graph)
         self.electrical_model = electrical_model
         self.initialized = False
-        
-        # Initialize LCP solver for diode state detection
-        self.lcp_solver = DiodeLCPSolver(tolerance=1e-10)
 
     def initialize(self, initial_state_values=None, initial_input_values=None):
         # Initialize the electrical graph first
@@ -89,8 +86,12 @@ class ElectricalDaeSystem(DaeSystem):
         self.static_eqs = self.compute_static_component_equations()
         self.switch_eqs = self.compute_switch_equations()
 
-        # Attributes for diode mode detection
+        # Attributes for diode mode detection (cached to avoid recomputation)
         self.shunt_model = None
+        self.shunt_kcl = None
+        self.shunt_kvl = None
+        self.shunt_static = None
+        self.shunt_vars_to_solve = None
         
         # Initialize diode modes using iterative approach if we have diodes and initial values
         if self.electrical_model.diode_list and initial_state_values is not None:
@@ -231,39 +232,64 @@ class ElectricalDaeSystem(DaeSystem):
 
     def _solve_lcp(self, M: np.ndarray, q: np.ndarray) -> List[bool]:
         """Solve LCP and return diode modes in ElectricalModel.diode_list order.
-        
+
         Args:
             M: LCP matrix
             q: LCP vector
-            
+
         Returns:
             List of diode conducting states (True = conducting) in consistent order
         """
         # Get diode names in ElectricalModel order for logging
         diode_names = [diode.comp_id for diode in self.electrical_model.diode_list]
-        
-        # Solve LCP
-        conducting_states, info = self.lcp_solver.detect_diode_states(M, q, diode_names)
-        
+
+        # Solve LCP using new LCP class
+        lcp = LCP(M, q)
+        w, z, info = lcp.solve()
+
+        # Interpret solution: z represents diode currents
+        # If z[i] > tolerance, diode i is conducting
+        current_tol = 1e-10
+        conducting_states = [z_i > current_tol for z_i in z]
+
+        # Log results
         logging.debug(f"LCP solver: converged={info['converged']}, pivots={info['pivots']}")
         if info['converged']:
             logging.debug(f"LCP complementarity: {info['complementarity']:.2e}")
-        
+
+        for diode_name, is_conducting, z_val, w_val in zip(diode_names, conducting_states, z, w):
+            state_str = "CONDUCTING" if is_conducting else "BLOCKING"
+            logging.debug(f"  {diode_name}: {state_str} (i_D={z_val:.6e}, -v_D={w_val:.6e})")
+
         return conducting_states
 
     def _initialize_diode_modes(self, conducting_states: List[bool]) -> None:
         """Update diode component modes based on LCP solution.
-        
+
         Args:
             conducting_states: List of diode conducting states in ElectricalModel.diode_list order
         """
         if len(conducting_states) != len(self.electrical_model.diode_list):
             raise ValueError(f"Conducting states length {len(conducting_states)} != diode count {len(self.electrical_model.diode_list)}")
-        
+
         # Update diode modes in order
         for diode, is_conducting in zip(self.electrical_model.diode_list, conducting_states):
             diode.is_on = is_conducting
             logging.debug(f"Set diode {diode.comp_id}: {'CONDUCTING' if is_conducting else 'BLOCKING'}")
+
+    def _clear_shunt_model_cache(self) -> None:
+        """Clear cached shunt model and equations.
+
+        Call this method if circuit topology changes (e.g., components added/removed).
+        Note: Switch state changes do NOT require clearing the cache since switch
+        equations are computed dynamically.
+        """
+        logging.debug("Clearing shunt model cache")
+        self.shunt_model = None
+        self.shunt_kcl = None
+        self.shunt_kvl = None
+        self.shunt_static = None
+        self.shunt_vars_to_solve = None
 
     
     
@@ -550,40 +576,63 @@ class ElectricalDaeSystem(DaeSystem):
 
     def compute_diode_lcp_matrices(self, state_values: np.ndarray, input_values: np.ndarray) -> Tuple[Matrix, Matrix]:
         """Compute Linear Complementarity Problem matrices for diode state detection.
-        
+
         Formulates the diode problem as: -v_D = M*i_D + q
         where -v_D is the vector of negative diode voltages, i_D is the vector of diode currents,
         M is the diode impedance matrix, and q is the offset vector.
-        
+
         LCP constraints: -v_D ≥ 0, i_D ≥ 0, (-v_D)·i_D = 0
         - Blocking: -v_D > 0 (i.e., v_D < 0, reverse bias), i_D = 0
         - Conducting: -v_D = 0 (i.e., v_D = 0, forward bias), i_D > 0
-        
+
         Args:
             state_values: Current values of state variables (inductor currents, capacitor voltages)
             input_values: Current values of input variables (source values)
-            
+
         Returns:
             Tuple[Matrix, Matrix]: (M matrix, q vector) for LCP formulation -v_D = M*i_D + q
         """
         if not self.electrical_model.diode_list:
             # No diodes in circuit, return empty matrices
             return Matrix([]), Matrix([])
-        
-        # Set up equations of shunt model (diodes + shunt resistors)
-        shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e2)  # shunt resistors
-        shunt_model.initialize()
-        shunt_kcl = self.compute_kcl_equations(shunt_model)
-        shunt_kvl = self.compute_kvl_equations(shunt_model)
-        shunt_static = self.compute_static_component_equations(shunt_model)
+
+        # Build or reuse cached shunt model and equations (topology-dependent, computed once)
+        if self.shunt_model is None:
+            logging.debug("LCP: Building shunt model and equations (first call)")
+            # Set up equations of shunt model (diodes + shunt resistors)
+            self.shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e2)
+            self.shunt_model.initialize()
+            self.shunt_kcl = self.compute_kcl_equations(self.shunt_model)
+            self.shunt_kvl = self.compute_kvl_equations(self.shunt_model)
+            self.shunt_static = self.compute_static_component_equations(self.shunt_model)
+
+            # Get diode current variables to exclude from solving
+            diode_current_vars = [diode.current_var for diode in self.electrical_model.diode_list]
+
+            # Get all variables from shunt model graph (not original electrical model)
+            junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.shunt_model.variable_lists()
+
+            # Remove ground node (0) from junction voltage variables
+            junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
+
+            # Combine all variables
+            combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
+
+            # Remove excluded variables (only diode_current_vars)
+            excluded = set(diode_current_vars)
+            self.shunt_vars_to_solve = [var for var in combined_vars if var not in excluded]
+
+            logging.debug(f"LCP: Cached shunt model equations: KCL={len(self.shunt_kcl)}, KVL={len(self.shunt_kvl)}, Static={len(self.shunt_static)}")
+            logging.debug(f"LCP: Cached {len(self.shunt_vars_to_solve)} variables to solve")
+        else:
+            logging.debug("LCP: Reusing cached shunt model and equations")
+
+        # Get switch equations (may change during simulation, so not cached)
         shunt_switch = self.compute_switch_equations()  # Use self.electrical_model for switches
 
-        # Get equations EXCEPT diode equations (since we're solving for diode voltages)
-        equations = shunt_kcl + shunt_kvl + shunt_static + shunt_switch
-        logging.debug(f"LCP: Shunt model equations count: KCL={len(shunt_kcl)}, KVL={len(shunt_kvl)}, Static={len(shunt_static)}, Switch={len(shunt_switch)}")
-        # equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs
-        # logging.debug(f"LCP: Base equations count: KCL={len(self.kcl_eqs)}, KVL={len(self.kvl_eqs)}, Static={len(self.static_eqs)}, Switch={len(self.switch_eqs)}")
-        
+        # Build equations from cached components
+        equations = self.shunt_kcl + self.shunt_kvl + self.shunt_static + shunt_switch
+
         # Add initial condition equations: state_var = state_value, input_var = input_value
         # Get variables from electrical model (works without DAE initialization)
         if self.initialized:
@@ -604,30 +653,17 @@ class ElectricalDaeSystem(DaeSystem):
                 equations.append(input_var - input_values[i])
                 initial_condition_count += 1
                 logging.debug(f"LCP: Added input equation: {input_var} = {input_values[i]}")
-        
+
         logging.debug(f"LCP: Added {initial_condition_count} initial condition equations")
         logging.debug(f"LCP: Total equations before solving: {len(equations)}")
-        
+
         # Get diode current variables to exclude from solving
         diode_current_vars = [diode.current_var for diode in self.electrical_model.diode_list]
         logging.debug(f"LCP: Diode current vars to exclude: {[str(v) for v in diode_current_vars]}")
 
-        # Get all variables from shunt model graph (not original electrical model)
-        junction_voltage_var_list, component_current_var_list, component_voltage_var_list = shunt_model.variable_lists()
-        
-        # Remove ground node (0) from junction voltage variables
-        junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
-        
-        logging.debug(f"LCP: Variable counts: Junction={len(junction_voltage_var_list_cleaned)}, Current={len(component_current_var_list)}, Voltage={len(component_voltage_var_list)}")
-        
-        # Combine all variables
-        combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
-        logging.debug(f"LCP: Total combined variables: {len(combined_vars)}")
-        
-        # Remove excluded variables (only diode_current_vars)
-        excluded = set(diode_current_vars)
-        vars_to_solve = [var for var in combined_vars if var not in excluded]
-        logging.debug(f"LCP: Variables to solve: {len(vars_to_solve)} (excluded {len(excluded)} diode currents)")
+        # Use cached vars_to_solve
+        vars_to_solve = self.shunt_vars_to_solve
+        logging.debug(f"LCP: Variables to solve: {len(vars_to_solve)} (excluded {len(diode_current_vars)} diode currents)")
         
         # Solve circuit without diodes using generic solver
         print("\n" + "="*80)
@@ -711,47 +747,57 @@ class ElectricalDaeSystem(DaeSystem):
     
     def _detect_diode_states_lcp(self, state_values: np.ndarray, input_values: np.ndarray) -> List[bool]:
         """Detect diode states using Linear Complementarity Problem formulation.
-        
+
         Solves the LCP: -v_D = M*i_D + q with complementarity constraints:
         - -v_D >= 0, i_D >= 0, (-v_D) * i_D = 0
         - If -v_D > 0: diode is reverse-biased (blocking), i_D = 0
         - If i_D > 0: diode is forward-biased (conducting), -v_D = 0
-        
-        Uses the integrated LCP solver for robust solution.
-        
+
+        Uses the new LCP solver class for robust solution.
+
         Args:
             state_values: Current values of state variables
             input_values: Current values of input variables
-            
+
         Returns:
             List[bool]: List of diode conducting states
         """
         try:
             # Get LCP matrices
             M_matrix, q_vector = self.compute_diode_lcp_matrices(state_values, input_values)
-            
+
             # Convert to numpy for numerical solving
             M_np = np.array(M_matrix.tolist(), dtype=float)
             q_np = np.array(q_vector.tolist(), dtype=float).flatten()
-            
+
             # Get diode names for logging
             diode_list = self.electrical_model.diode_list if self.initialized else self.electrical_model.find_diodes()
             diode_names = [diode.comp_id for diode in diode_list]
-            
-            # Use integrated LCP solver for robust solution
-            conducting_states, info = self.lcp_solver.detect_diode_states(M_np, q_np, diode_names)
-            
+
+            # Use new LCP class to solve
+            lcp = LCP(M_np, q_np)
+            w, z, info = lcp.solve()
+
+            # Interpret solution: z represents diode currents
+            # If z[i] > tolerance, diode i is conducting
+            current_tol = 1e-10
+            conducting_states = [z_i > current_tol for z_i in z]
+
             # Log solver results
             if info["converged"]:
                 logging.debug(f"LCP solver converged in {info['pivots']} pivots")
                 logging.debug(f"Complementarity: {info['complementarity']:.2e}")
+
+                # Log individual diode states
+                for diode_name, is_conducting, z_val, w_val in zip(diode_names, conducting_states, z, w):
+                    state_str = "CONDUCTING" if is_conducting else "BLOCKING"
+                    logging.debug(f"  {diode_name}: {state_str} (i_D={z_val:.6e}, -v_D={w_val:.6e})")
             else:
                 logging.warning(f"LCP solver did not converge after {info['pivots']} pivots")
-                if info['last_violation']:
-                    logging.warning(f"Last violation: {info['last_violation']}")
-            
+                logging.warning(f"Termination reason: {info.get('termination_reason', 'unknown')}")
+
             return conducting_states
-            
+
         except Exception as e:
             logging.warning(f"LCP diode state detection failed: {e}")
             # Fallback: assume all diodes are blocking
