@@ -93,20 +93,20 @@ class ElectricalDaeSystem(DaeSystem):
         self.shunt_static = None
         self.shunt_vars_to_solve = None
         
-        # Initialize diode modes using iterative approach if we have diodes and initial values
-        if self.electrical_model.diode_list and initial_state_values is not None:
-            # Use the iterative diode state detection approach
-            conducting_states = self.detect_diode_states(
-                initial_state_values, 
-                initial_input_values or np.zeros(len(self.input_vars))
-            )
-            self._initialize_diode_modes(conducting_states)
+        # Initialize diode modes if we have diodes
+        # if self.electrical_model.diode_list:
+        #     # Default to zero state values if not provided
+        #     state_vals = initial_state_values if initial_state_values is not None else np.zeros(len(self.state_vars))
+        #     input_vals = initial_input_values if initial_input_values is not None else np.zeros(len(self.input_vars))
+
+        #     conducting_states = self.detect_diode_states(state_vals, input_vals)
+        #     self._initialize_diode_modes(conducting_states)
         
-        # Compute diode equations with proper modes
-        self.diode_eqs = self.compute_diode_equations()
-        self.circuit_eqs = self.compute_circuit_equations()
-        self.derivatives = self.compute_derivatives()
-        self.output_eqs = self.compute_output_equations()
+        # # Compute diode equations with proper modes
+        # self.diode_eqs = self.compute_diode_equations()
+        # self.circuit_eqs = self.compute_circuit_equations()
+        # self.derivatives = self.compute_derivatives()
+        # self.output_eqs = self.compute_output_equations()
         self.initialized = True
     
     def _solve_circuit_equations(self, equations: List, vars_to_solve: List) -> Dict:
@@ -157,25 +157,34 @@ class ElectricalDaeSystem(DaeSystem):
 
     def _solve_circuit_equations_safe(self, equations: List, vars_to_solve: List) -> Dict:
         """Safe circuit equation solver that handles cases where sympy.solve() returns empty list.
-        
+
         Args:
             equations: List of equations to solve
             vars_to_solve: List of variables to solve for
-            
+
         Returns:
             Dictionary mapping variables to their symbolic expressions, or None if no solution exists
         """
         logging.debug(f"Safe circuit solver: {len(equations)} equations, {len(vars_to_solve)} variables")
-        
+
         # Check equation/variable balance
         if len(equations) != len(vars_to_solve):
             logging.debug(f"Equation/variable mismatch: {len(equations)} equations, {len(vars_to_solve)} variables")
             return None
-        
+
+        # Log equations for debugging
+        logging.debug("Safe solver equations:")
+        for i, eq in enumerate(equations):
+            logging.debug(f"  [{i}] {eq}")
+
+        logging.debug("Safe solver variables to solve:")
+        for i, var in enumerate(vars_to_solve):
+            logging.debug(f"  [{i}] {var}")
+
         try:
             # Solve the equations
             solution = solve(equations, vars_to_solve)
-            
+
             # Handle different return types from sympy.solve()
             if isinstance(solution, dict):
                 # Normal case: solution is a dictionary
@@ -184,6 +193,11 @@ class ElectricalDaeSystem(DaeSystem):
                     return solution
                 else:
                     logging.debug(f"Safe solver: Incomplete solution - {len(solution)} solutions for {len(vars_to_solve)} variables")
+                    # Log which variables have solutions and which don't
+                    solved_vars = set(solution.keys())
+                    unsolved_vars = [var for var in vars_to_solve if var not in solved_vars]
+                    logging.debug(f"Safe solver: Variables WITH solutions: {[str(v) for v in solved_vars]}")
+                    logging.debug(f"Safe solver: Variables WITHOUT solutions: {[str(v) for v in unsolved_vars]}")
                     return None
             elif isinstance(solution, list):
                 # sympy returned a list (usually empty when no solution exists)
@@ -206,6 +220,7 @@ class ElectricalDaeSystem(DaeSystem):
             return None
 
     def _extract_diode_voltage_expressions(self, solution: Dict) -> List:
+        ### Todo: remove redundancy
         """Extract diode voltage expressions in ElectricalModel.diode_list order.
         
         Args:
@@ -562,14 +577,19 @@ class ElectricalDaeSystem(DaeSystem):
                 diode_edges.append((source_node, target_node, component))
 
         # Now add shunt resistors for each diode
+        i = 0
         for source_node, target_node, component in diode_edges:
             # Create a unique resistor ID based on the diode ID
             resistor_id = f"{component.comp_id}_shunt"
-
+            
+            ### Todo: test: variable shunt resistance for numerical stability? -> doesn't seem to help
+            # R_shunt_insert = R_shunt + i*R_shunt
+            # i += 1
+            R_shunt_insert = R_shunt
             # Add shunt resistor in parallel to the diode using the same terminals
-            shunt_resistor = Resistor(comp_id=resistor_id, resistance=R_shunt)
+            shunt_resistor = Resistor(comp_id=resistor_id, resistance=R_shunt_insert)
             shunt_model.add_component(shunt_resistor, p=source_node, n=target_node)
-            logging.debug(f"Added shunt resistor {resistor_id} with R={R_shunt}Ω across diode {component.comp_id}")
+            logging.debug(f"Added shunt resistor {resistor_id} with R={R_shunt_insert}Ω across diode {component.comp_id}")
 
         return shunt_model
 
@@ -600,7 +620,7 @@ class ElectricalDaeSystem(DaeSystem):
         if self.shunt_model is None:
             logging.debug("LCP: Building shunt model and equations (first call)")
             # Set up equations of shunt model (diodes + shunt resistors)
-            self.shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e2)
+            self.shunt_model = self._add_shunt_resistors_to_diodes(R_shunt=1e5)
             self.shunt_model.initialize()
             self.shunt_kcl = self.compute_kcl_equations(self.shunt_model)
             self.shunt_kvl = self.compute_kvl_equations(self.shunt_model)
@@ -687,25 +707,49 @@ class ElectricalDaeSystem(DaeSystem):
         print("="*80)
         
         # Extract diode voltage expressions in correct order
-        diode_voltage_exprs = self._extract_diode_voltage_expressions(solution)
+        # diode_voltage_exprs = self._extract_diode_voltage_expressions(solution)
         
         # Apply -1 factor for LCP formulation: -v_D = M*i_D + q (positive = blocking)
-        diode_voltage_exprs = [-expr for expr in diode_voltage_exprs]
-        
+        # diode_voltage_exprs = [-expr for expr in diode_voltage_exprs]
+        # logging.debug(f"Diode voltage expressions (with -1 factor):")
+        # for i, expr in enumerate(diode_voltage_exprs):
+        #     diode_name = self.electrical_model.diode_list[i].comp_id
+        #     logging.debug(f"  [{i}] {diode_name}: -v_D = {expr}")
+
         # Extract M matrix and q vector by collecting coefficients
         n_diodes = len(self.electrical_model.diode_list)
         M_matrix = Matrix.zeros(n_diodes, n_diodes)
         q_vector = Matrix.zeros(n_diodes, 1)
+
+        diode_voltage_exprs = []
+        voltage_vars = []
+        current_vars = []
+        # Iterate through diodes in ElectricalModel order to maintain consistency
+        for diode in self.electrical_model.diode_list:
+            voltage_var = diode.voltage_var
+            voltage_vars.append(voltage_var)
+            current_vars.append(diode.current_var)
+            logging.debug(f"LCP: Processing diode {diode.comp_id} with voltage var {voltage_var} and current var {diode.current_var}")
+            if diode.voltage_var in solution:
+                # Extract v_D expression 
+                expr = solution[voltage_var]
+                logging.debug(f"LCP: Diode {diode.comp_id} voltage expression before -1 factor: v_D = {expr}")
+                diode_voltage_exprs.append(-expr) # Apply -1 factor for LCP -v_D = M*i_D + q
+                logging.debug(f"LCP: Diode {diode.comp_id} voltage expression: -v_D = {-expr}")
+            else:
+                raise ValueError(f"Could not find solution for diode voltage {voltage_var} (diode {diode.comp_id})")
         
         for i, expr in enumerate(diode_voltage_exprs):
             # Extract coefficients for each diode current (maintain order)
-            for j, diode_current_var in enumerate(diode_current_vars):
-                coeff = expr.coeff(diode_current_var, 1)
+            logging.debug(f"LCP: Processing diode voltage expression for M and q extraction: {expr}")
+            for j, current_var in enumerate(current_vars):
+                coeff = expr.coeff(current_var, 1)
                 if coeff is not None:
                     M_matrix[i, j] = coeff
             
             # Get constant term (expression with all diode currents set to zero)
             constant_term = expr.subs({var: 0 for var in diode_current_vars})
+            logging.debug(f"LCP: Diode {self.electrical_model.diode_list[i].comp_id} constant term (q): {constant_term}")
             q_vector[i] = constant_term
         
         logging.debug(f"LCP: Generated M matrix:\n{M_matrix}")
@@ -718,10 +762,10 @@ class ElectricalDaeSystem(DaeSystem):
     def detect_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> List[bool]:
         """Detect the conducting state of all diodes in the circuit.
 
-        This is a modular interface that can be replaced with different detection algorithms:
-        - LCP solver (current implementation)
-        - Iterative methods
-        - Heuristic approaches
+        This method runs both LCP and iterative detection algorithms and compares results.
+        - If LCP succeeds and both methods agree: return result
+        - If LCP fails: return iterative result
+        - If both succeed but disagree: return iterative result with warning
 
         Args:
             state_values: Current values of state variables
@@ -742,8 +786,37 @@ class ElectricalDaeSystem(DaeSystem):
             logging.debug("No diodes found in circuit, returning empty list")
             return []
 
-        # Use iterative or lcp diode state detection approach
-        return self._detect_diode_states_lcp(state_values, input_values)
+        # Run both methods and compare
+        lcp_success = True
+        lcp_result = None
+
+        try:
+            lcp_result = self._detect_diode_states_lcp(state_values, input_values)
+            logging.info(f"LCP result: {lcp_result}")
+        except Exception as e:
+            lcp_success = False
+            logging.warning(f"LCP method failed: {e}")
+
+        # Always run iterative method
+        iterative_result = self._detect_diode_states_iterative(state_values, input_values)
+        logging.info(f"Iterative result: {iterative_result}")
+
+        # Normalize both results to lists for comparison
+        lcp_list = [bool(x) for x in lcp_result]
+        iter_list = [bool(x) for x in iterative_result]
+
+        # Compare and decide (normalize to lists for comparison)
+        if not lcp_success:
+            logging.warning("Decision: Using ITERATIVE result (LCP failed)")
+            return list(iter_list)
+
+        if lcp_list == iter_list:
+            logging.info("Decision: AGREE - Both methods converged to same result")
+            return lcp_list
+        else:
+            logging.warning(f"Decision: DISAGREE - LCP={lcp_list}, Iterative={iter_list}")
+            logging.warning("Using LCP result")
+            return lcp_list
     
     def _detect_diode_states_lcp(self, state_values: np.ndarray, input_values: np.ndarray) -> List[bool]:
         """Detect diode states using Linear Complementarity Problem formulation.
@@ -805,66 +878,62 @@ class ElectricalDaeSystem(DaeSystem):
             return [False] * len(diode_list)
     
     def _detect_diode_states_iterative(self, state_values: np.ndarray, input_values: np.ndarray, max_iterations: int = 100) -> List[bool]:
-        """Detect diode states using iterative approach.
-        
+        """Detect diode states using exhaustive search through all combinations.
+
         Algorithm:
-        1. Start with all diodes blocking (i_D = 0)
-        2. Solve circuit equations with current diode assumptions  
-        3. Check if resulting diode currents/voltages are consistent
-        4. Update diode states if inconsistencies found
-        5. Repeat until convergence or max iterations reached
-        
+        1. Try ALL possible diode state combinations
+        2. For each combination:
+           - Solve circuit equations with those diode states
+           - Check if solution is consistent (passes all physical constraints)
+        3. Report feasibility of all combinations
+        4. Return the first feasible combination found
+
         Args:
             state_values: Current values of state variables
             input_values: Current values of input variables
-            max_iterations: Maximum number of iterations to try
-            
+            max_iterations: Maximum number of iterations to try (unused, kept for compatibility)
+
         Returns:
             List[bool]: List of diode conducting states (True = conducting, False = blocking)
         """
         if not self.diode_list:
             return []
-        
+
         # Input validation
         if state_values is None or len(state_values) != len(self.state_vars):
             logging.error(f"Invalid state_values: expected {len(self.state_vars)} values, got {len(state_values) if state_values is not None else None}")
             return [False] * len(self.diode_list)
-        
+
         if input_values is None or len(input_values) != len(self.input_vars):
             logging.error(f"Invalid input_values: expected {len(self.input_vars)} values, got {len(input_values) if input_values is not None else None}")
             return [False] * len(self.diode_list)
-        
-        if max_iterations <= 0:
-            logging.error(f"Invalid max_iterations: {max_iterations}")
-            return [False] * len(self.diode_list)
-        
-        # # Initialize all diodes as blocking
-        # current_states = [False] * len(self.diode_list)
-        
+
         # Get all possible combinations of diode states
         all_combinations = list(itertools.product([True, False], repeat=len(self.diode_list)))
-        
-        # Initialize diodes with first combination
-        current_states = all_combinations[0]
-        visited_combinations = [current_states]
 
-        logging.debug(f"Starting iterative diode detection with {len(self.diode_list)} diodes")
-        
-        for iteration in range(max_iterations):
-            logging.debug(f"Iteration {iteration + 1}: Current states = {current_states}")
-            
-            # Set diode modes based on current assumptions
-            for diode, is_conducting in zip(self.diode_list, current_states):
+        logging.debug(f"Starting EXHAUSTIVE iterative diode detection with {len(self.diode_list)} diodes")
+        logging.info(f"\n{'='*80}")
+        logging.info(f"EXHAUSTIVE SEARCH: Checking all {len(all_combinations)} possible combinations")
+        logging.info(f"{'='*80}")
+
+        # Track results for each combination
+        results = {}
+
+        # Check each combination
+        for combo_idx, combination in enumerate(all_combinations):
+            logging.debug(f"\n--- Checking combination {combo_idx + 1}/{len(all_combinations)}: {combination} ---")
+
+            # Set diode modes based on this combination
+            for diode, is_conducting in zip(self.diode_list, combination):
                 diode.is_on = is_conducting
 
             # Recompute diode equations with current states
             diode_eqs = self.compute_diode_equations()
-            
-            # Try to solve circuit with current diode assumptions
+
             try:
                 # Get all equations including current diode equations
                 equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs + diode_eqs
-                
+
                 # Add initial condition equations
                 for i, state_var in enumerate(self.state_vars):
                     if i < len(state_values):
@@ -872,113 +941,115 @@ class ElectricalDaeSystem(DaeSystem):
                 for i, input_var in enumerate(self.input_vars):
                     if i < len(input_values):
                         equations.append(input_var - input_values[i])
-                
-                # Get all variables except diode currents for blocking diodes and diode voltages for conducting diodes
+
+                # Get all variables
                 junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
                 junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
                 combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
-
                 vars_to_solve = combined_vars
 
                 # Attempt to solve
                 solution = self._solve_circuit_equations_safe(equations, vars_to_solve)
-                
+
                 if solution is None:
-                    current_states = all_combinations[iteration + 1]
-                    visited_combinations.append(current_states)
+                    results[combination] = {
+                        'solvable': False,
+                        'consistent': False,
+                        'reason': 'Circuit equations unsolvable'
+                    }
+                    logging.debug(f"Combination {combination}: Circuit UNSOLVABLE")
                     continue
-                
+
                 # Check solution consistency
-                new_states = list(current_states)
-                states_changed = False
-                
+                is_consistent = True
+                inconsistency_reasons = []
+
                 for i, diode in enumerate(self.diode_list):
-                    # Check if diode current is negative (not allowed)
+                    # Check if variables are in solution
                     if diode.current_var not in solution:
-                        logging.debug(f"Diode {diode.comp_id}: current variable {diode.current_var} not in solution, skipping consistency check")
-                        new_states = all_combinations[iteration + 1]
-                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
-                        states_changed = True
+                        is_consistent = False
+                        inconsistency_reasons.append(f"{diode.comp_id}: current var not in solution")
                         continue
-                    
+
                     if diode.voltage_var not in solution:
-                        logging.debug(f"Diode {diode.comp_id}: voltage variable {diode.voltage_var} not in solution, skipping consistency check")
-                        new_states = all_combinations[iteration + 1]
-                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
-                        states_changed = True
+                        is_consistent = False
+                        inconsistency_reasons.append(f"{diode.comp_id}: voltage var not in solution")
                         continue
 
-                    
-                    i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars, 
-                                                                                                            list(state_values) + list(input_values))}))
-                    if i_diode_val < -self.diode_current_tol:  # Small tolerance for numerical errors
-                        logging.debug(f"Diode {diode.comp_id}: negative current {i_diode_val:.6f} while conducting, switch to blocking")
-                        new_states[i] = not current_states[i]     
-                        # Check if new combination has been visited
-                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
-                        states_changed = True
-                        continue
-                    # Check if diode voltage is positive (not allowed)
+                    # Evaluate current and voltage values
+                    i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
+                                                                                                        list(state_values) + list(input_values))}))
                     v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
-                                                                                                            list(state_values) + list(input_values))}))
-                    if v_diode_val > self.diode_voltage_tol:  # Small tolerance for numerical errors
-                        logging.debug(f"Diode {diode.comp_id}: positive voltage {v_diode_val:.6f} while blocking, switch to conducting")
-                        new_states[i] = not current_states[i]
-                        # Check if new combination has been visited
-                        new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
-                        states_changed = True   
+                                                                                                        list(state_values) + list(input_values))}))
+
+                    # Check physical constraints
+                    # 1. Current should never be negative
+                    if i_diode_val < -self.diode_current_tol:
+                        is_consistent = False
+                        inconsistency_reasons.append(f"{diode.comp_id}: negative current {i_diode_val:.6e}")
                         continue
 
-                    if current_states[i]:  # Currently conducting
-                        # Check if voltage is negative (reverse bias means should be blocking)
-                        v_diode_val = float(solution[diode.voltage_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
-                                                                                                            list(state_values) + list(input_values))}))
-                        if v_diode_val < -self.diode_voltage_tol:  # Small tolerance for numerical errors
-                            logging.debug(f"Diode {diode.comp_id}: negative voltage {v_diode_val:.6f} while conducting, switch to blocking")
-                            new_states[i] = not current_states[i]
-                            # Check if new combination has been visited
-                            new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
-                            states_changed = True
+                    # 2. Voltage should never be positive (forward bias beyond ideal)
+                    if v_diode_val > self.diode_voltage_tol:
+                        is_consistent = False
+                        inconsistency_reasons.append(f"{diode.comp_id}: positive voltage {v_diode_val:.6e}")
+                        continue
+
+                    # 3. If conducting (is_on=True), voltage should be ~0
+                    if combination[i]:  # Conducting
+                        if v_diode_val < -self.diode_voltage_tol:
+                            is_consistent = False
+                            inconsistency_reasons.append(f"{diode.comp_id}: conducting with negative voltage {v_diode_val:.6e}")
                             continue
-                    else:  # Currently blocking
-                        # Check if current is positive (forward bias means should be conducting)
-                        i_diode_val = float(solution[diode.current_var].subs({var: val for var, val in zip(self.state_vars + self.input_vars,
-                                                                                                            list(state_values) + list(input_values))}))
-                        if i_diode_val > self.diode_current_tol:  # Small tolerance for numerical errors
-                            logging.debug(f"Diode {diode.comp_id}: positive current {i_diode_val:.6f} while blocking, switch to conducting")
-                            new_states[i] = not current_states[i]
-                            # Check if new combination has been visited
-                            new_states = self._check_diode_states_visited(new_states, visited_combinations, iteration, all_combinations)
-                            states_changed = True
+
+                    # 4. If blocking (is_on=False), current should be ~0
+                    else:  # Blocking
+                        if i_diode_val > self.diode_current_tol:
+                            is_consistent = False
+                            inconsistency_reasons.append(f"{diode.comp_id}: blocking with positive current {i_diode_val:.6e}")
                             continue
-                
-                if not states_changed:
-                    # Converged!
-                    logging.debug(f"Iterative diode detection converged in {iteration + 1} iterations")
-                    states_str = [f'{diode.comp_id}={"CONDUCTING" if state else "BLOCKING"}' for diode, state in zip(self.diode_list, current_states)]
-                    logging.debug(f"Final states: {states_str}")
-                    return current_states
-                
-                # Update states for next iteration
-                current_states = new_states
-                if current_states not in visited_combinations:
-                    visited_combinations.append(current_states)
+
+                # Store result
+                results[combination] = {
+                    'solvable': True,
+                    'consistent': is_consistent,
+                    'reason': 'Feasible' if is_consistent else '; '.join(inconsistency_reasons)
+                }
+
+                if is_consistent:
+                    logging.debug(f"Combination {combination}: FEASIBLE ✓")
                 else:
-                    logging.warning(f"Degeneracy detected after {iteration + 1} iterations. Diode states: {current_states}")
-                
+                    logging.debug(f"Combination {combination}: INCONSISTENT ({'; '.join(inconsistency_reasons)})")
+
             except Exception as e:
-                logging.debug(f"Iteration {iteration + 1}: Exception during solving: {e}")
-                # Try different diode state combination
-                if iteration == 0:
-                    current_states = [True] * len(self.diode_list)  # Try all conducting
-                else:
-                    # For now, just return all blocking as fallback
-                    logging.warning(f"Iterative diode detection failed after {iteration + 1} iterations: {e}")
-                    return [False] * len(self.diode_list)
-        
-        # Max iterations reached
-        logging.warning(f"Iterative diode detection did not converge after {max_iterations} iterations")
-        return current_states  # Return best attempt
+                results[combination] = {
+                    'solvable': False,
+                    'consistent': False,
+                    'reason': f'Exception: {str(e)}'
+                }
+                logging.debug(f"Combination {combination}: EXCEPTION ({e})")
+
+        # Report results
+        logging.info(f"\n{'='*80}")
+        logging.info(f"EXHAUSTIVE SEARCH RESULTS: {len(all_combinations)} possible combinations")
+        logging.info(f"{'='*80}")
+        for combination, result in results.items():
+            feasible = "yes" if (result['solvable'] and result['consistent']) else "no"
+            reason_str = f" ({result['reason']})" if feasible == "no" else ""
+            logging.info(f"{combination} -> {feasible}{reason_str}")
+        logging.info(f"{'='*80}\n")
+
+        # Find and return first feasible combination
+        feasible_combinations = [combo for combo, result in results.items()
+                                if result['solvable'] and result['consistent']]
+
+        if feasible_combinations:
+            chosen = feasible_combinations[0]
+            logging.info(f"Returning first feasible combination: {chosen}")
+            return list(chosen)
+        else:
+            logging.warning("No feasible combination found! Returning all blocking as fallback.")
+            return [False] * len(self.diode_list)
     
     def _check_diode_states_visited(self, new_states: List[bool], visited: List[List[bool]], iteration: int, all_combinations: List[List[bool]]) -> List[bool]:
         """Check if the new diode states have been visited before. If so, try the next combination.

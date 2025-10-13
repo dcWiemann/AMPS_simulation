@@ -76,7 +76,7 @@ class TestDiodeIntegration:
         d1 = Diode(comp_id="D1")
 
         # Add components to circuit
-        model.add_component(v1, [0, 1])  # Voltage source: GND to node 1
+        model.add_component(v1, [1, 0])  # Voltage source: GND to node 1
         model.add_component(r1, [1, 2])  # Resistor: node 1 to node 2
         model.add_component(d1, [2, 0])  # Diode: node 2 to GND (anode at node 2)
 
@@ -177,7 +177,7 @@ class TestDiodeIntegration:
         r1 = Resistor(comp_id="R1", resistance=1.0)
 
         # Add components to circuit
-        model.add_component(c1, [0, 1])  # Capacitor: GND to node 1
+        model.add_component(c1, [1, 0])  # Capacitor: GND to node 1
         model.add_component(d1, [1, 2])  # Diode: node 1 to node 2 (anode at node 1)
         model.add_component(r1, [2, 0])  # Resistor: node 2 to GND
 
@@ -214,6 +214,7 @@ class TestDiodeIntegration:
 
         # Verify results
         assert len(diode_states) == 1, f"Expected 1 diode, found {len(diode_states)}"
+        assert diode_states[0] == True, "Diode D1 should be CONDUCTING with +5V capacitor voltage"
 
         print(f"\n[C-D v_C=+5V] Diode D1 state: {'CONDUCTING (v_D=0)' if diode_states[0] else 'BLOCKING (i_D=0)'}")
         print(f"  Expected: CONDUCTING (capacitor discharges through diode and resistor)")
@@ -233,6 +234,7 @@ class TestDiodeIntegration:
 
         # Verify results
         assert len(diode_states) == 1, f"Expected 1 diode, found {len(diode_states)}"
+        assert diode_states[0] == False, "Diode D1 should be BLOCKING with -5V capacitor voltage"
 
         print(f"\n[C-D v_C=-5V] Diode D1 state: {'CONDUCTING (v_D=0)' if diode_states[0] else 'BLOCKING (i_D=0)'}")
         print(f"  Expected: BLOCKING (diode is reverse-biased)")
@@ -252,6 +254,7 @@ class TestDiodeIntegration:
 
         # Verify results
         assert len(diode_states) == 1, f"Expected 1 diode, found {len(diode_states)}"
+        assert diode_states[0] == False, "Diode D1 should be BLOCKING with 0V capacitor voltage"
 
         print(f"\n[C-D v_C=0V] Diode D1 state: {'CONDUCTING (v_D=0)' if diode_states[0] else 'BLOCKING (i_D=0)'}")
         print(f"  Expected: BLOCKING (no forward bias)")
@@ -285,7 +288,7 @@ class TestDiodeIntegration:
         r1 = Resistor(comp_id="R1", resistance=1.0)
 
         # Add components to circuit
-        model.add_component(v1, [0, 1])  # Voltage source: GND to node 1
+        model.add_component(v1, [1, 0])  # Voltage source: node 1 to GND
         model.add_component(d1, [1, 2])  # Diode D1: node 1 to node 2
         model.add_component(d2, [2, 3])  # Diode D2: node 2 to node 3
         model.add_component(r1, [3, 0])  # Resistor: node 3 to GND
@@ -354,23 +357,7 @@ class TestDiodeIntegration:
         """
         Build bridge rectifier circuit with AC input and DC filtering.
 
-        Circuit topology:
-                      D1
-                      |>
-              V1(+) --+-- DC+
-                      |
-                      D3
-                      |>
-          GND --------+-------- DC_GND
-                      |
-                      D4
-                      <>|
-                      |
-              V1(-) --+-- DC+
-                      |
-                      D2
-                      <>|
-
+        AC side: AC+ ---V1(AC)--- AC_GND
         DC side: DC+ ---R_load(10Ω)--- DC_GND
                  DC+ ---C_filter(100μF)--- DC_GND
 
@@ -390,8 +377,9 @@ class TestDiodeIntegration:
         # Add nodes
         model.add_node(0, is_ground=True)  # AC ground
         model.add_node(1)  # AC + terminal
-        model.add_node(2)  # DC + bus
-        model.add_node(3)  # DC ground bus
+        model.add_node(2)  # DC + resistor
+        model.add_node(3)  # between resistor and capacitor
+        model.add_node(4)  # DC ground bus
 
         # Create components
         v1 = VoltageSource(comp_id="V1", voltage=v_input)
@@ -399,23 +387,23 @@ class TestDiodeIntegration:
         d2 = Diode(comp_id="D2")  # DC+ to AC_GND
         d3 = Diode(comp_id="D3")  # AC+ to DC_GND
         d4 = Diode(comp_id="D4")  # DC_GND to AC_GND
-        r_load = Resistor(comp_id="R_load", resistance=10.0)
+        r_load = Resistor(comp_id="R_load", resistance=0.1) # 0.1 Ω Vorwiderstand
         c_filter = Capacitor(comp_id="C_filter", capacitance=100e-6)  # 100 μF
 
         # Add AC source
-        model.add_component(v1, [0, 1])  # Voltage source: AC_GND to AC+
+        model.add_component(v1, [1, 0])  # Voltage source: AC+ to AC_GND
 
         # Add bridge diodes
         # When V_in > 0: Current path is AC+ (node 1) -> D1 -> DC+ (node 2) -> Load -> DC_GND (node 3) -> D4 -> AC_GND (node 0)
         # When V_in < 0: Current path is AC_GND (node 0) -> D2 -> DC+ (node 2) -> Load -> DC_GND (node 3) -> D3 -> AC+ (node 1)
         model.add_component(d1, [1, 2])  # D1: AC+ to DC+ (anode at AC+)
         model.add_component(d2, [0, 2])  # D2: AC_GND to DC+ (anode at AC_GND)
-        model.add_component(d3, [3, 1])  # D3: DC_GND to AC+ (anode at DC_GND)
-        model.add_component(d4, [3, 0])  # D4: DC_GND to AC_GND (anode at DC_GND)
+        model.add_component(d3, [4, 1])  # D3: DC_GND to AC+ (anode at DC_GND)
+        model.add_component(d4, [4, 0])  # D4: DC_GND to AC_GND (anode at DC_GND)
 
         # Add DC side load and filter
         model.add_component(r_load, [2, 3])     # Load resistor: DC+ to DC_GND
-        model.add_component(c_filter, [2, 3])   # Filter capacitor: DC+ to DC_GND
+        model.add_component(c_filter, [3, 4])   # Filter capacitor: DC+ to DC_GND
 
         model.initialize()
 
@@ -462,10 +450,22 @@ class TestDiodeIntegration:
         assert num_conducting == 2, f"Expected 2 conducting diodes, found {num_conducting}"
 
         # Specifically, D1 and D4 should conduct for positive input
-        assert diode_states[0] == True, "D1 should conduct with positive input"
-        assert diode_states[3] == True, "D4 should conduct with positive input"
-        assert diode_states[1] == False, "D2 should block with positive input"
-        assert diode_states[2] == False, "D3 should block with positive input"
+        # assert diode_states[0] == True, "D1 should conduct with positive input"
+        # assert diode_states[3] == True, "D4 should conduct with positive input"
+        # assert diode_states[1] == False, "D2 should block with positive input"
+        # assert diode_states[2] == False, "D3 should block with positive input"
+
+        # Check the ordering of diodes
+        diode_list = engine.electrical_model.diode_list
+        # find index of D1, D2, D3, D4 in diode_list
+        d1_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D1"))
+        d2_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D2"))
+        d3_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D3"))
+        d4_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D4"))
+        assert diode_states[d1_index] == True, "D1 should conduct with positive input"
+        assert diode_states[d2_index] == False, "D2 should block with positive input"
+        assert diode_states[d3_index] == False, "D3 should block with positive input"
+        assert diode_states[d4_index] == True, "D4 should conduct with positive input"
 
     def test_bridge_rectifier_negative_voltage(self):
         """
@@ -495,11 +495,19 @@ class TestDiodeIntegration:
         # Exactly 2 diodes should be conducting
         assert num_conducting == 2, f"Expected 2 conducting diodes, found {num_conducting}"
 
-        # Specifically, D2 and D3 should conduct for negative input
-        assert diode_states[1] == True, "D2 should conduct with negative input"
-        assert diode_states[2] == True, "D3 should conduct with negative input"
-        assert diode_states[0] == False, "D1 should block with negative input"
-        assert diode_states[3] == False, "D4 should block with negative input"
+        # Check the ordering of diodes
+        diode_list = engine.electrical_model.diode_list
+
+        # find index of D1, D2, D3, D4 in diode_list
+        d1_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D1"))
+        d2_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D2"))
+        d3_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D3"))
+        d4_index = diode_list.index(next(d for d in diode_list if d.comp_id == "D4"))
+        assert diode_states[d1_index] == False, "D1 should block with negative input"
+        assert diode_states[d2_index] == True, "D2 should conduct with negative input"
+        assert diode_states[d3_index] == True, "D3 should conduct with negative input"
+        assert diode_states[d4_index] == False, "D4 should block with negative input"
+
 
     def test_bridge_rectifier_zero_voltage(self):
         """
