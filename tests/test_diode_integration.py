@@ -297,12 +297,12 @@ class TestDiodeIntegration:
 
         # Initialize engine
         engine = Engine(model)
-        engine.initialize()
 
-        # Prepare state and input arrays
-        n_states = len(engine.state_vars)
-        state_values = np.zeros(n_states)
+        # Prepare state and input arrays (no state variables in this circuit)
+        state_values = np.array([])
         input_values = np.array([v_input])
+
+        engine.initialize(initial_conditions=None, initial_inputs=input_values)
 
         return engine, state_values, input_values
 
@@ -409,7 +409,7 @@ class TestDiodeIntegration:
 
         # Initialize engine
         engine = Engine(model)
-        engine.initialize()
+        engine.initialize(initial_conditions=np.array([v_cap_initial]), initial_inputs=np.array([v_input]))
 
         # Set capacitor voltage as state variable
         n_states = len(engine.state_vars)
