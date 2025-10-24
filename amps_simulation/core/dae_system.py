@@ -94,19 +94,19 @@ class ElectricalDaeSystem(DaeSystem):
         self.shunt_vars_to_solve = None
         
         # Initialize diode modes if we have diodes
-        # if self.electrical_model.diode_list:
-        #     # Default to zero state values if not provided
-        #     state_vals = initial_state_values if initial_state_values is not None else np.zeros(len(self.state_vars))
-        #     input_vals = initial_input_values if initial_input_values is not None else np.zeros(len(self.input_vars))
+        if self.electrical_model.diode_list:
+            # Default to zero state values if not provided
+            state_vals = initial_state_values if initial_state_values is not None else np.zeros(len(self.state_vars))
+            input_vals = initial_input_values if initial_input_values is not None else np.zeros(len(self.input_vars))
 
-        #     conducting_states = self.detect_diode_states(state_vals, input_vals)
-        #     self._initialize_diode_modes(conducting_states)
-        
-        # # Compute diode equations with proper modes
-        # self.diode_eqs = self.compute_diode_equations()
-        # self.circuit_eqs = self.compute_circuit_equations()
-        # self.derivatives = self.compute_derivatives()
-        # self.output_eqs = self.compute_output_equations()
+            conducting_states = self.detect_diode_states(state_vals, input_vals)
+            self._initialize_diode_modes(conducting_states)
+
+        # Compute diode equations with proper modes
+        self.diode_eqs = self.compute_diode_equations()
+        self.circuit_eqs = self.compute_circuit_equations()
+        self.derivatives = self.compute_derivatives()
+        self.output_eqs = self.compute_output_equations()
         self.initialized = True
     
     def _solve_circuit_equations(self, equations: List, vars_to_solve: List) -> Dict:
@@ -797,26 +797,39 @@ class ElectricalDaeSystem(DaeSystem):
             lcp_success = False
             logging.warning(f"LCP method failed: {e}")
 
-        # Always run iterative method
-        iterative_result = self._detect_diode_states_iterative(state_values, input_values)
-        logging.info(f"Iterative result: {iterative_result}")
+        # For debugging (leave me here): run iterative method
+        # iterative_result = self._detect_diode_states_iterative(state_values, input_values)
+        # logging.info(f"Iterative result: {iterative_result}")
 
         # Normalize both results to lists for comparison
-        lcp_list = [bool(x) for x in lcp_result]
-        iter_list = [bool(x) for x in iterative_result]
+        # lcp_list = [bool(x) for x in lcp_result]
+        # iter_list = [bool(x) for x in iterative_result]
 
         # Compare and decide (normalize to lists for comparison)
-        if not lcp_success:
-            logging.warning("Decision: Using ITERATIVE result (LCP failed)")
-            return list(iter_list)
+        # if not lcp_success:
+        #     logging.warning("Decision: Using ITERATIVE result (LCP failed)")
+        #     return list(iter_list)
 
-        if lcp_list == iter_list:
-            logging.info("Decision: AGREE - Both methods converged to same result")
+        # if lcp_list == iter_list:
+        #     logging.info("Decision: AGREE - Both methods converged to same result")
+        #     return lcp_list
+        # else:
+        #     logging.warning(f"Decision: DISAGREE - LCP={lcp_list}, Iterative={iter_list}")
+        #     logging.warning("Using LCP result")
+        #     return lcp_list
+
+        # normal flow: return LCP result
+        if lcp_success:
+            lcp_list = [bool(x) for x in lcp_result]
             return lcp_list
         else:
-            logging.warning(f"Decision: DISAGREE - LCP={lcp_list}, Iterative={iter_list}")
-            logging.warning("Using LCP result")
-            return lcp_list
+            # logging.warning("LCP method failed, falling back to ITERATIVE method")
+            # iterative_result = self._detect_diode_states_iterative(state_values, input_values)
+            # logging.info(f"Iterative result: {iterative_result}")
+
+            # throw error for now
+            raise RuntimeError("No valid diode states found (LCP method failed)")
+        
     
     def _detect_diode_states_lcp(self, state_values: np.ndarray, input_values: np.ndarray) -> List[bool]:
         """Detect diode states using Linear Complementarity Problem formulation.
