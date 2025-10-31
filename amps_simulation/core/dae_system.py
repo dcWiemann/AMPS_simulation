@@ -55,8 +55,10 @@ class ElectricalDaeSystem(DaeSystem):
         outputs (Dict[str, float]): Dictionary mapping output variable names to their values
     """
     # Configurable tolerances for diode state checks
-    diode_current_tol = 1e-6
-    diode_voltage_tol = 1e-6
+    # diode_current_tol = 1e-6
+    # diode_voltage_tol = 1e-6
+    diode_current_tol = 0.0
+    diode_voltage_tol = 0.0
     def __init__(self, electrical_model: ElectricalModel):
         super().__init__(electrical_model.graph)
         self.electrical_model = electrical_model
@@ -264,7 +266,8 @@ class ElectricalDaeSystem(DaeSystem):
 
         # Interpret solution: z represents diode currents
         # If z[i] > tolerance, diode i is conducting
-        current_tol = 1e-10
+        # current_tol = 1e-10
+        current_tol = 0.0  # Use zero tolerance for strict interpretation
         conducting_states = [z_i > current_tol for z_i in z]
 
         # Log results
@@ -866,7 +869,8 @@ class ElectricalDaeSystem(DaeSystem):
 
             # Interpret solution: z represents diode currents
             # If z[i] > tolerance, diode i is conducting
-            current_tol = 1e-10
+            # current_tol = 1e-10
+            current_tol = 0.0  # Use zero tolerance for strict interpretation
             conducting_states = [z_i > current_tol for z_i in z]
 
             # Log solver results
