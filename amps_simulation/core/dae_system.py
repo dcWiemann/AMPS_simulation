@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
 from amps_simulation.core.electrical_model import ElectricalModel
+from amps_simulation.core.circuit_sanity_checker import CircuitSanityChecker
 from amps_simulation.core.lcp import LCP
 from sympy import Matrix, Symbol, sympify, solve
 import logging
@@ -443,24 +444,120 @@ class ElectricalDaeSystem(DaeSystem):
             diode_eqs.append(diode.get_comp_eq())
 
         return diode_eqs
-    
+
+    def _process_islands(self, kvl_eqs: List) -> Tuple[List, set, List]:
+        """Process electrical islands and filter KVL equations for boundary components.
+
+        Detects electrical islands (circuit sections not connected to ground) and:
+        1. Removes KVL equations for boundary components (components connecting islands to external circuit)
+        2. Identifies single-node island voltage variables to exclude from circuit solving
+        3. Sets voltage reference (v=0) for one node in each multi-node island
+
+        Args:
+            kvl_eqs: List of KVL equations to filter
+
+        Returns:
+            Tuple[List, set, List]: (filtered_kvl_eqs, island_single_node_voltages, island_reference_eqs)
+                - filtered_kvl_eqs: KVL equations with boundary component equations removed
+                - island_single_node_voltages: Set of voltage variables for single-node islands (excluded from solving)
+                - island_reference_eqs: Equations setting reference voltages for multi-node islands (v_node = 0)
+        """
+        # Detect electrical islands
+        checker = CircuitSanityChecker(self.graph)
+        islands = checker.detect_islands()
+
+        # Early return if no islands detected
+        if not islands:
+            logging.debug("No electrical islands detected")
+            return kvl_eqs, set(), []
+
+        logging.debug(f"Detected {len(islands)} electrical island(s)")
+
+        # Find boundary component indices to exclude their KVL equations
+        boundary_component_indices = set()
+        island_single_node_voltages = set()
+        island_reference_eqs = []
+
+        # Get component_list for index lookup
+        component_list = self.electrical_model.component_list
+
+        for island in islands:
+            island_id = island['island_id']
+            node_count = island['node_count']
+            boundary_components = island['boundary_components']
+
+            logging.debug(f"Island {island_id}: {node_count} nodes, {len(boundary_components)} boundary components")
+
+            # Find indices of boundary components in component_list
+            for source, target, boundary_comp in boundary_components:
+                # Find this component's index in component_list
+                for idx, comp in enumerate(component_list):
+                    if comp.comp_id == boundary_comp.comp_id:
+                        boundary_component_indices.add(idx)
+                        logging.debug(f"  Boundary component {boundary_comp.comp_id} at index {idx}")
+                        break
+
+            # Handle single-node islands: exclude node voltage from vars_to_solve
+            if node_count == 1:
+                island_nodes = island['nodes']
+                island_node = list(island_nodes)[0]  # Get the single node
+
+                # Find the voltage variable for this node
+                junction = self.graph.nodes[island_node]['junction']
+                voltage_var = junction.voltage_var
+
+                if voltage_var is not None:
+                    island_single_node_voltages.add(voltage_var)
+                    logging.debug(f"  Single-node island: excluding voltage variable {voltage_var}")
+
+            # Handle multi-node islands: set reference voltage for one node
+            elif node_count > 1:
+                island_nodes = island['nodes']
+                # Pick the first node (sorted for determinism) as the reference
+                reference_node = sorted(island_nodes)[0]
+
+                # Find the voltage variable for this reference node
+                junction = self.graph.nodes[reference_node]['junction']
+                voltage_var = junction.voltage_var
+
+                if voltage_var is not None:
+                    # Add equation: v_node = 0 to set voltage reference
+                    island_reference_eqs.append(voltage_var - 0)
+                    logging.debug(f"  Multi-node island: setting reference voltage {voltage_var} = 0")
+
+        # Filter KVL equations to exclude boundary component equations
+        if boundary_component_indices:
+            kvl_eqs_filtered = [eq for idx, eq in enumerate(kvl_eqs) if idx not in boundary_component_indices]
+            logging.debug(f"Removed {len(boundary_component_indices)} KVL equations for boundary components")
+            logging.debug(f"KVL equations: {len(kvl_eqs)} -> {len(kvl_eqs_filtered)}")
+        else:
+            kvl_eqs_filtered = kvl_eqs
+
+        return kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs
+
     def compute_circuit_equations(self) -> Dict:
         """Solve the full circuit variables including diode equations.
-        
+
         Returns:
             Dict: Dictionary mapping variables to their symbolic expressions
         """
         # Get all equations including diode equations (this is the full circuit)
         if self.initialized:
             # Use precomputed equations during normal operation
-            equations = self.kcl_eqs + self.kvl_eqs + self.static_eqs + self.switch_eqs + self.diode_eqs
+            kcl_eqs = self.kcl_eqs
+            kvl_eqs = self.kvl_eqs
+            static_eqs = self.static_eqs
+            switch_eqs = self.switch_eqs
+            diode_eqs = self.diode_eqs
             input_vars = self.input_vars
             state_vars = self.state_vars
         else:
             # Compute equations during initialization
-            equations = (self.compute_kcl_equations() + self.compute_kvl_equations() +
-                        self.compute_static_component_equations() + self.compute_switch_equations() +
-                        self.compute_diode_equations())
+            kcl_eqs = self.compute_kcl_equations()
+            kvl_eqs = self.compute_kvl_equations()
+            static_eqs = self.compute_static_component_equations()
+            switch_eqs = self.compute_switch_equations()
+            diode_eqs = self.compute_diode_equations()
             # If electrical model isn't initialized, compute the variables directly
             if self.electrical_model.initialized:
                 input_vars = self.electrical_model.input_vars
@@ -468,23 +565,29 @@ class ElectricalDaeSystem(DaeSystem):
             else:
                 input_vars = self.electrical_model.find_input_vars()
                 state_vars = self.electrical_model.find_state_vars()
-        
+
         logging.debug(f"Full circuit: input_vars={[str(v) for v in input_vars]}")
         logging.debug(f"Full circuit: state_vars={[str(v) for v in state_vars]}")
-        
+
+        # Process islands: filter KVL equations and get single-node island voltages and reference equations
+        kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs = self._process_islands(kvl_eqs)
+
+        # Assemble equations with filtered KVL equations and island reference equations
+        equations = kcl_eqs + kvl_eqs_filtered + static_eqs + switch_eqs + diode_eqs + island_reference_eqs
+
         # Get all variables from electrical graph
         junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
-        
+
         # Remove ground node (0) from junction voltage variables
         junction_voltage_var_list_cleaned = [var for var in junction_voltage_var_list if var != 0]
-        
+
         # Combine all variables
         combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
-        
-        # Remove excluded variables (input_vars and state_vars only)
-        excluded = set(input_vars) | set(state_vars)
+
+        # Remove excluded variables (input_vars, state_vars, and single-node island voltages)
+        excluded = set(input_vars) | set(state_vars) | island_single_node_voltages
         vars_to_solve = [var for var in combined_vars if var not in excluded]
-        
+
         # Use safe solver that handles empty solutions
         solution = self._solve_circuit_equations_safe(equations, vars_to_solve)
         if solution is None:
