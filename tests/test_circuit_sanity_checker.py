@@ -5,14 +5,15 @@ Tests for the circuit sanity checker module.
 import pytest
 import networkx as nx
 from amps_simulation.core.components import (
-    VoltageSource, CurrentSource, Resistor, Capacitor, Inductor, 
+    VoltageSource, CurrentSource, Resistor, Capacitor, Inductor,
     PowerSwitch, Diode, Ground, ElecJunction, Ammeter, Voltmeter,
     Component
 )
 from amps_simulation.core.circuit_sanity_checker import (
-    CircuitSanityChecker, CircuitTopologyError, 
+    CircuitSanityChecker, CircuitTopologyError,
     has_short_circuit_path, has_current_path
 )
+from amps_simulation.core.electrical_model import ElectricalModel
 
 @pytest.fixture(autouse=True)
 def clear_registries():
@@ -376,12 +377,331 @@ class TestSanityChecker:
         # Create a valid circuit
         vs = VoltageSource(comp_id="V1", voltage=5.0)
         resistor = Resistor(comp_id="R1", resistance=100.0)
-        
+
         basic_graph.add_edge("1", "2", component=vs)
         basic_graph.add_edge("2", "3", component=resistor)
-        
+
         checker = CircuitSanityChecker(basic_graph)
         result = checker.check_all(raise_on_error=False)
-        
+
         assert len(result['errors']) == 0
         assert len(result['warnings']) == 0
+
+    def test_ground_node_check_no_ground(self):
+        # Create graph without ground node
+        graph = nx.MultiDiGraph()
+
+        j1 = ElecJunction(junction_id=1, is_ground=False)
+        j2 = ElecJunction(junction_id=2, is_ground=False)
+
+        graph.add_node("1", junction=j1)
+        graph.add_node("2", junction=j2)
+
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        graph.add_edge("1", "2", component=r1)
+
+        checker = CircuitSanityChecker(graph)
+        result = checker.check_all(raise_on_error=False)
+
+        # Should have error about missing ground
+        assert len(result['errors']) > 0
+        assert any("ground reference node" in error.lower() for error in result['errors'])
+
+    def test_ground_node_check_with_ground(self):
+        # Create graph with ground node
+        graph = nx.MultiDiGraph()
+
+        j1 = ElecJunction(junction_id=1, is_ground=True)  # Ground
+        j2 = ElecJunction(junction_id=2, is_ground=False)
+
+        graph.add_node("1", junction=j1)
+        graph.add_node("2", junction=j2)
+
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        graph.add_edge("1", "2", component=r1)
+
+        checker = CircuitSanityChecker(graph)
+        result = checker.check_all(raise_on_error=False)
+
+        # Should not have ground-related errors
+        assert not any("ground reference node" in error.lower() for error in result['errors'])
+
+    def test_ground_node_check_raises_error(self):
+        # Test that missing ground raises exception when raise_on_error=True
+        graph = nx.MultiDiGraph()
+
+        j1 = ElecJunction(junction_id=1, is_ground=False)
+        graph.add_node("1", junction=j1)
+
+        checker = CircuitSanityChecker(graph)
+
+        with pytest.raises(CircuitTopologyError):
+            checker.check_all(raise_on_error=True)
+
+class TestIslandDetection:
+    """Test the island detection functionality."""
+
+    def test_no_islands_when_all_connected_to_ground(self):
+        """Test that no islands are detected when all nodes connect to ground."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(1, is_ground=True)
+        model.add_node(2)
+        model.add_node(3)
+
+        # Add components
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        r2 = Resistor(comp_id="R2", resistance=200.0)
+
+        model.add_component(r1, p=1, n=2)
+        model.add_component(r2, p=2, n=3)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        assert len(islands) == 0
+
+    def test_single_island_isolated_by_open_switch(self):
+        """Test detection of single island isolated by an open switch."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(0, is_ground=True)
+        model.add_node(1)
+        model.add_node(2)  # Island
+        model.add_node(3)  # Island
+
+        # Main circuit
+        v1 = VoltageSource(comp_id="V1", voltage=10.0)
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        model.add_component(v1, p=1, n=0)
+        model.add_component(r1, p=1, n=0)
+
+        # Island components (internal)
+        r2 = Resistor(comp_id="R2", resistance=50.0)
+        c1 = Capacitor(comp_id="C1", capacitance=1e-6)
+        model.add_component(r2, p=2, n=3)
+        model.add_component(c1, p=3, n=2)
+
+        # Boundary component (open switch)
+        switch = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        model.add_component(switch, p=1, n=2)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        # Verify one island detected
+        assert len(islands) == 1
+
+        island = islands[0]
+        assert island['island_id'] == 0
+        assert island['node_count'] == 2
+        assert set(island['nodes']) == {2, 3}
+
+        # Verify internal components
+        assert len(island['internal_components']) == 2
+        internal_ids = {comp.comp_id for _, _, comp in island['internal_components']}
+        assert internal_ids == {"R2", "C1"}
+
+        # Verify boundary components
+        assert len(island['boundary_components']) == 1
+        boundary_comp = island['boundary_components'][0]
+        assert boundary_comp[2].comp_id == "S1"
+        assert boundary_comp[2].is_open_circuit
+
+    def test_single_island_isolated_by_blocking_diode(self):
+        """Test island isolated by a blocking diode."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(0, is_ground=True)
+        model.add_node(1)
+        model.add_node(2)  # Island node
+        model.add_node(3)  # Island node
+
+        # Main circuit
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        model.add_component(r1, p=1, n=0)
+
+        # Island circuit (isolated from ground)
+        r2 = Resistor(comp_id="R2", resistance=50.0)
+        model.add_component(r2, p=2, n=3)
+
+        # Boundary (blocking diode)
+        diode = Diode(comp_id="D1", is_on=False)
+        model.add_component(diode, p=1, n=2)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        assert len(islands) == 1
+        assert islands[0]['node_count'] == 2
+        assert set(islands[0]['nodes']) == {2, 3}
+
+        # Verify boundary component is the diode
+        assert len(islands[0]['boundary_components']) == 1
+        assert islands[0]['boundary_components'][0][2].comp_id == "D1"
+
+    def test_multiple_islands(self):
+        """Test detection of multiple independent islands."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(0, is_ground=True)
+        model.add_node(1)
+        model.add_node(2)  # First island
+        model.add_node(3)  # First island
+        model.add_node(4)  # Second island
+        model.add_node(5)  # Second island
+
+        # Main circuit
+        r_main = Resistor(comp_id="R_main", resistance=100.0)
+        model.add_component(r_main, p=1, n=0)
+
+        # First island
+        r2 = Resistor(comp_id="R2", resistance=50.0)
+        model.add_component(r2, p=2, n=3)
+
+        # Second island
+        r3 = Resistor(comp_id="R3", resistance=75.0)
+        model.add_component(r3, p=4, n=5)
+
+        # Boundary components
+        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        s2 = PowerSwitch(comp_id="S2", is_on=False, switch_time=2.0)
+        model.add_component(s1, p=1, n=2)
+        model.add_component(s2, p=1, n=4)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        # Should detect two islands
+        assert len(islands) == 2
+
+        # Verify island IDs are sequential
+        island_ids = {island['island_id'] for island in islands}
+        assert island_ids == {0, 1}
+
+        # Each island should have 2 nodes
+        for island in islands:
+            assert island['node_count'] == 2
+
+    def test_island_with_multiple_boundary_components(self):
+        """Test island connected via multiple open components."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(0, is_ground=True)
+        model.add_node(1)
+        model.add_node(2)  # Island
+        model.add_node(3)  # Island
+
+        # Main circuit
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        model.add_component(r1, p=1, n=0)
+
+        # Island
+        r2 = Resistor(comp_id="R2", resistance=50.0)
+        model.add_component(r2, p=2, n=3)
+
+        # Multiple boundary components
+        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        d1 = Diode(comp_id="D1", is_on=False)
+        vm = Voltmeter(comp_id="VM1")
+
+        model.add_component(s1, p=1, n=2)
+        model.add_component(d1, p=1, n=3)
+        model.add_component(vm, p=1, n=2)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        assert len(islands) == 1
+        island = islands[0]
+
+        # Should have 3 boundary components
+        assert len(island['boundary_components']) == 3
+        boundary_ids = {comp.comp_id for _, _, comp in island['boundary_components']}
+        assert boundary_ids == {"S1", "D1", "VM1"}
+
+    def test_two_islands_connected_to_each_other(self):
+        """Test two islands connected to each other but not to ground."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(0, is_ground=True)
+        model.add_node(1)
+        model.add_node(2)  # Island node
+        model.add_node(3)  # Island node
+
+        # Main circuit
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        model.add_component(r1, p=1, n=0)
+
+        # Islands isolated from main but connected to each other via closed switch
+        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        s2 = PowerSwitch(comp_id="S2", is_on=False, switch_time=2.0)
+        s3 = PowerSwitch(comp_id="S3", is_on=True, switch_time=3.0)  # Closed switch connecting islands
+
+        model.add_component(s1, p=1, n=2)  # Main to node 2 (open)
+        model.add_component(s2, p=1, n=3)  # Main to node 3 (open)
+        model.add_component(s3, p=2, n=3)  # Node 2 to node 3 (closed)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        # Nodes 2 and 3 should be in SAME island (connected via S3)
+        assert len(islands) == 1
+        island = islands[0]
+        assert island['node_count'] == 2
+        assert set(island['nodes']) == {2, 3}
+
+        # S3 is internal (connects island nodes)
+        assert len(island['internal_components']) == 1
+        assert island['internal_components'][0][2].comp_id == "S3"
+
+        # S1 and S2 are boundary (connect to external)
+        assert len(island['boundary_components']) == 2
+        boundary_ids = {comp.comp_id for _, _, comp in island['boundary_components']}
+        assert boundary_ids == {"S1", "S2"}
+
+    def test_island_structure_fields(self):
+        """Test that island dictionary has all required fields."""
+        model = ElectricalModel()
+
+        # Add nodes
+        model.add_node(0, is_ground=True)
+        model.add_node(1)
+        model.add_node(2)  # Island
+
+        # Main circuit
+        r1 = Resistor(comp_id="R1", resistance=100.0)
+        model.add_component(r1, p=1, n=0)
+
+        # Boundary to island
+        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        model.add_component(s1, p=1, n=2)
+
+        checker = CircuitSanityChecker(model.graph)
+        islands = checker.detect_islands()
+
+        assert len(islands) == 1
+        island = islands[0]
+
+        # Verify all required fields exist
+        assert 'island_id' in island
+        assert 'nodes' in island
+        assert 'node_count' in island
+        assert 'internal_components' in island
+        assert 'boundary_components' in island
+
+        # Verify field types
+        assert isinstance(island['island_id'], int)
+        assert isinstance(island['nodes'], set)
+        assert isinstance(island['node_count'], int)
+        assert isinstance(island['internal_components'], list)
+        assert isinstance(island['boundary_components'], list)
+
+        # Verify consistency
+        assert island['node_count'] == len(island['nodes'])
