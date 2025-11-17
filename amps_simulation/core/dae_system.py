@@ -374,10 +374,10 @@ class ElectricalDaeSystem(DaeSystem):
         
         # Create voltage vector and multiply with transpose of incidence matrix
         voltage_vector = Matrix(junction_voltage_var_list)
-        kvl_equations = incidence_matrix.T * voltage_vector
+        kvl_lhs = incidence_matrix.T * voltage_vector
         
         # Add component voltage variables
-        kvl_eqs = [eq - v_comp for eq, v_comp in zip(kvl_equations, comp_voltage_vars)]
+        kvl_eqs = [eq - v_comp for eq, v_comp in zip(kvl_lhs, comp_voltage_vars)]
         
         return kvl_eqs
     
