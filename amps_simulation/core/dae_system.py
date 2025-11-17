@@ -537,6 +537,16 @@ class ElectricalDaeSystem(DaeSystem):
         output_eqs = {output: self.circuit_eqs[output] for output in outputs}
         return output_eqs
     
+
+    def update_all_equations(self) -> List[Symbol]:
+        self.switch_eqs = self.compute_switch_equations()
+        self.diode_eqs = self.compute_diode_equations() 
+        self.circuit_eqs = self.compute_circuit_equations()
+        self.derivatives = self.compute_derivatives()
+        self.output_eqs = self.compute_output_equations()
+        return self.circuit_eqs, self.derivatives, self.output_eqs
+    
+
     def update_switch_states(self, t = None) -> None:
         """Update the switch states. This method is called during simulation when a switch event is detected.
         It uses the kcl, kvl and component equations previously computed and only updates the switch equations.
@@ -548,16 +558,12 @@ class ElectricalDaeSystem(DaeSystem):
             switchmap = {switch.comp_id: switch.set_switch_state(t) for switch in self.switch_list}
         
         assert self.initialized == True, "Model must be initialized before updating switch states"
-        self.switch_eqs = self.compute_switch_equations()
-        self.diode_eqs = self.compute_diode_equations()  # Ensure diode equations are current
-        self.circuit_eqs = self.compute_circuit_equations()
-        self.derivatives = self.compute_derivatives()
-        self.output_eqs = self.compute_output_equations()
-        
+        circuit_eqs, derivatives, output_eqs = self.update_all_equations()
+
         if t is not None:
-            return self.circuit_eqs, self.derivatives, switchmap
+            return circuit_eqs, derivatives, switchmap
         else:
-            return self.circuit_eqs, self.derivatives
+            return circuit_eqs, derivatives
     
     def _add_shunt_resistors_to_diodes(self, R_shunt: float) -> ElectricalModel:
         """Add shunt resistors to all diodes in the electrical model for numerical stability.
@@ -1116,11 +1122,12 @@ class ElectricalDaeSystem(DaeSystem):
                 logging.debug(f"Diode {diode.comp_id} state changed to {'conducting' if new_state else 'blocking'}")
         
         # Recompute circuit equations if any diode state changed
-        if states_changed:
-            # Recompute diode equations (state-dependent)
-            self.diode_eqs = self.compute_diode_equations()
-            # Recompute all circuit variables
-            self.circuit_eqs = self.compute_circuit_equations()
-            self.derivatives = self.compute_derivatives()
-            self.output_eqs = self.compute_output_equations()
-            logging.debug("Circuit equations recomputed due to diode state changes")
+        # if states_changed:
+        #     # Recompute diode equations (state-dependent)
+        #     self.diode_eqs = self.compute_diode_equations()
+        #     # Recompute all circuit variables
+        #     self.circuit_eqs = self.compute_circuit_equations()
+        #     self.derivatives = self.compute_derivatives()
+        #     self.output_eqs = self.compute_output_equations()
+        #     logging.debug("Circuit equations recomputed due to diode state changes")
+        return new_states, states_changed

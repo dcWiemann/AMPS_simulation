@@ -589,14 +589,16 @@ class Engine:
         if self.diode_list:
             self.electrical_dae_system.update_diode_states(y, u, t)
             
-        # Run sanity checks for this switch/diode configuration
-        if self.switch_list or self.diode_list:
-            logging.debug(f"Running sanity checks for switch configuration: {switch_states}")
-            self._run_sanity_checks()
+        # Run sanity checks for this switch/diode configuration before caching
+        # This validates the circuit topology after any switch/diode state updates
+        logging.debug(f"Running sanity checks for switch/diode configuration: switches={switch_states}, diodes={diode_states}")
+        self._run_sanity_checks()
+
+        circuit_eqs, derivatives, output_eqs = self.electrical_dae_system.update_all_equations()
         
-        # Get derivatives and output equations from DAE system
-        derivatives = self.electrical_dae_system.derivatives
-        output_eqs = self.electrical_dae_system.output_eqs
+        # # Get derivatives and output equations from DAE system
+        # derivatives = self.electrical_dae_system.derivatives
+        # output_eqs = self.electrical_dae_system.output_eqs
         
         # Sort equations to match variable order
         sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
