@@ -6,7 +6,7 @@ as NetworkX graphs, using efficient NetworkX subgraph filtering methods.
 """
 
 import logging
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional, Any
 import networkx as nx
 from .components import (
     Component, VoltageSource, CurrentSource, Inductor, Capacitor, 
@@ -74,8 +74,9 @@ class CircuitSanityChecker:
         """
         self.warnings.clear()
         self.errors.clear()
-        
-        # Run all checks
+
+        # Run all checks (ground check first since others depend on it)
+        self._check_ground_node()
         self._check_short_circuited_voltage_sources()
         self._check_open_circuit_current_sources()
         self._check_parallel_voltage_sources()
@@ -103,7 +104,22 @@ class CircuitSanityChecker:
             if component and isinstance(component, component_type):
                 components.append((source, target, component))
         return components
-    
+
+    def _check_ground_node(self):
+        """Check that the circuit has at least one ground reference node."""
+        ground_nodes = []
+
+        for node, node_data in self.graph.nodes(data=True):
+            junction = node_data.get('junction')
+            if junction and isinstance(junction, ElecJunction) and junction.is_ground:
+                ground_nodes.append(node)
+
+        if not ground_nodes:
+            self.errors.append(
+                "Circuit has no ground reference node. "
+                "At least one ground node is required for circuit analysis."
+            )
+
     def _check_short_circuited_voltage_sources(self):
         """Check for voltage sources that are short-circuited by other components."""
         voltage_sources = self._get_components_by_type(VoltageSource)
@@ -231,15 +247,15 @@ class CircuitSanityChecker:
     def _check_floating_nodes(self):
         """Check for nodes that are not connected to ground."""
         ground_nodes = set()
-        
+
         # Find all ground nodes
         for node, node_data in self.graph.nodes(data=True):
             junction = node_data.get('junction')
             if junction and isinstance(junction, ElecJunction) and junction.is_ground:
                 ground_nodes.add(node)
-        
+
         if not ground_nodes:
-            self.warnings.append("No ground reference found in circuit")
+            # No ground - this is now caught by _check_ground_node()
             return
         
         # Create subgraph with only current-carrying components
@@ -318,7 +334,102 @@ class CircuitSanityChecker:
                 constraints['zero_voltage_capacitors'].append(capacitor.comp_id)
         
         return constraints
-    
+
+    def detect_islands(self) -> List[Dict[str, Any]]:
+        """
+        Detect electrical islands (circuit sections not connected to ground).
+
+        An island is a group of nodes that:
+        - Are connected to each other through current-carrying paths
+        - Are NOT connected to any ground node through current-carrying paths
+
+        For each island, this method identifies:
+        - Nodes in the island
+        - Components internal to the island (both terminals in island)
+        - Components on the boundary (connecting island to external circuit)
+
+        Boundary components are typically open circuits (open switches, blocking diodes)
+        that prevent current flow between the island and the rest of the circuit.
+
+        Returns:
+            List of dictionaries, each containing:
+            - 'island_id': Integer ID for the island (0-indexed)
+            - 'nodes': Set of node IDs in the island
+            - 'node_count': Number of nodes in the island
+            - 'internal_components': List of (source, target, component) tuples for components
+              with both terminals in the island
+            - 'boundary_components': List of (source, target, component) tuples for components
+              connecting the island to external nodes or other islands
+
+        Example:
+            >>> checker = CircuitSanityChecker(graph)
+            >>> islands = checker.detect_islands()
+            >>> for island in islands:
+            >>>     print(f"Island {island['island_id']}: {island['node_count']} nodes")
+            >>>     print(f"  Nodes: {island['nodes']}")
+            >>>     print(f"  Boundary components:")
+            >>>     for src, tgt, comp in island['boundary_components']:
+            >>>         print(f"    {comp.comp_id} ({src} -> {tgt})")
+        """
+        # Find all ground nodes
+        ground_nodes = set()
+        for node, node_data in self.graph.nodes(data=True):
+            junction = node_data.get('junction')
+            if junction and isinstance(junction, ElecJunction) and junction.is_ground:
+                ground_nodes.add(node)
+
+        # Create subgraph with only current-carrying components (non-open-circuit)
+        def edge_filter(u, v, k):
+            component = self.graph[u][v][k].get('component')
+            return component is not None and not component.is_open_circuit
+
+        current_graph = nx.subgraph_view(self.graph, filter_edge=edge_filter).to_undirected()
+
+        # Find all connected components in the current-carrying graph
+        connected_components = list(nx.connected_components(current_graph))
+
+        # Identify islands (components not connected to ground)
+        islands = []
+        island_id = 0
+
+        for component_nodes in connected_components:
+            # Check if this component is connected to ground
+            if not (component_nodes & ground_nodes):  # Intersection is empty
+                # This is an island - not connected to ground
+                island_nodes = component_nodes
+
+                # Find internal and boundary components by examining ALL edges in original graph
+                internal_components = []
+                boundary_components = []
+
+                for source, target, edge_data in self.graph.edges(data=True):
+                    component = edge_data.get('component')
+                    if not component:
+                        continue
+
+                    source_in_island = source in island_nodes
+                    target_in_island = target in island_nodes
+
+                    if source_in_island and target_in_island:
+                        # Both terminals in island - internal component
+                        internal_components.append((source, target, component))
+                    elif source_in_island or target_in_island:
+                        # One terminal in island, one outside - boundary component
+                        # These are typically open circuits isolating the island
+                        boundary_components.append((source, target, component))
+
+                islands.append({
+                    'island_id': island_id,
+                    'nodes': island_nodes,
+                    'node_count': len(island_nodes),
+                    'internal_components': internal_components,
+                    'boundary_components': boundary_components
+                })
+
+                island_id += 1
+
+        return islands
+
     def log_results(self):
         """Log the sanity check results."""
         if self.errors:
