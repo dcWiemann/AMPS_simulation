@@ -329,26 +329,26 @@ class TestDiodeIntegration:
               f"D2={'CONDUCTING' if diode_states[1] else 'BLOCKING'}")
 
     # TODO: Fix this test - currently failing due to incomplete DAE solver solution
-    # def test_two_diodes_negative_voltage(self):
-    #     """
-    #     Test two diodes in series with V_in = -5V.
-    #
-    #     Expected: Both diodes should be BLOCKING.
-    #     With negative voltage, both diodes are reverse-biased and block current.
-    #     """
-    #     engine, state_values, input_values = self.build_two_diodes_circuit(-5.0)
-    #
-    #     # Detect diode states
-    #     dae_system = engine.electrical_dae_system
-    #     diode_states = dae_system.detect_diode_states(state_values, input_values)
-    #
-    #     # Verify results
-    #     assert len(diode_states) == 2, f"Expected 2 diodes, found {len(diode_states)}"
-    #     assert diode_states[0] == False, "Diode D1 should be BLOCKING with -5V input"
-    #     assert diode_states[1] == False, "Diode D2 should be BLOCKING with -5V input"
-    #
-    #     print(f"\n[Two Diodes -5V] D1={'CONDUCTING' if diode_states[0] else 'BLOCKING'}, "
-    #           f"D2={'CONDUCTING' if diode_states[1] else 'BLOCKING'}")
+    def test_two_diodes_negative_voltage(self):
+        """
+        Test two diodes in series with V_in = -5V.
+    
+        Expected: Both diodes should be BLOCKING.
+        With negative voltage, both diodes are reverse-biased and block current.
+        """
+        engine, state_values, input_values = self.build_two_diodes_circuit(-5.0)
+    
+        # Detect diode states
+        dae_system = engine.electrical_dae_system
+        diode_states = dae_system.detect_diode_states(state_values, input_values)
+    
+        # Verify results
+        assert len(diode_states) == 2, f"Expected 2 diodes, found {len(diode_states)}"
+        assert diode_states[0] == False, "Diode D1 should be BLOCKING with -5V input"
+        assert diode_states[1] == False, "Diode D2 should be BLOCKING with -5V input"
+    
+        print(f"\n[Two Diodes -5V] D1={'CONDUCTING' if diode_states[0] else 'BLOCKING'}, "
+              f"D2={'CONDUCTING' if diode_states[1] else 'BLOCKING'}")
 
     # ========================================================================
     # CIRCUIT 4: Bridge Rectifier
@@ -511,35 +511,35 @@ class TestDiodeIntegration:
 
 
     # TODO: Fix this test - currently failing due to incomplete DAE solver solution
-    # def test_bridge_rectifier_zero_voltage(self):
-    #     """
-    #     Test bridge rectifier with V_in = 0V and v_C = 0V.
-    #
-    #     Expected: All diodes should be BLOCKING.
-    #     With zero input and zero capacitor voltage, there is no forward bias
-    #     on any diode.
-    #     """
-    #     engine, state_values, input_values = self.build_bridge_rectifier_circuit(0.0, 0.0)
-    #
-    #     # Detect diode states
-    #     dae_system = engine.electrical_dae_system
-    #     diode_states = dae_system.detect_diode_states(state_values, input_values)
-    #
-    #     # Verify results
-    #     assert len(diode_states) == 4, f"Expected 4 diodes in bridge, found {len(diode_states)}"
-    #
-    #     # Count conducting diodes
-    #     num_conducting = sum(diode_states)
-    #
-    #     print(f"\n[Bridge 0V] D1={'ON' if diode_states[0] else 'OFF'}, "
-    #           f"D2={'ON' if diode_states[1] else 'OFF'}, "
-    #           f"D3={'ON' if diode_states[2] else 'OFF'}, "
-    #           f"D4={'ON' if diode_states[3] else 'OFF'}")
-    #     print(f"  Expected: All diodes OFF (0 diodes conducting)")
-    #
-    #     # All diodes should be blocking
-    #     assert num_conducting == 0, f"Expected 0 conducting diodes, found {num_conducting}"
-    #     assert all(state == False for state in diode_states), "All diodes should be blocking with 0V input"
+    def test_bridge_rectifier_zero_voltage(self):
+        """
+        Test bridge rectifier with V_in = 0V and v_C = 0V.
+    
+        Expected: All diodes should be BLOCKING.
+        With zero input and zero capacitor voltage, there is no forward bias
+        on any diode.
+        """
+        engine, state_values, input_values = self.build_bridge_rectifier_circuit(0.0, 0.0)
+    
+        # Detect diode states
+        dae_system = engine.electrical_dae_system
+        diode_states = dae_system.detect_diode_states(state_values, input_values)
+    
+        # Verify results
+        assert len(diode_states) == 4, f"Expected 4 diodes in bridge, found {len(diode_states)}"
+    
+        # Count conducting diodes
+        num_conducting = sum(diode_states)
+    
+        print(f"\n[Bridge 0V] D1={'ON' if diode_states[0] else 'OFF'}, "
+              f"D2={'ON' if diode_states[1] else 'OFF'}, "
+              f"D3={'ON' if diode_states[2] else 'OFF'}, "
+              f"D4={'ON' if diode_states[3] else 'OFF'}")
+        print(f"  Expected: All diodes OFF (0 diodes conducting)")
+    
+        # All diodes should be blocking
+        assert num_conducting == 0, f"Expected 0 conducting diodes, found {num_conducting}"
+        assert all(state == False for state in diode_states), "All diodes should be blocking with 0V input"
 
 
 if __name__ == "__main__":
