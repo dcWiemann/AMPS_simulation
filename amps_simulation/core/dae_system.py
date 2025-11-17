@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 import numpy as np
 import networkx as nx
 from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode
@@ -112,75 +112,40 @@ class ElectricalDaeSystem(DaeSystem):
         self.output_eqs = self.compute_output_equations()
         self.initialized = True
     
-    def _solve_circuit_equations(self, equations: List, vars_to_solve: List) -> Dict:
-        """Generic circuit equation solver (DRY - used by both circuit solving and LCP).
-        
+    def _solve_symbolic_system(self, equations: List, vars_to_solve: List, strict: bool = True) -> Optional[Dict]:
+        """Unified symbolic equation solver using sympy.
+
+        Solves a system of symbolic equations for specified variables. Can operate in strict mode
+        (raises exceptions on failure) or lenient mode (returns None on failure).
+
         Args:
-            equations: List of equations to solve
-            vars_to_solve: List of variables to solve for
-            
+            equations: List of symbolic equations to solve
+            vars_to_solve: List of symbolic variables to solve for
+            strict: If True, raises ValueError on failure. If False, returns None on failure.
+
         Returns:
-            Dictionary mapping variables to their symbolic expressions
+            Dictionary mapping variables to their symbolic expressions, or None if strict=False and solving fails
+
+        Raises:
+            ValueError: If strict=True and solving fails (equation/variable mismatch, incomplete solution, etc.)
         """
-        logging.debug(f"Circuit solver: {len(equations)} equations, {len(vars_to_solve)} variables")
-        
+        logging.debug(f"Symbolic solver (strict={strict}): {len(equations)} equations, {len(vars_to_solve)} variables")
+
+        # Check equation/variable balance
+        if len(equations) != len(vars_to_solve):
+            msg = f"Equation/variable mismatch: {len(equations)} equations, {len(vars_to_solve)} variables"
+            logging.debug(msg)
+            if strict:
+                raise ValueError(msg)
+            else:
+                return None
+
         # Log equations and variables for debugging
         logging.debug("Equations to solve:")
         for i, eq in enumerate(equations):
             logging.debug(f"  [{i}] {eq}")
-        
+
         logging.debug("Variables to solve for:")
-        for i, var in enumerate(vars_to_solve):
-            logging.debug(f"  [{i}] {var}")
-        
-        # Check equation/variable balance
-        if len(equations) != len(vars_to_solve):
-            raise ValueError(f"Equation/variable mismatch: {len(equations)} equations, {len(vars_to_solve)} variables")
-        
-        # Solve the equations
-        solution = solve(equations, vars_to_solve)
-        
-        logging.debug(f"Circuit solver: Found {len(solution)} solutions")
-        
-        # Log the solutions found
-        if solution:
-            logging.debug("Solutions found:")
-            for var, expr in solution.items():
-                logging.debug(f"  {var} = {expr}")
-        
-        if len(solution) != len(vars_to_solve):
-            # Log which variables have no solution
-            solved_vars = set(solution.keys())
-            unsolved_vars = [var for var in vars_to_solve if var not in solved_vars]
-            if unsolved_vars:
-                logging.debug(f"Variables without solutions: {unsolved_vars}")
-            raise ValueError(f"Did not find a solution for every variable: {len(solution)} solutions, {len(vars_to_solve)} variables")
-        
-        return solution
-
-    def _solve_circuit_equations_safe(self, equations: List, vars_to_solve: List) -> Dict:
-        """Safe circuit equation solver that handles cases where sympy.solve() returns empty list.
-
-        Args:
-            equations: List of equations to solve
-            vars_to_solve: List of variables to solve for
-
-        Returns:
-            Dictionary mapping variables to their symbolic expressions, or None if no solution exists
-        """
-        logging.debug(f"Safe circuit solver: {len(equations)} equations, {len(vars_to_solve)} variables")
-
-        # Check equation/variable balance
-        if len(equations) != len(vars_to_solve):
-            logging.debug(f"Equation/variable mismatch: {len(equations)} equations, {len(vars_to_solve)} variables")
-            return None
-
-        # Log equations for debugging
-        logging.debug("Safe solver equations:")
-        for i, eq in enumerate(equations):
-            logging.debug(f"  [{i}] {eq}")
-
-        logging.debug("Safe solver variables to solve:")
         for i, var in enumerate(vars_to_solve):
             logging.debug(f"  [{i}] {var}")
 
@@ -192,35 +157,60 @@ class ElectricalDaeSystem(DaeSystem):
             if isinstance(solution, dict):
                 # Normal case: solution is a dictionary
                 if len(solution) == len(vars_to_solve):
-                    logging.debug(f"Safe solver: Found complete solution with {len(solution)} variables")
+                    logging.debug(f"Symbolic solver: Found complete solution with {len(solution)} variables")
+                    # Log the solutions found
+                    logging.debug("Solutions found:")
+                    for var, expr in solution.items():
+                        logging.debug(f"  {var} = {expr}")
                     return solution
                 else:
-                    logging.debug(f"Safe solver: Incomplete solution - {len(solution)} solutions for {len(vars_to_solve)} variables")
+                    # Incomplete solution
+                    msg = f"Incomplete solution: {len(solution)} solutions for {len(vars_to_solve)} variables"
+                    logging.debug(msg)
                     # Log which variables have solutions and which don't
                     solved_vars = set(solution.keys())
                     unsolved_vars = [var for var in vars_to_solve if var not in solved_vars]
-                    logging.debug(f"Safe solver: Variables WITH solutions: {[str(v) for v in solved_vars]}")
-                    logging.debug(f"Safe solver: Variables WITHOUT solutions: {[str(v) for v in unsolved_vars]}")
-                    return None
+                    logging.debug(f"Variables WITH solutions: {[str(v) for v in solved_vars]}")
+                    logging.debug(f"Variables WITHOUT solutions: {[str(v) for v in unsolved_vars]}")
+                    if strict:
+                        raise ValueError(msg)
+                    else:
+                        return None
             elif isinstance(solution, list):
                 # sympy returned a list (usually empty when no solution exists)
                 if len(solution) == 0:
-                    logging.debug("Safe solver: No solution found (empty list returned)")
-                    return None
+                    msg = "No solution found (empty list returned)"
+                    logging.debug(msg)
+                    if strict:
+                        raise ValueError(msg)
+                    else:
+                        return None
                 elif len(solution) == 1 and isinstance(solution[0], dict):
                     # Sometimes sympy returns [solution_dict]
-                    logging.debug("Safe solver: Found solution in list format")
+                    logging.debug("Symbolic solver: Found solution in list format")
                     return solution[0]
                 else:
-                    logging.debug(f"Safe solver: Unexpected list format with {len(solution)} items")
-                    return None
+                    msg = f"Unexpected list format with {len(solution)} items"
+                    logging.debug(msg)
+                    if strict:
+                        raise ValueError(msg)
+                    else:
+                        return None
             else:
-                logging.debug(f"Safe solver: Unexpected solution type: {type(solution)}")
-                return None
-                
+                msg = f"Unexpected solution type: {type(solution)}"
+                logging.debug(msg)
+                if strict:
+                    raise ValueError(msg)
+                else:
+                    return None
+
         except Exception as e:
-            logging.debug(f"Safe solver: Exception during solving: {e}")
-            return None
+            msg = f"Exception during solving: {e}"
+            logging.debug(msg)
+            if strict:
+                raise ValueError(msg) from e
+            else:
+                return None
 
     def _extract_diode_voltage_expressions(self, solution: Dict) -> List:
         ### Todo: remove redundancy
@@ -445,22 +435,26 @@ class ElectricalDaeSystem(DaeSystem):
 
         return diode_eqs
 
-    def _process_islands(self, kvl_eqs: List) -> Tuple[List, set, List]:
+    def _process_islands(self, kvl_eqs: List) -> Tuple[List, set, List, set, set]:
         """Process electrical islands and filter KVL equations for boundary components.
 
         Detects electrical islands (circuit sections not connected to ground) and:
         1. Removes KVL equations for boundary components (components connecting islands to external circuit)
         2. Identifies single-node island voltage variables to exclude from circuit solving
         3. Sets voltage reference (v=0) for one node in each multi-node island
+        4. Identifies boundary component voltage variables to exclude from circuit solving
+        5. Identifies reference node voltage variables to exclude from circuit solving
 
         Args:
             kvl_eqs: List of KVL equations to filter
 
         Returns:
-            Tuple[List, set, List]: (filtered_kvl_eqs, island_single_node_voltages, island_reference_eqs)
+            Tuple[List, set, List, set, set]: (filtered_kvl_eqs, island_single_node_voltages, island_reference_eqs, island_boundary_voltages, island_reference_voltages)
                 - filtered_kvl_eqs: KVL equations with boundary component equations removed
                 - island_single_node_voltages: Set of voltage variables for single-node islands (excluded from solving)
                 - island_reference_eqs: Equations setting reference voltages for multi-node islands (v_node = 0)
+                - island_boundary_voltages: Set of voltage variables for boundary components (excluded from solving)
+                - island_reference_voltages: Set of reference node voltage variables (excluded from solving)
         """
         # Detect electrical islands
         checker = CircuitSanityChecker(self.graph)
@@ -469,7 +463,7 @@ class ElectricalDaeSystem(DaeSystem):
         # Early return if no islands detected
         if not islands:
             logging.debug("No electrical islands detected")
-            return kvl_eqs, set(), []
+            return kvl_eqs, set(), [], set(), set()
 
         logging.debug(f"Detected {len(islands)} electrical island(s)")
 
@@ -477,6 +471,8 @@ class ElectricalDaeSystem(DaeSystem):
         boundary_component_indices = set()
         island_single_node_voltages = set()
         island_reference_eqs = []
+        island_boundary_voltages = set()
+        island_reference_voltages = set()  # Track reference node voltages to exclude
 
         # Get component_list for index lookup
         component_list = self.electrical_model.component_list
@@ -496,6 +492,11 @@ class ElectricalDaeSystem(DaeSystem):
                         boundary_component_indices.add(idx)
                         logging.debug(f"  Boundary component {boundary_comp.comp_id} at index {idx}")
                         break
+
+                # Collect voltage variable for boundary component
+                if boundary_comp.voltage_var is not None:
+                    island_boundary_voltages.add(boundary_comp.voltage_var)
+                    logging.debug(f"  Boundary component {boundary_comp.comp_id}: excluding voltage variable {boundary_comp.voltage_var}")
 
             # Handle single-node islands: exclude node voltage from vars_to_solve
             if node_count == 1:
@@ -523,6 +524,7 @@ class ElectricalDaeSystem(DaeSystem):
                 if voltage_var is not None:
                     # Add equation: v_node = 0 to set voltage reference
                     island_reference_eqs.append(voltage_var - 0)
+                    island_reference_voltages.add(voltage_var)  # Exclude from vars_to_solve
                     logging.debug(f"  Multi-node island: setting reference voltage {voltage_var} = 0")
 
         # Filter KVL equations to exclude boundary component equations
@@ -533,7 +535,7 @@ class ElectricalDaeSystem(DaeSystem):
         else:
             kvl_eqs_filtered = kvl_eqs
 
-        return kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs
+        return kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs, island_boundary_voltages, island_reference_voltages
 
     def compute_circuit_equations(self) -> Dict:
         """Solve the full circuit variables including diode equations.
@@ -569,8 +571,8 @@ class ElectricalDaeSystem(DaeSystem):
         logging.debug(f"Full circuit: input_vars={[str(v) for v in input_vars]}")
         logging.debug(f"Full circuit: state_vars={[str(v) for v in state_vars]}")
 
-        # Process islands: filter KVL equations and get single-node island voltages and reference equations
-        kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs = self._process_islands(kvl_eqs)
+        # Process islands: filter KVL equations and get variables to exclude
+        kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs, island_boundary_voltages, island_reference_voltages = self._process_islands(kvl_eqs)
 
         # Assemble equations with filtered KVL equations and island reference equations
         equations = kcl_eqs + kvl_eqs_filtered + static_eqs + switch_eqs + diode_eqs + island_reference_eqs
@@ -584,12 +586,12 @@ class ElectricalDaeSystem(DaeSystem):
         # Combine all variables
         combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
 
-        # Remove excluded variables (input_vars, state_vars, and single-node island voltages)
-        excluded = set(input_vars) | set(state_vars) | island_single_node_voltages
+        # Remove excluded variables (input_vars, state_vars, island voltages, boundary voltages, and reference voltages)
+        excluded = set(input_vars) | set(state_vars) | island_single_node_voltages | island_boundary_voltages | island_reference_voltages
         vars_to_solve = [var for var in combined_vars if var not in excluded]
 
-        # Use safe solver that handles empty solutions
-        solution = self._solve_circuit_equations_safe(equations, vars_to_solve)
+        # Use lenient solver (returns None on failure instead of raising)
+        solution = self._solve_symbolic_system(equations, vars_to_solve, strict=False)
         if solution is None:
             raise ValueError(f"Could not solve circuit equations: {len(equations)} equations, {len(vars_to_solve)} variables")
         return solution
@@ -809,8 +811,8 @@ class ElectricalDaeSystem(DaeSystem):
         print(f"\nVARIABLES TO SOLVE ({len(vars_to_solve)} total):")
         for i, var in enumerate(vars_to_solve):
             print(f"  [{i:2d}] {var}")
-        
-        solution = self._solve_circuit_equations(equations, vars_to_solve)
+
+        solution = self._solve_symbolic_system(equations, vars_to_solve, strict=True)
         
         print(f"\nSOLUTIONS ({len(solution)} total):")
         for var, expr in solution.items():
@@ -1074,8 +1076,8 @@ class ElectricalDaeSystem(DaeSystem):
                 combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
                 vars_to_solve = combined_vars
 
-                # Attempt to solve
-                solution = self._solve_circuit_equations_safe(equations, vars_to_solve)
+                # Attempt to solve (lenient mode - returns None on failure)
+                solution = self._solve_symbolic_system(equations, vars_to_solve, strict=False)
 
                 if solution is None:
                     results[combination] = {
