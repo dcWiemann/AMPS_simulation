@@ -6,7 +6,8 @@ from .components import (
     Component, Resistor, Capacitor, Inductor,
     PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction, Ammeter, Voltmeter
 )
-from .control_orchestrator import ControlGraph, ControlSignal
+from .control_graph import ControlGraph
+from .control_signal import ControlSignal
 from .control_port import ControlPort
 
 class CircuitParser(ABC):

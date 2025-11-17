@@ -13,6 +13,7 @@ if __name__ == "__main__":
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
 from amps_simulation.core.electrical_model import ElectricalModel
+from amps_simulation.core.control_model import ControlModel
 
 
 logging.basicConfig(
@@ -66,9 +67,10 @@ def run_simulation(circuit_json_data, t_span=(0, 1.0), method='RK45', plot_resul
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_json_data)
 
-    # Create electrical model and initialize the Engine
+    # Create electrical model and control model, then initialize the Engine
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Run the simulation using the new run_simulation method

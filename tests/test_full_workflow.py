@@ -15,6 +15,7 @@ from pathlib import Path
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.engine import Engine
 from amps_simulation.core.electrical_model import ElectricalModel
+from amps_simulation.core.control_model import ControlModel
 from amps_simulation.core.components import Component
 
 
@@ -38,9 +39,10 @@ class TestFullWorkflow:
         parser = ParserJson()
         graph, control_graph = parser.parse(circuit_data)
 
-        # Create electrical model and engine
+        # Create electrical model, control model, and engine
         electrical_model = ElectricalModel(graph)
-        engine = Engine(electrical_model, control_graph)
+        control_model = ControlModel(control_graph)
+        engine = Engine(electrical_model, control_model)
         engine.initialize()
         
         # Run simulation for 5 seconds to reach steady state

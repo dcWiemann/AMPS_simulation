@@ -8,7 +8,7 @@ from .components import Component
 from .dae_system import ElectricalDaeSystem
 from .electrical_model import ElectricalModel
 from .engine_settings import EngineSettings
-from .control_orchestrator import ControlOrchestrator, ControlGraph
+from .control_model import ControlModel
 from .circuit_sanity_checker import CircuitSanityChecker
 
 class Engine:
@@ -18,18 +18,17 @@ class Engine:
     This class takes an ElectricalModel and handles the simulation of the circuit.
     """
     
-    def __init__(self, electrical_model: ElectricalModel, control_graph: ControlGraph = None):
+    def __init__(self, electrical_model: ElectricalModel, control_model: ControlModel = None):
         """
         Initialize the Engine class.
 
         Args:
             electrical_model: ElectricalModel representing the circuit
-            control_graph: ControlGraph representing the control layer
+            control_model: ControlModel representing the control layer
         """
         self.electrical_model = electrical_model
         self.graph = electrical_model.graph  # Keep reference to graph for compatibility
-        self.control_graph = control_graph or ControlGraph()
-        self.control_orchestrator = ControlOrchestrator(self.control_graph)
+        self.control_model = control_model or ControlModel()
         
         # Initialize simulation variables
         self.components_list = []
@@ -72,8 +71,9 @@ class Engine:
         self.switch_list = tuple(self.electrical_model.switch_list)
         self.diode_list = tuple(self.electrical_model.diode_list)
         
-        # Build control orchestrator input function for sources only
-        source_ports = self.control_graph.get_source_ports()
+        # Build control model input function for sources only
+        source_ports = {name: port for name, port in self.control_model.ports.items()
+                       if port.port_type == "source"}
         if source_ports:
             # Create ordered list of SOURCE port names matching input_vars order
             # Engine determines and maintains this order throughout simulation
@@ -84,9 +84,9 @@ class Engine:
                     if port.variable == input_var:
                         port_order.append(port_name)
                         break
-            
+
             if port_order:
-                self.control_input_function = self.control_orchestrator.compile_input_function(port_order)
+                self.control_input_function = self.control_model.compile_input_function(port_order)
                 logging.debug(f"Control input function compiled with port order: {port_order}")
 
         if self.switch_list is not None:

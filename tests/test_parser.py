@@ -6,7 +6,7 @@ from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
     VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter, ElecJunction
 )
-from amps_simulation.core.control_orchestrator import ControlGraph
+from amps_simulation.core.control_graph import ControlGraph
 from amps_simulation.core.control_port import ControlPort
 
 def load_test_file(filename: str) -> dict:

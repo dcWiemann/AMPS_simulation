@@ -9,7 +9,8 @@ from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, 
 from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.dae_system import ElectricalDaeSystem
 from amps_simulation.core.electrical_model import ElectricalModel
-from amps_simulation.core.control_orchestrator import ControlGraph
+from amps_simulation.core.control_model import ControlModel
+from amps_simulation.core.control_graph import ControlGraph
 
 def load_test_circuit(filename):
     """Helper function to load test circuit from JSON file."""
@@ -27,7 +28,8 @@ def test_initialize_rlc():
 
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Test components list
@@ -57,7 +59,8 @@ def test_initialize_resistive():
 
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Test components list
@@ -83,7 +86,8 @@ def test_run_simulation_basic():
 
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Run simulation
@@ -115,7 +119,8 @@ def test_run_simulation_with_switch():
 
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Run simulation that spans the switch event
@@ -147,7 +152,8 @@ def test_run_simulation_with_outputs():
 
     Component.clear_registry()
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Run simulation
@@ -170,7 +176,8 @@ def test_run_simulation_no_states():
     Component.clear_registry()
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Verify this is indeed a no-states circuit
@@ -212,7 +219,8 @@ def test_switch_events():
     Component.clear_registry()
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Test that switch events were created
@@ -255,7 +263,8 @@ def test_compute_state_space_model():
 
     # Create electrical model and engine instance
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
     
     # Create model and get equations
@@ -288,10 +297,10 @@ def test_compute_state_space_model():
     assert all(isinstance(expr, sp.Expr) for expr in C)
     assert all(isinstance(expr, sp.Expr) for expr in D)
 
-def test_engine_control_orchestrator_integration():
-    """Test that Engine integrates with ControlOrchestrator for sources with values."""
+def test_engine_control_model_integration():
+    """Test that Engine integrates with ControlModel for sources with values."""
     Component.clear_registry()
-    
+
     # Create test circuit with voltage source having a value
     circuit_data = {
         "nodes": [
@@ -311,14 +320,15 @@ def test_engine_control_orchestrator_integration():
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
 
-    # Create electrical model and engine with control graph
+    # Create electrical model and engine with control model
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
 
-    # Verify ControlOrchestrator was created
-    assert hasattr(engine, 'control_orchestrator')
-    assert engine.control_orchestrator.control_graph is control_graph
+    # Verify ControlModel was created
+    assert hasattr(engine, 'control_model')
+    assert engine.control_model.control_graph is control_graph
 
     # Verify control input function was created for source ports
     assert hasattr(engine, 'control_input_function')
@@ -331,7 +341,7 @@ def test_engine_control_orchestrator_integration():
 def test_engine_no_control_sources():
     """Test Engine behavior when circuit has no sources with values."""
     Component.clear_registry()
-    
+
     # Create test circuit without sources with values
     circuit_data = {
         "nodes": [
@@ -349,13 +359,14 @@ def test_engine_no_control_sources():
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
 
-    # Create electrical model and engine with empty control graph
+    # Create electrical model and engine with empty control model
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
 
-    # Should still have ControlOrchestrator
-    assert hasattr(engine, 'control_orchestrator')
+    # Should still have ControlModel
+    assert hasattr(engine, 'control_model')
     
     # Should not have control input function since no source ports
     assert not hasattr(engine, 'control_input_function')
@@ -385,7 +396,8 @@ def test_engine_multiple_source_control():
     graph, control_graph = parser.parse(circuit_data)
 
     electrical_model = ElectricalModel(graph)
-    engine = Engine(electrical_model, control_graph)
+    control_model = ControlModel(control_graph)
+    engine = Engine(electrical_model, control_model)
     engine.initialize()
 
     # Should have control input function for multiple sources
