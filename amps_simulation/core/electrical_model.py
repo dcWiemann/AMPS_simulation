@@ -136,11 +136,24 @@ class ElectricalModel:
         n_edges = len(component_list)
         incidence_matrix = np.zeros((n_nodes, n_edges))
 
-        # Create mapping from node to junction index
-        nodelist = list(self.graph.nodes())
+        # Create mapping from junction_id to node_id to ensure nodelist matches junction_list ordering
+        junction_id_to_node = {}
+        for node, node_data in self.graph.nodes(data=True):
+            junction = node_data['junction']
+            junction_id_to_node[junction.junction_id] = node
 
-        # Fill incidence matrix based on edge directions
-        for edge_idx, (source, target, data) in enumerate(self.graph.edges(data=True)):
+        # Build nodelist in same order as junction_list
+        nodelist = [junction_id_to_node[junction.junction_id] for junction in junction_list]
+
+        # Create mapping from component_id to (source, target) to ensure edge ordering matches component_list
+        component_id_to_edge = {}
+        for source, target, edge_data in self.graph.edges(data=True):
+            component = edge_data['component']
+            component_id_to_edge[component.comp_id] = (source, target)
+
+        # Fill incidence matrix based on edge directions, using component_list ordering
+        for edge_idx, component in enumerate(component_list):
+            source, target = component_id_to_edge[component.comp_id]
             source_idx = nodelist.index(source)
             target_idx = nodelist.index(target)
 
