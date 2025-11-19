@@ -435,26 +435,25 @@ class ElectricalDaeSystem(DaeSystem):
 
         return diode_eqs
 
-    def _process_islands(self, kvl_eqs: List) -> Tuple[List, set, List, set, set]:
-        """Process electrical islands and filter KVL equations for boundary components.
+    def _process_islands(self, kcl_eqs: List, kvl_eqs: List) -> Tuple[List, List, List, set]:
+        """Process electrical islands and filter KCL/KVL equations for boundary components.
 
         Detects electrical islands (circuit sections not connected to ground) and:
-        1. Removes KVL equations for boundary components (components connecting islands to external circuit)
-        2. Identifies single-node island voltage variables to exclude from circuit solving
-        3. Sets voltage reference (v=0) for one node in each multi-node island
+        1. Removes KCL equations for reference nodes (one per island, to avoid redundant equations)
+        2. Removes KVL equations for boundary components (components connecting islands to external circuit)
+        3. Adds voltage reference equation (v=0) for one node in each island
         4. Identifies boundary component voltage variables to exclude from circuit solving
-        5. Identifies reference node voltage variables to exclude from circuit solving
 
         Args:
+            kcl_eqs: List of KCL equations to filter
             kvl_eqs: List of KVL equations to filter
 
         Returns:
-            Tuple[List, set, List, set, set]: (filtered_kvl_eqs, island_single_node_voltages, island_reference_eqs, island_boundary_voltages, island_reference_voltages)
+            Tuple[List, List, List, set]: (filtered_kcl_eqs, filtered_kvl_eqs, island_reference_eqs, island_boundary_voltages)
+                - filtered_kcl_eqs: KCL equations with reference node equations removed
                 - filtered_kvl_eqs: KVL equations with boundary component equations removed
-                - island_single_node_voltages: Set of voltage variables for single-node islands (excluded from solving)
-                - island_reference_eqs: Equations setting reference voltages for multi-node islands (v_node = 0)
+                - island_reference_eqs: Equations setting reference voltages for islands (v_node = 0)
                 - island_boundary_voltages: Set of voltage variables for boundary components (excluded from solving)
-                - island_reference_voltages: Set of reference node voltage variables (excluded from solving)
         """
         # Detect electrical islands
         checker = CircuitSanityChecker(self.graph)
@@ -463,19 +462,28 @@ class ElectricalDaeSystem(DaeSystem):
         # Early return if no islands detected
         if not islands:
             logging.debug("No electrical islands detected")
-            return kvl_eqs, set(), [], set(), set()
+            return kcl_eqs, kvl_eqs, [], set()
 
         logging.debug(f"Detected {len(islands)} electrical island(s)")
 
         # Find boundary component indices to exclude their KVL equations
         boundary_component_indices = set()
-        island_single_node_voltages = set()
         island_reference_eqs = []
         island_boundary_voltages = set()
-        island_reference_voltages = set()  # Track reference node voltages to exclude
+        island_reference_nodes = set()  # Track reference nodes to exclude their KCL equations
 
         # Get component_list for index lookup
         component_list = self.electrical_model.component_list
+        junction_list = self.electrical_model.junction_list
+
+        # Build mapping from node ID to KCL equation index
+        # KCL equations correspond to junctions in junction_list order, excluding ground
+        node_to_kcl_index = {}
+        kcl_idx = 0
+        for junction in junction_list:
+            if not junction.is_ground:
+                node_to_kcl_index[junction.junction_id] = kcl_idx
+                kcl_idx += 1
 
         for island in islands:
             island_id = island['island_id']
@@ -498,34 +506,43 @@ class ElectricalDaeSystem(DaeSystem):
                     island_boundary_voltages.add(boundary_comp.voltage_var)
                     logging.debug(f"  Boundary component {boundary_comp.comp_id}: excluding voltage variable {boundary_comp.voltage_var}")
 
-            # Handle single-node islands: exclude node voltage from vars_to_solve
-            if node_count == 1:
-                island_nodes = island['nodes']
-                island_node = list(island_nodes)[0]  # Get the single node
+            # Handle islands: set voltage reference and exclude redundant KCL equations
+            island_nodes = island['nodes']
+            sorted_nodes = sorted(island_nodes)
 
-                # Find the voltage variable for this node
-                junction = self.graph.nodes[island_node]['junction']
-                voltage_var = junction.voltage_var
+            # Helper function to find junction by node ID
+            def find_junction(node_id):
+                for j in junction_list:
+                    if j.junction_id == node_id:
+                        return j
+                return None
 
-                if voltage_var is not None:
-                    island_single_node_voltages.add(voltage_var)
-                    logging.debug(f"  Single-node island: excluding voltage variable {voltage_var}")
+            # Process reference node (first node in sorted order)
+            reference_node = sorted_nodes[0]
+            reference_junction = find_junction(reference_node)
 
-            # Handle multi-node islands: set reference voltage for one node
-            elif node_count > 1:
-                island_nodes = island['nodes']
-                # Pick the first node (sorted for determinism) as the reference
-                reference_node = sorted(island_nodes)[0]
+            if reference_junction and reference_junction.voltage_var is not None:
+                voltage_var = reference_junction.voltage_var
+                # Add reference voltage equation (v_node = 0) for all islands
+                # Keep the voltage in variables to solve
+                island_reference_eqs.append(voltage_var - 0)
+                logging.debug(f"  Island: setting reference voltage {voltage_var} = 0")
 
-                # Find the voltage variable for this reference node
-                junction = self.graph.nodes[reference_node]['junction']
-                voltage_var = junction.voltage_var
+            # Exclude KCL equation for the reference node
+            # For an island with n nodes, we have n KCL equations but only n-1 are independent
+            # By removing 1 KCL and adding 1 reference equation, we maintain balance: (n-1) + 1 = n equations for n variables
+            if reference_node in node_to_kcl_index:
+                island_reference_nodes.add(reference_node)
+                logging.debug(f"  Island: excluding KCL equation for reference node {reference_node}")
 
-                if voltage_var is not None:
-                    # Add equation: v_node = 0 to set voltage reference
-                    island_reference_eqs.append(voltage_var - 0)
-                    island_reference_voltages.add(voltage_var)  # Exclude from vars_to_solve
-                    logging.debug(f"  Multi-node island: setting reference voltage {voltage_var} = 0")
+        # Filter KCL equations to exclude reference node equations
+        kcl_indices_to_remove = {node_to_kcl_index[node] for node in island_reference_nodes if node in node_to_kcl_index}
+        if kcl_indices_to_remove:
+            kcl_eqs_filtered = [eq for idx, eq in enumerate(kcl_eqs) if idx not in kcl_indices_to_remove]
+            logging.debug(f"Removed {len(kcl_indices_to_remove)} KCL equations for island reference nodes")
+            logging.debug(f"KCL equations: {len(kcl_eqs)} -> {len(kcl_eqs_filtered)}")
+        else:
+            kcl_eqs_filtered = kcl_eqs
 
         # Filter KVL equations to exclude boundary component equations
         if boundary_component_indices:
@@ -535,7 +552,7 @@ class ElectricalDaeSystem(DaeSystem):
         else:
             kvl_eqs_filtered = kvl_eqs
 
-        return kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs, island_boundary_voltages, island_reference_voltages
+        return kcl_eqs_filtered, kvl_eqs_filtered, island_reference_eqs, island_boundary_voltages
 
     def compute_circuit_equations(self) -> Dict:
         """Solve the full circuit variables including diode equations.
@@ -571,11 +588,11 @@ class ElectricalDaeSystem(DaeSystem):
         logging.debug(f"Full circuit: input_vars={[str(v) for v in input_vars]}")
         logging.debug(f"Full circuit: state_vars={[str(v) for v in state_vars]}")
 
-        # Process islands: filter KVL equations and get variables to exclude
-        kvl_eqs_filtered, island_single_node_voltages, island_reference_eqs, island_boundary_voltages, island_reference_voltages = self._process_islands(kvl_eqs)
+        # Process islands: filter KCL/KVL equations and get variables to exclude
+        kcl_eqs_filtered, kvl_eqs_filtered, island_reference_eqs, island_boundary_voltages = self._process_islands(kcl_eqs, kvl_eqs)
 
-        # Assemble equations with filtered KVL equations and island reference equations
-        equations = kcl_eqs + kvl_eqs_filtered + static_eqs + switch_eqs + diode_eqs + island_reference_eqs
+        # Assemble equations with filtered KCL/KVL equations and island reference equations
+        equations = kcl_eqs_filtered + kvl_eqs_filtered + static_eqs + switch_eqs + diode_eqs + island_reference_eqs
 
         # Get all variables from electrical graph
         junction_voltage_var_list, component_current_var_list, component_voltage_var_list = self.electrical_model.variable_lists()
@@ -586,8 +603,9 @@ class ElectricalDaeSystem(DaeSystem):
         # Combine all variables
         combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
 
-        # Remove excluded variables (input_vars, state_vars, island voltages, boundary voltages, and reference voltages)
-        excluded = set(input_vars) | set(state_vars) | island_single_node_voltages | island_boundary_voltages | island_reference_voltages
+        # Remove excluded variables (input_vars, state_vars, and boundary voltages)
+        # Note: Island reference voltages are kept in variables (we have v_ref = 0 equations for them)
+        excluded = set(input_vars) | set(state_vars) | island_boundary_voltages
         vars_to_solve = [var for var in combined_vars if var not in excluded]
 
         # Use lenient solver (returns None on failure instead of raising)
