@@ -277,7 +277,7 @@ class CircuitSanityChecker:
         floating_nodes = all_nodes - connected_to_ground
         
         if floating_nodes:
-            self.errors.append(
+            self.warnings.append(
                 f"Floating nodes detected (not connected to ground): {sorted(floating_nodes)}"
             )
     
