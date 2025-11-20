@@ -304,8 +304,8 @@ class TestSanityChecker:
         checker = CircuitSanityChecker(graph)
         result = checker.check_all(raise_on_error=False)
         
-        assert len(result['errors']) > 0
-        assert any("Floating nodes" in error for error in result['errors'])
+        assert len(result['warnings']) > 0
+        assert any("Floating nodes" in warning for warning in result['warnings'])
     
     def test_open_circuit_inductor(self, basic_graph):
         # Create inductor that's the only current path
