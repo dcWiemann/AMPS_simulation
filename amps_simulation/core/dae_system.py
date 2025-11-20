@@ -816,27 +816,27 @@ class ElectricalDaeSystem(DaeSystem):
         # Use cached vars_to_solve
         vars_to_solve = self.shunt_vars_to_solve
         logging.debug(f"LCP: Variables to solve: {len(vars_to_solve)} (excluded {len(diode_current_vars)} diode currents)")
-        
+
         # Solve circuit without diodes using generic solver
-        print("\n" + "="*80)
-        print("LCP FORMULATION DEBUG - EQUATIONS, VARIABLES, AND SOLUTIONS")
-        print("="*80)
-        
-        print(f"\nEQUATIONS ({len(equations)} total):")
+        logging.debug("="*80)
+        logging.debug("LCP FORMULATION DEBUG - EQUATIONS, VARIABLES, AND SOLUTIONS")
+        logging.debug("="*80)
+
+        logging.debug(f"EQUATIONS ({len(equations)} total):")
         for i, eq in enumerate(equations):
-            print(f"  [{i:2d}] {eq} = 0")
-        
-        print(f"\nVARIABLES TO SOLVE ({len(vars_to_solve)} total):")
+            logging.debug(f"  [{i:2d}] {eq} = 0")
+
+        logging.debug(f"VARIABLES TO SOLVE ({len(vars_to_solve)} total):")
         for i, var in enumerate(vars_to_solve):
-            print(f"  [{i:2d}] {var}")
+            logging.debug(f"  [{i:2d}] {var}")
 
         solution = self._solve_symbolic_system(equations, vars_to_solve, strict=True)
-        
-        print(f"\nSOLUTIONS ({len(solution)} total):")
+
+        logging.debug(f"SOLUTIONS ({len(solution)} total):")
         for var, expr in solution.items():
-            print(f"  {var} = {expr}")
-        
-        print("="*80)
+            logging.debug(f"  {var} = {expr}")
+
+        logging.debug("="*80)
         
         # Extract diode voltage expressions in correct order
         # diode_voltage_exprs = self._extract_diode_voltage_expressions(solution)
@@ -924,7 +924,7 @@ class ElectricalDaeSystem(DaeSystem):
 
         try:
             lcp_result = self._detect_diode_states_lcp(state_values, input_values)
-            logging.info(f"LCP result: {lcp_result}")
+            logging.debug(f"LCP result: {lcp_result}")
         except Exception as e:
             lcp_success = False
             logging.warning(f"LCP method failed: {e}")
@@ -1057,7 +1057,7 @@ class ElectricalDaeSystem(DaeSystem):
         # Get all possible combinations of diode states
         all_combinations = list(itertools.product([True, False], repeat=len(self.diode_list)))
 
-        logging.debug(f"Starting EXHAUSTIVE iterative diode detection with {len(self.diode_list)} diodes")
+        logging.info(f"Starting EXHAUSTIVE iterative diode detection with {len(self.diode_list)} diodes")
         logging.info(f"\n{'='*80}")
         logging.info(f"EXHAUSTIVE SEARCH: Checking all {len(all_combinations)} possible combinations")
         logging.info(f"{'='*80}")
