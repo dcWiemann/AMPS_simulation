@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, ClassVar, Dict
+from typing import Optional, ClassVar, Dict, Any
 from pydantic import BaseModel, Field, computed_field, field_validator
 from pydantic import ConfigDict
 from sympy import symbols, Symbol, Eq, Function
@@ -9,16 +9,27 @@ class Component(BaseModel, ABC):
     """Abstract base class for all circuit components."""
     comp_id: str = Field(..., description="Unique identifier for the component", pattern=r"^[A-Za-z].*")
     _registry: ClassVar[Dict[str, 'Component']] = {}
+    # Simulation metadata (to be removed once Engine owns sim context)
+    n_control_port: ClassVar[int] = 0
+    n_states: ClassVar[int] = 0
+
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
+        """Check if component behaves as a short circuit (zero impedance)."""
+        return False
     
     @property
     def is_short_circuit(self) -> bool:
-        """Check if component behaves as a short circuit (zero impedance)."""
+        """Compatibility property for existing callers."""
+        return self.is_short_circuit_state()
+    
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
+        """Check if component behaves as an open circuit (infinite impedance)."""
         return False
     
     @property 
     def is_open_circuit(self) -> bool:
-        """Check if component behaves as an open circuit (infinite impedance)."""
-        return False
+        """Compatibility property for existing callers."""
+        return self.is_open_circuit_state()
     
     @field_validator('comp_id')
     @classmethod
@@ -82,56 +93,58 @@ class Meter(Component):
 class Resistor(Component):
     """Resistor component."""
     resistance: float = Field(..., description="Resistance value in ohms")
+    n_states: ClassVar[int] = 0
 
     def __init__(self, comp_id: str, resistance: float, **data):
         """Initialize resistor with positional arguments support."""
         super().__init__(comp_id=comp_id, resistance=resistance, **data)
 
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Resistor is short circuit if R = 0."""
         return self.resistance == 0.0
 
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Resistor is open circuit if R approaches infinity."""
         return self.resistance == float('inf')
 
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for Ohm's law.
         
         Returns:
             Symbol: Symbolic equation representing V = I * R, where V is voltage,
                  I is current, and R is resistance.
         """
-        return self.voltage_var - self.current_var * self.resistance
+        v = voltage_var if voltage_var is not None else self.voltage_var
+        i = current_var if current_var is not None else self.current_var
+        return v - i * self.resistance
 
 class Capacitor(Component):
     """Capacitor component."""
     capacitance: float = Field(..., description="Capacitance value in farads", ge=0)
+    n_states: ClassVar[int] = 1
 
     def __init__(self, comp_id: str, capacitance: float, **data):
         """Initialize capacitor with positional arguments support."""
         super().__init__(comp_id=comp_id, capacitance=capacitance, **data)
 
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Capacitor is short circuit if C approaches infinity."""
         return self.capacitance == float('inf')
     
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Capacitor is open circuit if C = 0."""
         return self.capacitance == 0.0
 
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for the capacitor.
         
         Returns:
             Symbol: Symbolic equation representing dV/dt = 1/C * I, where dV/dt is the derivative of voltage with respect to time,
                  C is capacitance, and I is current.
         """
-        return Eq(self.voltage_var.diff(t), (1/self.capacitance) * self.current_var)
+        v = voltage_var if voltage_var is not None else self.voltage_var
+        i = current_var if current_var is not None else self.current_var
+        return Eq(v.diff(t), (1/self.capacitance) * i)
     
     @computed_field
     @property
@@ -142,29 +155,30 @@ class Capacitor(Component):
 class Inductor(Component):
     """Inductor component."""
     inductance: float = Field(..., description="Inductance value in henries", ge=0)
+    n_states: ClassVar[int] = 1
 
     def __init__(self, comp_id: str, inductance: float, **data):
         """Initialize inductor with positional arguments support."""
         super().__init__(comp_id=comp_id, inductance=inductance, **data)
 
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Inductor is short circuit if L = 0."""
         return self.inductance == 0.0
     
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Inductor is open circuit if L approaches infinity."""
         return self.inductance == float('inf')
 
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for the inductor.
         
         Returns:
             Symbol: Symbolic equation representing dI/dt = 1/L * V, where dI/dt is the derivative of current with respect to time,
                  L is inductance, and V is voltage.
         """
-        return Eq(self.current_var.diff(t), (1/self.inductance) * self.voltage_var)
+        v = voltage_var if voltage_var is not None else self.voltage_var
+        i = current_var if current_var is not None else self.current_var
+        return Eq(i.diff(t), (1/self.inductance) * v)
 
     @computed_field
     @property
@@ -176,28 +190,32 @@ class PowerSwitch(Component):
     """Power switch component."""
     switch_time: float = Field(..., description="Time to switch in seconds")
     is_on: bool = Field(..., description="Whether the switch is on")
+    n_control_port: ClassVar[int] = 1
     
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Switch is short circuit when closed (is_on = True)."""
-        return self.is_on
+        state = bool(cp_value) if cp_value is not None else self.is_on
+        return state
     
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Switch is open circuit when open (is_on = False)."""
-        return not self.is_on
+        state = bool(cp_value) if cp_value is not None else self.is_on
+        return not state
     
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for the switch based on its position.
         
         Returns:
             Symbol: Symbolic equation. If switch is closed (1), returns voltage equation.
                  If switch is open (0), returns current equation.
         """
-        if self.is_on:  # closed
-            return self.voltage_var
+        v = voltage_var if voltage_var is not None else self.voltage_var
+        i = current_var if current_var is not None else self.current_var
+        state = bool(cp_value) if cp_value is not None else self.is_on
+        if state:  # closed
+            return v
         else:  # open
-            return self.current_var
+            return i
         
     def set_switch_state(self, t: float) -> int:
         """Returns the control signal for the switch. 
@@ -219,39 +237,42 @@ class PowerSwitch(Component):
 class Diode(Component):
     """Diode component."""
     is_on: bool = Field(False, description="Whether the diode is conducting")
+    n_control_port: ClassVar[int] = 0
 
     def __init__(self, comp_id: str, **data):
         """Initialize diode with positional arguments support."""
         super().__init__(comp_id=comp_id, **data)
 
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Diode is short circuit when forward-biased and conducting."""
-        return self.is_on
+        state = bool(cp_value) if cp_value is not None else self.is_on
+        return state
     
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Diode is open circuit when reverse-biased or not conducting."""
-        return not self.is_on
+        state = bool(cp_value) if cp_value is not None else self.is_on
+        return not state
     
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for the diode based on its state.
         
         Returns:
             Symbol: Symbolic equation. If diode is conducting, returns voltage equation.
                  If diode is not conducting, returns current equation.
         """
-        if self.is_on:
-            return self.voltage_var
+        v = voltage_var if voltage_var is not None else self.voltage_var
+        i = current_var if current_var is not None else self.current_var
+        state = bool(cp_value) if cp_value is not None else self.is_on
+        if state:
+            return v
         else:
-            return self.current_var
+            return i
 
 class VoltageSource(Source):
     """Voltage source component."""
     voltage: float = Field(..., description="Voltage value in volts")
     
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Voltage source is short circuit if voltage = 0."""
         return self.voltage == 0.0
 
@@ -275,8 +296,7 @@ class CurrentSource(Source):
     """Current source component."""
     current: float = Field(..., description="Current value in amperes")
     
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Current source is open circuit if current = 0."""
         return self.current == 0.0
 
@@ -302,8 +322,7 @@ class Ground(Component):
 class Ammeter(Meter):
     """Ammeter component."""
     
-    @property
-    def is_short_circuit(self) -> bool:
+    def is_short_circuit_state(self, cp_value: Any = None) -> bool:
         """Ideal ammeter has zero voltage drop (short circuit)."""
         return True
 
@@ -311,19 +330,19 @@ class Ammeter(Meter):
         super().__init__(**data)
         self.output_var = self.current_var
 
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for the ammeter. Ideal ammeter has 0 voltage drop.
         
         Returns:
             Symbol: Symbolic equation.
         """
-        return self.voltage_var
+        v = voltage_var if voltage_var is not None else self.voltage_var
+        return v
 
 class Voltmeter(Meter):
     """Voltmeter component."""
     
-    @property
-    def is_open_circuit(self) -> bool:
+    def is_open_circuit_state(self, cp_value: Any = None) -> bool:
         """Ideal voltmeter has infinite impedance (open circuit)."""
         return True
 
@@ -331,13 +350,14 @@ class Voltmeter(Meter):
         super().__init__(**data)
         self.output_var = self.voltage_var
 
-    def get_comp_eq(self) -> Symbol:
+    def get_comp_eq(self, voltage_var: Optional[Symbol] = None, current_var: Optional[Symbol] = None, cp_value: Any = None) -> Symbol:
         """Returns the symbolic equation for the voltmeter. Ideal voltmeter has 0 current.
         
         Returns:
             Symbol: Symbolic equation.
         """
-        return self.current_var
+        i = current_var if current_var is not None else self.current_var
+        return i
 
 class ElecJunction(BaseModel):
     """Electrical junction component."""
