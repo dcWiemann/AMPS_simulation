@@ -522,17 +522,17 @@ class Engine:
         # Check if this combination is already cached
         if combined_states in switchmap:
             A, B, C, D, ode_function = switchmap[combined_states]
-            # logging.debug(f"Using cached ODE function for states: switches={current_switch_states}, diodes={current_diode_states}")
+            # logging.debug(f"Using cached state space model for states: switches={current_switch_states}, diodes={current_diode_states}")
         else:
             # Compute new DAE system for this switch/diode combination
             A, B, C, D = self._compute_state_space_for_states(current_switch_states, current_diode_states, t, y, u)
+            # logging.debug(f"Computed new state space model for states: switches={current_switch_states}, diodes={current_diode_states}")
             
             # Create ODE function from state space matrices
             ode_function = self._create_state_space_ode(A, B, input_function)
             
             # Cache the result
             switchmap[combined_states] = (A, B, C, D, ode_function)
-            logging.debug(f"Computed new DAE system for states: switches={current_switch_states}, diodes={current_diode_states}")
             
         return ode_function(t, y)
     
