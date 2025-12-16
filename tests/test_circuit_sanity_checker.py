@@ -46,86 +46,86 @@ class TestComponentAttributes:
     
     def test_resistor_attributes(self):
         r_normal = Resistor(comp_id="R1", resistance=100.0)
-        assert not r_normal.is_short_circuit
-        assert not r_normal.is_open_circuit
+        assert not r_normal.is_short_circuit()
+        assert not r_normal.is_open_circuit()
         
         r_short = Resistor(comp_id="R2", resistance=0.0)
-        assert r_short.is_short_circuit
-        assert not r_short.is_open_circuit
+        assert r_short.is_short_circuit()
+        assert not r_short.is_open_circuit()
         
         r_open = Resistor(comp_id="R3", resistance=float('inf'))
-        assert not r_open.is_short_circuit
-        assert r_open.is_open_circuit
+        assert not r_open.is_short_circuit()
+        assert r_open.is_open_circuit()
     
     def test_capacitor_attributes(self):
         c_normal = Capacitor(comp_id="C1", capacitance=1e-6)
-        assert not c_normal.is_short_circuit
-        assert not c_normal.is_open_circuit
+        assert not c_normal.is_short_circuit()
+        assert not c_normal.is_open_circuit()
         
         c_open = Capacitor(comp_id="C2", capacitance=0.0)
-        assert not c_open.is_short_circuit
-        assert c_open.is_open_circuit
+        assert not c_open.is_short_circuit()
+        assert c_open.is_open_circuit()
         
         c_short = Capacitor(comp_id="C3", capacitance=float('inf'))
-        assert c_short.is_short_circuit
-        assert not c_short.is_open_circuit
+        assert c_short.is_short_circuit()
+        assert not c_short.is_open_circuit()
     
     def test_inductor_attributes(self):
         l_normal = Inductor(comp_id="L1", inductance=1e-3)
-        assert not l_normal.is_short_circuit
-        assert not l_normal.is_open_circuit
+        assert not l_normal.is_short_circuit()
+        assert not l_normal.is_open_circuit()
         
         l_short = Inductor(comp_id="L2", inductance=0.0)
-        assert l_short.is_short_circuit
-        assert not l_short.is_open_circuit
+        assert l_short.is_short_circuit()
+        assert not l_short.is_open_circuit()
         
         l_open = Inductor(comp_id="L3", inductance=float('inf'))
-        assert not l_open.is_short_circuit
-        assert l_open.is_open_circuit
+        assert not l_open.is_short_circuit()
+        assert l_open.is_open_circuit()
     
     def test_switch_attributes(self):
-        switch_open = PowerSwitch(comp_id="S1", switch_time=1.0, is_on=False)
-        assert not switch_open.is_short_circuit
-        assert switch_open.is_open_circuit
+        switch_open = PowerSwitch(comp_id="S1", switch_time=1.0)
+        assert not switch_open.is_short_circuit(False)
+        assert switch_open.is_open_circuit(False)
         
-        switch_closed = PowerSwitch(comp_id="S2", switch_time=1.0, is_on=True)
-        assert switch_closed.is_short_circuit
-        assert not switch_closed.is_open_circuit
+        switch_closed = PowerSwitch(comp_id="S2", switch_time=1.0)
+        assert switch_closed.is_short_circuit(True)
+        assert not switch_closed.is_open_circuit(True)
     
     def test_diode_attributes(self):
-        diode_off = Diode(comp_id="D1", is_on=False)
-        assert not diode_off.is_short_circuit
-        assert diode_off.is_open_circuit
+        diode_off = Diode(comp_id="D1")
+        assert not diode_off.is_short_circuit(False)
+        assert diode_off.is_open_circuit(False)
         
-        diode_on = Diode(comp_id="D2", is_on=True)
-        assert diode_on.is_short_circuit
-        assert not diode_on.is_open_circuit
+        diode_on = Diode(comp_id="D2")
+        assert diode_on.is_short_circuit(True)
+        assert not diode_on.is_open_circuit(True)
     
     def test_source_attributes(self):
         vs_normal = VoltageSource(comp_id="V1", voltage=5.0)
-        assert not vs_normal.is_short_circuit
-        assert not vs_normal.is_open_circuit
+        assert not vs_normal.is_short_circuit()
+        assert not vs_normal.is_open_circuit()
         
         vs_short = VoltageSource(comp_id="V2", voltage=0.0)
-        assert vs_short.is_short_circuit
-        assert not vs_short.is_open_circuit
+        assert vs_short.is_short_circuit()
+        assert not vs_short.is_open_circuit()
         
         cs_normal = CurrentSource(comp_id="I1", current=1.0)
-        assert not cs_normal.is_short_circuit
-        assert not cs_normal.is_open_circuit
+        assert not cs_normal.is_short_circuit()
+        assert not cs_normal.is_open_circuit()
         
         cs_open = CurrentSource(comp_id="I2", current=0.0)
-        assert not cs_open.is_short_circuit
-        assert cs_open.is_open_circuit
+        assert not cs_open.is_short_circuit()
+        assert cs_open.is_open_circuit()
     
     def test_meter_attributes(self):
         ammeter = Ammeter(comp_id="A1")
-        assert ammeter.is_short_circuit
-        assert not ammeter.is_open_circuit
+        assert ammeter.is_short_circuit()
+        assert not ammeter.is_open_circuit()
         
         voltmeter = Voltmeter(comp_id="V1")
-        assert not voltmeter.is_short_circuit
-        assert voltmeter.is_open_circuit
+        assert not voltmeter.is_short_circuit()
+        assert voltmeter.is_open_circuit()
 
 class TestPathFunctions:
     """Test the path detection helper functions."""
@@ -485,7 +485,7 @@ class TestIslandDetection:
         model.add_component(c1, p=3, n=2)
 
         # Boundary component (open switch)
-        switch = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        switch = PowerSwitch(comp_id="S1", switch_time=1.0)
         model.add_component(switch, p=1, n=2)
 
         checker = CircuitSanityChecker(model.graph)
@@ -508,7 +508,7 @@ class TestIslandDetection:
         assert len(island['boundary_components']) == 1
         boundary_comp = island['boundary_components'][0]
         assert boundary_comp[2].comp_id == "S1"
-        assert boundary_comp[2].is_open_circuit
+        assert boundary_comp[2].is_open_circuit(False)
 
     def test_single_island_isolated_by_blocking_diode(self):
         """Test island isolated by a blocking diode."""
@@ -529,7 +529,7 @@ class TestIslandDetection:
         model.add_component(r2, p=2, n=3)
 
         # Boundary (blocking diode)
-        diode = Diode(comp_id="D1", is_on=False)
+        diode = Diode(comp_id="D1")
         model.add_component(diode, p=1, n=2)
 
         checker = CircuitSanityChecker(model.graph)
@@ -542,6 +542,7 @@ class TestIslandDetection:
         # Verify boundary component is the diode
         assert len(islands[0]['boundary_components']) == 1
         assert islands[0]['boundary_components'][0][2].comp_id == "D1"
+        assert islands[0]['boundary_components'][0][2].is_open_circuit(False)
 
     def test_multiple_islands(self):
         """Test detection of multiple independent islands."""
@@ -568,8 +569,8 @@ class TestIslandDetection:
         model.add_component(r3, p=4, n=5)
 
         # Boundary components
-        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
-        s2 = PowerSwitch(comp_id="S2", is_on=False, switch_time=2.0)
+        s1 = PowerSwitch(comp_id="S1", switch_time=1.0)
+        s2 = PowerSwitch(comp_id="S2", switch_time=2.0)
         model.add_component(s1, p=1, n=2)
         model.add_component(s2, p=1, n=4)
 
@@ -606,8 +607,8 @@ class TestIslandDetection:
         model.add_component(r2, p=2, n=3)
 
         # Multiple boundary components
-        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
-        d1 = Diode(comp_id="D1", is_on=False)
+        s1 = PowerSwitch(comp_id="S1", switch_time=1.0)
+        d1 = Diode(comp_id="D1")
         vm = Voltmeter(comp_id="VM1")
 
         model.add_component(s1, p=1, n=2)
@@ -640,13 +641,16 @@ class TestIslandDetection:
         model.add_component(r1, p=1, n=0)
 
         # Islands isolated from main but connected to each other via closed switch
-        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
-        s2 = PowerSwitch(comp_id="S2", is_on=False, switch_time=2.0)
-        s3 = PowerSwitch(comp_id="S3", is_on=True, switch_time=3.0)  # Closed switch connecting islands
+        s1 = PowerSwitch(comp_id="S1", switch_time=1.0)
+        s2 = PowerSwitch(comp_id="S2", switch_time=2.0)
+        s3 = PowerSwitch(comp_id="S3", switch_time=3.0)  # Closed switch connecting islands
 
         model.add_component(s1, p=1, n=2)  # Main to node 2 (open)
         model.add_component(s2, p=1, n=3)  # Main to node 3 (open)
         model.add_component(s3, p=2, n=3)  # Node 2 to node 3 (closed)
+        for _, _, edge_data in model.graph.edges(data=True):
+            if edge_data.get('component') is s3 and edge_data.get('sim_info'):
+                edge_data['sim_info'].value = True
 
         checker = CircuitSanityChecker(model.graph)
         islands = checker.detect_islands()
@@ -680,7 +684,7 @@ class TestIslandDetection:
         model.add_component(r1, p=1, n=0)
 
         # Boundary to island
-        s1 = PowerSwitch(comp_id="S1", is_on=False, switch_time=1.0)
+        s1 = PowerSwitch(comp_id="S1", switch_time=1.0)
         model.add_component(s1, p=1, n=2)
 
         checker = CircuitSanityChecker(model.graph)

@@ -65,6 +65,26 @@ class ElectricalDaeSystem(DaeSystem):
         self.electrical_model = electrical_model
         self.initialized = False
 
+    def _get_component_sim_info(self, component) -> Optional[Any]:
+        """Return the sim_info object stored on the edge for this component, if any."""
+        for _, _, data in self.graph.edges(data=True):
+            if data.get("component") is component:
+                return data.get("sim_info")
+        return None
+
+    def _get_component_state(self, component, default: Optional[bool] = None) -> Optional[bool]:
+        """Read component state from edge sim_info value if present."""
+        sim_info = self._get_component_sim_info(component)
+        if sim_info is not None and sim_info.value is not None:
+            return bool(sim_info.value)
+        return default
+
+    def _set_component_state(self, component, state: bool) -> None:
+        """Persist component state into edge sim_info."""
+        sim_info = self._get_component_sim_info(component)
+        if sim_info is not None:
+            sim_info.value = bool(state)
+
     def initialize(self, initial_state_values=None, initial_input_values=None):
         # Initialize the electrical graph first
         if not self.electrical_model.initialized:
@@ -283,7 +303,7 @@ class ElectricalDaeSystem(DaeSystem):
 
         # Update diode modes in order
         for diode, is_conducting in zip(self.electrical_model.diode_list, conducting_states):
-            diode.is_on = is_conducting
+            self._set_component_state(diode, is_conducting)
             logging.debug(f"Set diode {diode.comp_id}: {'CONDUCTING' if is_conducting else 'BLOCKING'}")
 
     def _clear_shunt_model_cache(self) -> None:
@@ -410,7 +430,8 @@ class ElectricalDaeSystem(DaeSystem):
 
         switch_eqs = []
         for switch in switch_list:
-            switch_eqs.append(switch.get_comp_eq())
+            state = self._get_component_state(switch, default=False)
+            switch_eqs.append(switch.get_comp_eq(state))
 
         return switch_eqs
     
@@ -431,7 +452,8 @@ class ElectricalDaeSystem(DaeSystem):
         
         diode_eqs = []
         for diode in diode_list:
-            diode_eqs.append(diode.get_comp_eq())
+            state = self._get_component_state(diode, default=False)
+            diode_eqs.append(diode.get_comp_eq(state))
 
         return diode_eqs
 
@@ -678,7 +700,11 @@ class ElectricalDaeSystem(DaeSystem):
         """
         if t is not None:
             assert isinstance(t, float), "Time must be a float"
-            switchmap = {switch.comp_id: switch.set_switch_state(t) for switch in self.switch_list}
+            switchmap = {}
+            for switch in self.switch_list:
+                control_signal = switch.set_switch_state(t)
+                self._set_component_state(switch, bool(control_signal))
+                switchmap[switch.comp_id] = control_signal
         
         assert self.initialized == True, "Model must be initialized before updating switch states"
         circuit_eqs, derivatives, output_eqs = self.update_all_equations()
@@ -912,7 +938,8 @@ class ElectricalDaeSystem(DaeSystem):
 
         logging.debug(f"Detect diode states: Found {len(diode_list)} diodes")
         for diode in diode_list:
-            logging.debug(f"  Diode {diode.comp_id}: currently {'conducting' if diode.is_on else 'blocking'}")
+            current_state = self._get_component_state(diode, default=False)
+            logging.debug(f"  Diode {diode.comp_id}: currently {'conducting' if current_state else 'blocking'}")
 
         if not diode_list:
             logging.debug("No diodes found in circuit, returning empty list")
@@ -1071,7 +1098,7 @@ class ElectricalDaeSystem(DaeSystem):
 
             # Set diode modes based on this combination
             for diode, is_conducting in zip(self.diode_list, combination):
-                diode.is_on = is_conducting
+                self._set_component_state(diode, is_conducting)
 
             # Recompute diode equations with current states
             diode_eqs = self.compute_diode_equations()
@@ -1239,8 +1266,9 @@ class ElectricalDaeSystem(DaeSystem):
         # Update diode components
         states_changed = False
         for i, (diode, new_state) in enumerate(zip(self.diode_list, new_states)):
-            if diode.is_on != new_state:
-                diode.is_on = new_state
+            current_state = self._get_component_state(diode, default=False)
+            if current_state != new_state:
+                self._set_component_state(diode, new_state)
                 states_changed = True
                 logging.debug(f"Diode {diode.comp_id} state changed to {'conducting' if new_state else 'blocking'}")
         

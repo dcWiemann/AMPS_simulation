@@ -179,7 +179,8 @@ def test_compute_switch_equations():
 
     for edge in G.edges(data=True):
         if isinstance(edge[2]['component'], PowerSwitch):
-            edge[2]['component'].is_on = True
+            if edge[2].get('sim_info'):
+                edge[2]['sim_info'].value = True
 
     switch_eqs = model.compute_switch_equations()
     print("switch_eqs on: ", switch_eqs)
@@ -197,7 +198,8 @@ def test_compute_circuit_equations():
     G, _ = parser.parse(circuit_json)
     for edge in G.edges(data=True):
         if isinstance(edge[2]['component'], PowerSwitch):
-            edge[2]['component'].is_on = False
+            if edge[2].get('sim_info'):
+                edge[2]['sim_info'].value = False
 
     electrical_model = ElectricalModel(G)
     model = ElectricalDaeSystem(electrical_model)
@@ -242,8 +244,9 @@ def test_print_dae_model_components():
     electrical_model = ElectricalModel(G)
     model = ElectricalDaeSystem(electrical_model)
     model.initialize()
-    for switch in model.switch_list:
-        switch.is_on = True
+    for _, _, edge_data in model.graph.edges(data=True):
+        if isinstance(edge_data.get('component'), PowerSwitch) and edge_data.get('sim_info'):
+            edge_data['sim_info'].value = True
     model.update_switch_states()
     
     # print attributes of the model
