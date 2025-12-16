@@ -24,9 +24,11 @@ def has_short_circuit_path(G: nx.MultiDiGraph, s, t, exclude_components: Set[Com
     
     def edge_filter(u, v, k):
         component = G[u][v][k].get('component')
+        sim_info = G[u][v][k].get('sim_info')
+        state = bool(sim_info.value) if sim_info is not None and sim_info.value is not None else False
         return (component is not None and 
                 component not in exclude_components and 
-                component.is_short_circuit)
+                component.is_short_circuit(state))
     
     H = nx.subgraph_view(G, filter_edge=edge_filter).to_undirected()
     return nx.has_path(H, s, t)
@@ -38,9 +40,11 @@ def has_current_path(G: nx.MultiDiGraph, s, t, exclude_components: Set[Component
     
     def edge_filter(u, v, k):
         component = G[u][v][k].get('component')
+        sim_info = G[u][v][k].get('sim_info')
+        state = bool(sim_info.value) if sim_info is not None and sim_info.value is not None else False
         return (component is not None and 
                 component not in exclude_components and 
-                not component.is_open_circuit)
+                not component.is_open_circuit(state))
     
     H = nx.subgraph_view(G, filter_edge=edge_filter).to_undirected()
     return nx.has_path(H, s, t)
@@ -219,18 +223,22 @@ class CircuitSanityChecker:
                     for neighbor in self.graph.neighbors(shared_node):
                         for edge_data in self.graph[shared_node][neighbor].values():
                             component = edge_data.get('component')
+                            sim_info = edge_data.get('sim_info')
+                            state = bool(sim_info.value) if sim_info is not None and sim_info.value is not None else False
                             if isinstance(component, CurrentSource):
                                 current_sources_at_node.append(component)
-                            elif component and not component.is_open_circuit:
+                            elif component and not component.is_open_circuit(state):
                                 other_current_paths += 1
                     
                     # Check incoming edges to shared_node
                     for predecessor in self.graph.predecessors(shared_node):
                         for edge_data in self.graph[predecessor][shared_node].values():
                             component = edge_data.get('component')
+                            sim_info = edge_data.get('sim_info')
+                            state = bool(sim_info.value) if sim_info is not None and sim_info.value is not None else False
                             if isinstance(component, CurrentSource):
                                 current_sources_at_node.append(component)
-                            elif component and not component.is_open_circuit:
+                            elif component and not component.is_open_circuit(state):
                                 other_current_paths += 1
                     
                     # Series connection if only these two current sources and no other current paths
@@ -260,8 +268,11 @@ class CircuitSanityChecker:
         
         # Create subgraph with only current-carrying components
         def edge_filter(u, v, k):
-            component = self.graph[u][v][k].get('component')
-            return component is not None and not component.is_open_circuit
+            edge_data = self.graph[u][v][k]
+            component = edge_data.get('component')
+            sim_info = edge_data.get('sim_info')
+            state = bool(sim_info.value) if sim_info is not None and sim_info.value is not None else False
+            return component is not None and not component.is_open_circuit(state)
         
         current_graph = nx.subgraph_view(self.graph, filter_edge=edge_filter).to_undirected()
         
@@ -380,8 +391,11 @@ class CircuitSanityChecker:
 
         # Create subgraph with only current-carrying components (non-open-circuit)
         def edge_filter(u, v, k):
-            component = self.graph[u][v][k].get('component')
-            return component is not None and not component.is_open_circuit
+            edge_data = self.graph[u][v][k]
+            component = edge_data.get('component')
+            sim_info = edge_data.get('sim_info')
+            state = bool(sim_info.value) if sim_info is not None and sim_info.value is not None else False
+            return component is not None and not component.is_open_circuit(state)
 
         current_graph = nx.subgraph_view(self.graph, filter_edge=edge_filter).to_undirected()
 

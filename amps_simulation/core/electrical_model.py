@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 from sympy import Matrix, Symbol
 from .components import Resistor, PowerSwitch, Inductor, Capacitor, Source, Meter, Diode, Component, ElecJunction
+from .sim_info import SimInfo
 
 
 class ElectricalModel:
@@ -53,6 +54,14 @@ class ElectricalModel:
 
         # Initialize flag
         self.initialized = False
+
+    @staticmethod
+    def _component_runtime_value(component: Component) -> Optional[bool]:
+        """Get initial runtime value for a component if applicable."""
+        if isinstance(component, (PowerSwitch, Diode)):
+            return False
+        return None
+
     
     def initialize(self) -> None:
         """
@@ -237,10 +246,15 @@ class ElectricalModel:
             existing_junction = self.graph.nodes[node_id]['junction']
             if is_ground:
                 existing_junction.is_ground = True
+            if 'sim_info' not in self.graph.nodes[node_id]:
+                sim_info = SimInfo(name=f"junction_{existing_junction.junction_id}",
+                                   path=("junction", str(existing_junction.junction_id)))
+                self.graph.nodes[node_id]['sim_info'] = sim_info
         else:
             # Create new junction and add node
             junction = ElecJunction(junction_id=node_id, is_ground=is_ground)
-            self.graph.add_node(node_id, junction=junction)
+            sim_info = SimInfo(name=f"junction_{junction.junction_id}", path=("junction", str(junction.junction_id)))
+            self.graph.add_node(node_id, junction=junction, sim_info=sim_info)
 
     def add_component(self, component: Component, terminals: Union[List[int], Dict[str, int], None] = None, **kwargs) -> None:
         """
@@ -291,7 +305,9 @@ class ElectricalModel:
             self.add_node(node2)
 
         # Add component as edge between the two nodes
-        self.graph.add_edge(node1, node2, component=component)
+        sim_info = SimInfo(name=component.comp_id, path=("component", component.comp_id),
+                           value=self._component_runtime_value(component))
+        self.graph.add_edge(node1, node2, component=component, sim_info=sim_info)
 
     def find_state_vars(self) -> List[Symbol]:
         """Find the state variables in the graph.

@@ -333,7 +333,7 @@ def test_component_positional_constructors():
     # Test Diode
     D1 = Diode('D1')
     assert D1.comp_id == 'D1'
-    assert D1.is_on == False  # Default value
+    assert D1.get_comp_eq(False) == D1.current_var  # Default behavior when off
 
 
 def test_programmatic_api_example():

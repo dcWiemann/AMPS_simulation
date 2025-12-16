@@ -9,6 +9,7 @@ from .components import (
 from .control_graph import ControlGraph
 from .control_signal import ControlSignal
 from .control_port import ControlPort
+from .sim_info import SimInfo
 
 class CircuitParser(ABC):
     """Abstract base class for circuit parsers that produce NetworkX graphs."""
@@ -108,7 +109,6 @@ class ParserJson(CircuitParser):
                 kwargs["current"] = 0.0 if isinstance(value, str) else value
             elif ctype == "switch":
                 kwargs["switch_time"] = data.get("value")
-                kwargs["is_on"] = False # default is off
             # Add more mappings as needed for other types
             component_list.append(cls(**kwargs))
         return component_list
@@ -268,6 +268,11 @@ class ParserJson(CircuitParser):
             junctions (Dict[int, ElecJunction]): A dictionary mapping node numbers
                 to ElecJunction objects, representing the electrical junctions.
         """
+        def _initial_state(component: Component) -> Optional[bool]:
+            if isinstance(component, (PowerSwitch, Diode)):
+                return False
+            return None
+
         for comp in self.components_list:
             comp_id = comp.comp_id
 
@@ -286,15 +291,27 @@ class ParserJson(CircuitParser):
 
                 if not self.graph.has_node(source_node):
                     elec_junction = junctions[int(source_node)]
-                    self.graph.add_node(source_node, junction=elec_junction)
+                    self.graph.add_node(
+                        source_node,
+                        junction=elec_junction,
+                        sim_info=SimInfo(name=f"junction_{elec_junction.junction_id}",
+                                         path=("junction", str(elec_junction.junction_id)))
+                    )
                 if not self.graph.has_node(target_node):
                     elec_junction = junctions[int(target_node)]
-                    self.graph.add_node(target_node, junction=elec_junction)
+                    self.graph.add_node(
+                        target_node,
+                        junction=elec_junction,
+                        sim_info=SimInfo(name=f"junction_{elec_junction.junction_id}",
+                                         path=("junction", str(elec_junction.junction_id)))
+                    )
 
                 self.graph.add_edge(
                     source_node,
                     target_node,
-                    component=comp
+                    component=comp,
+                    sim_info=SimInfo(name=comp.comp_id, path=("component", comp.comp_id),
+                                     value=_initial_state(comp))
                 )
 
     def _create_electrical_model(self, connections: list, components: list) -> None:

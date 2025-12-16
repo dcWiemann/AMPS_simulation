@@ -87,13 +87,10 @@ def test_unique_junction_ids():
 def test_power_switch_control_signal():
     """Test the control signal calculation for PowerSwitch."""
     # Create a PowerSwitch instance
-    switch = PowerSwitch(comp_id="SW1", switch_time=1.0, is_on=True)
+    switch = PowerSwitch(comp_id="SW1", switch_time=1.0)
     
     # Test when the switch is on
     assert switch.set_switch_state(0.2) == 0  # Should be 0 when off, before switch_time
-    
-    # Test when the switch is off
-    switch.is_on = False
     assert switch.set_switch_state(1) == 1  # Should be 1 when on, after switch_time
 
 def test_voltage_source_input_var():
