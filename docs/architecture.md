@@ -7,12 +7,11 @@ This section captures the planned structure that will move into the README once 
 - **ElectricalModel**: Pure topology and components; no simulation variables. Adding a component uses `add_component(component, name, nodes=[...])`. Enforces uniqueness of component names within the model.
 - **ControlModel**: Control blocks and control ports. Enforces unique block/port names within the model.
 - **ControlPorts & ElectricalPorts**: Interfaces to the outer world. ControlPorts inherit from ControlBlocks. ElectricalPorts expose external terminals.
-- **VarInfo**: Immutable mapping of `path` (tuple of names from root to element) to `variables` (e.g., voltage/current/signal symbols) plus optional `value`. Path naming uses `model__subsystem__component` segments to guarantee global uniqueness.
 
 ### Engine responsibilities
 - Consumes the top-level Model, flattens nested Models into single ElectricalModel and ControlModel while preserving full paths for traceability.
-- Owns stable ordering of nodes/edges/ports; builds a topology snapshot (incidence matrix, VarInfos, index maps) once and reuses it across switch/diode modes.
-- Creates symbols from paths, attaches VarInfo to each node/edge, and invokes components with provided symbols and control/state values (`cp_value`).
+- Owns stable ordering of nodes/edges/ports; builds a topology snapshot (incidence matrix, index maps) once and reuses it across switch/diode modes.
+- Creates symbols from paths and invokes components with provided symbols and control/state values (`cp_value`).
 - Caches mode-specific results (e.g., A/B/C/D or equation sets) keyed by switch/diode states; the topology snapshot is reused.
 
 ### Component API (simulation-facing)
