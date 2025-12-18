@@ -78,12 +78,6 @@ class ControlPort(ControlBlock):
         return u[0] if u else None
 
 
-class SignalSource(ControlBlock):
-    """Purely-structural block representing a signal origin."""
-
-    def __init__(self, name: str):
-        super().__init__(name=name, inport_names=[], outport_names=[f"{name}__out"])
-
 class InPort(ControlPort):
     """
     Input block for the control layer.

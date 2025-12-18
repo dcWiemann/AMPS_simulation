@@ -7,7 +7,7 @@ from .components import (
 	PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction, Ammeter, Voltmeter
 )
 from .control_model import ControlModel
-from .control_block import ControlPort as ControlPortBlock, SignalSource
+from .control_block import ControlPort as ControlPortBlock, ControlSource
 from .control_signal import ControlSignal
 from .sim_info import SimInfo
 
@@ -371,13 +371,13 @@ class ParserJson(CircuitParser):
                 # Assign port name to the component
                 component.control_port_name = port_name
                 
-                signal_source = SignalSource(name=f"{comp_id}__signal_source")
+                signal_source = ControlSource(name=f"{comp_id}_signal_source", outport_names=[f"{comp_id}_out"])
                 port_block = ControlPortBlock(
                     name=port_name,
                     port_type="source",
                     variable=component.input_var,
-                    inport_names=[f"{port_name}__in"],
-                    outport_names=[f"{port_name}__out"],
+                    inport_names=[f"{port_name}_in"],
+                    outport_names=[f"{port_name}_out"],
                 )
                 self.control_model.add_block([signal_source, port_block])
 
