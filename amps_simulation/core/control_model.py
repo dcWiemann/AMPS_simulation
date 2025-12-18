@@ -2,7 +2,7 @@ from typing import Optional, List, Callable, Union, Tuple, Sequence, Any, Dict
 import numpy as np
 import networkx as nx
 from sympy import Symbol
-from .control_block import ControlBlock
+from .control_block import ControlBlock, InPort, OutPort, LinearControlBlock
 from .control_signal import ControlSignal
 
 
@@ -25,6 +25,12 @@ class ControlModel:
         self.block_list: List[ControlBlock] = []
         self.state_vars: List[Symbol] = []
 
+        # Convenience lists (populated in initialize())
+        self.list_all_blocks: List[ControlBlock] = []
+        self.list_linear_blocks: List[LinearControlBlock] = []
+        self.list_inports: List[InPort] = []
+        self.list_outports: List[OutPort] = []
+
         # Compilation state
         self._input_function: Optional[Callable[[float], np.ndarray]] = None
         self._port_order: List[str] = []
@@ -32,7 +38,25 @@ class ControlModel:
         self.initialized = False
 
     def initialize(self) -> None:
-        """Initialize the control model (placeholder for future extensions)."""
+        """Initialize the control model and populate convenience block lists."""
+        self.list_all_blocks = []
+        self.list_linear_blocks = []
+        self.list_inports = []
+        self.list_outports = []
+
+        for _, node_data in self.graph.nodes(data=True):
+            block = node_data.get("block")
+            if not isinstance(block, ControlBlock):
+                continue
+
+            self.list_all_blocks.append(block)
+            if isinstance(block, LinearControlBlock):
+                self.list_linear_blocks.append(block)
+            if isinstance(block, InPort):
+                self.list_inports.append(block)
+            if isinstance(block, OutPort):
+                self.list_outports.append(block)
+
         self.initialized = True
 
     # New graph-building API
