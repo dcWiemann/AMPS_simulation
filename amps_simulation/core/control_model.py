@@ -139,7 +139,6 @@ class ControlModel:
                 src_port_idx=src_port_idx,
                 dst_port_idx=dst_port_idx,
                 dtype=getattr(from_block, "outport_dtype", None),
-                shape=getattr(from_block, "outport_shape", None),
             )
         else:
             # Fill in structural metadata if missing
@@ -152,7 +151,6 @@ class ControlModel:
             signal.src_port_idx = signal.src_port_idx if signal.src_port_idx is not None else src_port_idx
             signal.dst_port_idx = signal.dst_port_idx if signal.dst_port_idx is not None else dst_port_idx
             signal.dtype = signal.dtype if signal.dtype is not None else getattr(from_block, "outport_dtype", None)
-            signal.shape = signal.shape if signal.shape is not None else getattr(from_block, "outport_shape", None)
 
         self.graph.add_edge(from_block.name, to_block.name, key=signal.name, signal=signal)
         return signal

@@ -19,8 +19,6 @@ class ControlBlock:
     outport_names: List[str] = field(default_factory=list)
     inport_dtype: Any = None
     outport_dtype: Any = None
-    inport_shape: List[int] = field(default_factory=list)
-    outport_shape: List[int] = field(default_factory=list)
     n_inports: int = field(init=False, default=0)
     n_outports: int = field(init=False, default=0)
     n_states: int = field(init=False, default=0)
@@ -33,16 +31,12 @@ class ControlBlock:
         *,
         inport_dtype: Any = None,
         outport_dtype: Any = None,
-        inport_shape: Optional[List[int]] = None,
-        outport_shape: Optional[List[int]] = None,
     ) -> None:
         self.name = name
-        self.inport_names = list(inport_names) if inport_names is not None else []
-        self.outport_names = list(outport_names) if outport_names is not None else []
+        self.inport_names = list(inport_names) if inport_names is not None else ["in"]
+        self.outport_names = list(outport_names) if outport_names is not None else ["out"]
         self.inport_dtype = inport_dtype
         self.outport_dtype = outport_dtype
-        self.inport_shape = list(inport_shape) if inport_shape is not None else []
-        self.outport_shape = list(outport_shape) if outport_shape is not None else []
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -69,8 +63,6 @@ class ControlPort(ControlBlock):
         super().__init__(name=name, inport_names=inport_names or [], outport_names=outport_names or [])
         self.inport_dtype = Any
         self.outport_dtype = Any
-        self.inport_shape = [1] if self.n_inports else []
-        self.outport_shape = [1] if self.n_outports else []
         self.port_type = port_type
         self.variable = variable
 
@@ -87,8 +79,6 @@ class InPort(ControlPort):
     def __init__(self, name: str):
         super().__init__(name=name, port_type="input", inport_names=[f"{name}__in"], outport_names=[])
         self.inport_dtype = Any
-        self.inport_shape = [1]
-        self.outport_shape = []
 
 class OutPort(ControlPort):
     """
@@ -100,8 +90,6 @@ class OutPort(ControlPort):
         super().__init__(name=name, port_type="output", inport_names=[], outport_names=[f"{name}__out"])
         self.inport_dtype = []
         self.outport_dtype = Any
-        self.inport_shape = []
-        self.outport_shape = [1]
 
 
 class LinearControlBlock(ControlBlock):
@@ -145,7 +133,7 @@ class LinearControlBlock(ControlBlock):
 
     def _validate_and_finalize_from_matrices(self) -> None:
         """
-        Validate state-space dimensions and derive n_states/n_inports/n_outports and port shapes.
+        Validate state-space dimensions and derive n_states/n_inports/n_outports.
 
         Expected shapes:
           A: (nx, nx)
@@ -189,11 +177,6 @@ class LinearControlBlock(ControlBlock):
         self.n_inports = nu
         self.n_outports = ny
 
-        # Shapes are the per-port signal shapes (scalar/vector/matrix).
-        # For now, each port carries a scalar by default.
-        self.inport_shape = [1] if nu > 0 else []
-        self.outport_shape = [1] if ny > 0 else []
-
         if nx > 0 and not self.x_names:
             self.x_names = [f"x{i}" for i in range(1, nx + 1)]
 
@@ -215,7 +198,7 @@ class LinearControlBlock(ControlBlock):
         else:
             y = self.D @ u_vec
 
-        if y.shape == (1, 1) and self.outport_shape == [1]:
+        if y.shape == (1, 1) and self.n_outports == 1:
             return float(y[0, 0])
         return y.reshape((-1,))
 
@@ -323,25 +306,10 @@ class TransferFunction(LinearControlBlock):
 class ControlSource(ControlBlock):
     """Base class for source blocks u(t)."""
 
-    @staticmethod
-    def _infer_shape(value: Any) -> List[int]:
-        if isinstance(value, (int, float, bool)):
-            return [1]
-        if isinstance(value, (list, tuple)):
-            return [len(value)]
-        if hasattr(value, "shape"):
-            try:
-                return list(value.shape)
-            except Exception:
-                return []
-        return []
-
     def __init__(self, name: str, outport_names: Optional[List[str]] = None):
         super().__init__(name=name, inport_names=[], outport_names=outport_names or ["y"])
         self.inport_dtype = []
         self.outport_dtype = Any
-        self.inport_shape = []
-        self.outport_shape = [1]
         self.n_inports = 0
         self.n_states = 0
 
@@ -359,9 +327,6 @@ class Step(ControlSource):
         self.initial_value = initial_value
         self.final_value = final_value
         self.outport_dtype = Any
-        init_shape = self._infer_shape(initial_value)
-        final_shape = self._infer_shape(final_value)
-        self.outport_shape = init_shape if init_shape == final_shape else (init_shape or final_shape or [])
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return self.initial_value if t < self.t0 else self.final_value
@@ -374,7 +339,6 @@ class Constant(ControlSource):
         super().__init__(name=name, outport_names=["y"])
         self.value = value
         self.outport_dtype = Any
-        self.outport_shape = self._infer_shape(value)
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return self.value
