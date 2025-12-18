@@ -371,11 +371,11 @@ class ParserJson(CircuitParser):
                 # Assign port name to the component
                 component.control_port_name = port_name
                 
-                signal_source = ControlSource(name=f"{comp_id}_signal_source", outport_names=[f"{comp_id}_out"])
+                signal_source = ControlSource(name=f"{comp_id}_signal_source", output_names=[f"{comp_id}_out"])
                 port_block = ControlPortBlock(
                     name=port_name,
-                    inport_names=[f"{port_name}_in"],
-                    outport_names=[f"{port_name}_out"],
+                    input_names=[f"{port_name}_in"],
+                    output_names=[f"{port_name}_out"],
                 )
                 self.control_model.add_block([signal_source, port_block])
 

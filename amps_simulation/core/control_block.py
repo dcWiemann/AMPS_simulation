@@ -15,33 +15,33 @@ class ControlBlock:
     fleshed out later.
     """
     name: str
-    inport_names: List[str] = field(default_factory=list)
-    outport_names: List[str] = field(default_factory=list)
-    inport_dtype: Any = None
-    outport_dtype: Any = None
-    n_inports: int = field(init=False, default=0)
-    n_outports: int = field(init=False, default=0)
+    input_names: List[str] = field(default_factory=list)
+    output_names: List[str] = field(default_factory=list)
+    input_dtype: Any = None
+    output_dtype: Any = None
+    n_inputs: int = field(init=False, default=0)
+    n_outputs: int = field(init=False, default=0)
     n_states: int = field(init=False, default=0)
 
     def __init__(
         self,
         name: str,
-        inport_names: Optional[List[str]] = None,
-        outport_names: Optional[List[str]] = None,
+        input_names: Optional[List[str]] = None,
+        output_names: Optional[List[str]] = None,
         *,
-        inport_dtype: Any = None,
-        outport_dtype: Any = None,
+        input_dtype: Any = None,
+        output_dtype: Any = None,
     ) -> None:
         self.name = name
-        self.inport_names = list(inport_names) if inport_names is not None else ["in"]
-        self.outport_names = list(outport_names) if outport_names is not None else ["out"]
-        self.inport_dtype = inport_dtype
-        self.outport_dtype = outport_dtype
+        self.input_names = list(input_names) if input_names is not None else ["in"]
+        self.output_names = list(output_names) if output_names is not None else ["out"]
+        self.input_dtype = input_dtype
+        self.output_dtype = output_dtype
         self.__post_init__()
 
     def __post_init__(self) -> None:
-        self.n_inports = len(self.inport_names)
-        self.n_outports = len(self.outport_names)
+        self.n_inputs = len(self.input_names)
+        self.n_outputs = len(self.output_names)
         self.n_states = 0
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
@@ -55,12 +55,12 @@ class ControlPort(ControlBlock):
     def __init__(
         self,
         name: str,
-        inport_names: Optional[List[str]] = None,
-        outport_names: Optional[List[str]] = None,
+        input_names: Optional[List[str]] = None,
+        output_names: Optional[List[str]] = None,
     ):
-        super().__init__(name=name, inport_names=inport_names or [], outport_names=outport_names or [])
-        self.inport_dtype = Any
-        self.outport_dtype = Any
+        super().__init__(name=name, input_names=input_names or [], output_names=output_names or [])
+        self.input_dtype = Any
+        self.output_dtype = Any
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return u[0] if u else None
@@ -73,8 +73,8 @@ class InPort(ControlPort):
     """
 
     def __init__(self, name: str):
-        super().__init__(name=name, inport_names=[], outport_names=["out"])
-        self.inport_dtype = Any
+        super().__init__(name=name, input_names=[], output_names=["out"])
+        self.output_dtype = Any
 
 class OutPort(ControlPort):
     """
@@ -83,9 +83,8 @@ class OutPort(ControlPort):
     """
 
     def __init__(self, name: str):
-        super().__init__(name=name, inport_names=["in"], outport_names=[])
-        self.inport_dtype = []
-        self.outport_dtype = Any
+        super().__init__(name=name, input_names=["in"], output_names=[])
+        self.input_dtype = Any
 
 
 class LinearControlBlock(ControlBlock):
@@ -97,12 +96,12 @@ class LinearControlBlock(ControlBlock):
     def __init__(
         self,
         name: str,
-        inport_names: Optional[List[str]] = None,
-        outport_names: Optional[List[str]] = None,
+        input_names: Optional[List[str]] = None,
+        output_names: Optional[List[str]] = None,
     ):
-        super().__init__(name=name, inport_names=inport_names or [], outport_names=outport_names or [])
-        self.inport_dtype = float
-        self.outport_dtype = float
+        super().__init__(name=name, input_names=input_names or [], output_names=output_names or [])
+        self.input_dtype = float
+        self.output_dtype = float
 
         # All linear blocks have A, B, C, D.
         # Stateless blocks use 0 state dimension, i.e. A is (0,0).
@@ -129,7 +128,7 @@ class LinearControlBlock(ControlBlock):
 
     def _validate_and_finalize_from_matrices(self) -> None:
         """
-        Validate state-space dimensions and derive n_states/n_inports/n_outports.
+        Validate state-space dimensions and derive n_states/n_inputs/n_outputs.
 
         Expected shapes:
           A: (nx, nx)
@@ -153,25 +152,25 @@ class LinearControlBlock(ControlBlock):
         if self.D.shape != (ny, nu):
             raise ValueError(f"Block '{self.name}' invalid D shape {self.D.shape}, expected ({ny},{nu})")
 
-        if self.inport_names:
-            if len(self.inport_names) != nu:
+        if self.input_names:
+            if len(self.input_names) != nu:
                 raise ValueError(
-                    f"Block '{self.name}' inport_names length {len(self.inport_names)} must match n_inports={nu}"
+                    f"Block '{self.name}' input_names length {len(self.input_names)} must match n_inputs={nu}"
                 )
         else:
-            self.inport_names = ["u"] if nu == 1 else [f"u{i}" for i in range(1, nu + 1)]
+            self.input_names = ["u"] if nu == 1 else [f"u{i}" for i in range(1, nu + 1)]
 
-        if self.outport_names:
-            if len(self.outport_names) != ny:
+        if self.output_names:
+            if len(self.output_names) != ny:
                 raise ValueError(
-                    f"Block '{self.name}' outport_names length {len(self.outport_names)} must match n_outports={ny}"
+                    f"Block '{self.name}' output_names length {len(self.output_names)} must match n_outputs={ny}"
                 )
         else:
-            self.outport_names = ["y"] if ny == 1 else [f"y{i}" for i in range(1, ny + 1)]
+            self.output_names = ["y"] if ny == 1 else [f"y{i}" for i in range(1, ny + 1)]
 
         self.n_states = nx
-        self.n_inports = nu
-        self.n_outports = ny
+        self.n_inputs = nu
+        self.n_outputs = ny
 
         if nx > 0 and not self.x_names:
             self.x_names = [f"x{i}" for i in range(1, nx + 1)]
@@ -181,9 +180,9 @@ class LinearControlBlock(ControlBlock):
         For stateless linear blocks: y = D u
         For stateful linear blocks: y = C x + D u
         """
-        if len(u) != self.n_inports:
-            raise ValueError(f"Block '{self.name}' expected {self.n_inports} inputs, got {len(u)}")
-        u_vec = np.asarray(u, dtype=float).reshape((-1, 1)) if self.n_inports else np.zeros((0, 1), dtype=float)
+        if len(u) != self.n_inputs:
+            raise ValueError(f"Block '{self.name}' expected {self.n_inputs} inputs, got {len(u)}")
+        u_vec = np.asarray(u, dtype=float).reshape((-1, 1)) if self.n_inputs else np.zeros((0, 1), dtype=float)
         if self.n_states > 0:
             if x is None:
                 raise ValueError(f"Block '{self.name}' requires state vector x of length {self.n_states}")
@@ -194,7 +193,7 @@ class LinearControlBlock(ControlBlock):
         else:
             y = self.D @ u_vec
 
-        if y.shape == (1, 1) and self.n_outports == 1:
+        if y.shape == (1, 1) and self.n_outputs == 1:
             return float(y[0, 0])
         return y.reshape((-1,))
 
@@ -203,7 +202,7 @@ class Gain(LinearControlBlock):
     """Static gain block."""
 
     def __init__(self, name: str, gain: float = 1.0):
-        super().__init__(name=name, inport_names=["u"], outport_names=["y"])
+        super().__init__(name=name, input_names=["u"], output_names=["y"])
         self.gain = gain
         self.A = np.zeros((0, 0), dtype=float)
         self.B = np.zeros((0, 1), dtype=float)
@@ -220,20 +219,20 @@ class Gain(LinearControlBlock):
 class Sum(LinearControlBlock):
     """Summing junction with sign pattern."""
 
-    def __init__(self, name: str, signs: Optional[List[int]] = None, n_inports: Optional[int] = None):
+    def __init__(self, name: str, signs: Optional[List[int]] = None, n_inputs: Optional[int] = None):
         signs = list(signs) if signs is not None else []
-        if n_inports is None:
-            n_inports = len(signs)
-        if n_inports <= 0:
-            raise ValueError("n_inports must be > 0")
-        if signs and len(signs) != n_inports:
-            raise ValueError(f"Expected {n_inports} signs, got {len(signs)}")
+        if n_inputs is None:
+            n_inputs = len(signs)
+        if n_inputs <= 1:
+            raise ValueError("n_inputs must be > 1")
+        if signs and len(signs) != n_inputs:
+            raise ValueError(f"Expected {n_inputs} signs, got {len(signs)}")
 
-        super().__init__(name=name, inport_names=[f"u{i}" for i in range(1, n_inports + 1)], outport_names=["y"])
-        self.signs = signs if signs else [1 for _ in range(n_inports)]
+        super().__init__(name=name, input_names=[f"u{i}" for i in range(1, n_inputs + 1)], output_names=["y"])
+        self.signs = signs if signs else [1 for _ in range(n_inputs)]
 
         self.A = np.zeros((0, 0), dtype=float)
-        self.B = np.zeros((0, n_inports), dtype=float)
+        self.B = np.zeros((0, n_inputs), dtype=float)
         self.C = np.zeros((1, 0), dtype=float)
         self.D = np.asarray([self.signs], dtype=float)
         self._validate_and_finalize_from_matrices()
@@ -251,7 +250,7 @@ class StateSpaceModel(LinearControlBlock):
 
     def __init__(self, name: str, A=None, B=None, C=None, D=None, x_init: Optional[Any] = None,
                  x_names: Optional[List[str]] = None):
-        super().__init__(name=name, inport_names=[], outport_names=[])
+        super().__init__(name=name, input_names=[], output_names=[])
         self.A = self._as_2d_float_array(A, name="A")
         self.B = self._as_2d_float_array(B, name="B")
         self.C = self._as_2d_float_array(C, name="C")
@@ -265,7 +264,7 @@ class Integrator(LinearControlBlock):
     """Integrator block."""
 
     def __init__(self, name: str, x_init: float = 0.0, x_name: Optional[str] = None):
-        super().__init__(name=name, inport_names=["u"], outport_names=["y"])
+        super().__init__(name=name, input_names=["u"], output_names=["y"])
         self.x_init = x_init
         self.x_name = x_name
         self.A = np.asarray([[0.0]], dtype=float)
@@ -285,7 +284,7 @@ class TransferFunction(LinearControlBlock):
     """Transfer function block storing numerator/denominator."""
 
     def __init__(self, name: str, num=None, den=None):
-        super().__init__(name=name, inport_names=["u"], outport_names=["y"])
+        super().__init__(name=name, input_names=["u"], output_names=["y"])
         self.num = num
         self.den = den
         # Placeholder until we compute a realization.
@@ -302,11 +301,11 @@ class TransferFunction(LinearControlBlock):
 class ControlSource(ControlBlock):
     """Base class for source blocks u(t)."""
 
-    def __init__(self, name: str, outport_names: Optional[List[str]] = None):
-        super().__init__(name=name, inport_names=[], outport_names=outport_names or ["y"])
-        self.inport_dtype = []
-        self.outport_dtype = Any
-        self.n_inports = 0
+    def __init__(self, name: str, output_names: Optional[List[str]] = None):
+        super().__init__(name=name, input_names=[], output_names=output_names or ["y"])
+        self.input_dtype = []
+        self.output_dtype = Any
+        self.n_inputs = 0
         self.n_states = 0
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
@@ -318,11 +317,11 @@ class Step(ControlSource):
     """Step source block."""
 
     def __init__(self, name: str, t0: float = 0.0, initial_value: float = 0.0, final_value: float = 1.0):
-        super().__init__(name=name, outport_names=["y"])
+        super().__init__(name=name, output_names=["y"])
         self.t0 = t0
         self.initial_value = initial_value
         self.final_value = final_value
-        self.outport_dtype = Any
+        self.output_dtype = Any
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return self.initial_value if t < self.t0 else self.final_value
@@ -332,9 +331,9 @@ class Constant(ControlSource):
     """Constant output source."""
 
     def __init__(self, name: str, value: Any):
-        super().__init__(name=name, outport_names=["y"])
+        super().__init__(name=name, output_names=["y"])
         self.value = value
-        self.outport_dtype = Any
+        self.output_dtype = Any
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return self.value

@@ -28,8 +28,8 @@ class ControlModel:
         # Convenience lists (populated in initialize())
         self.list_all_blocks: List[ControlBlock] = []
         self.list_linear_blocks: List[LinearControlBlock] = []
-        self.list_inports: List[InPort] = []
-        self.list_outports: List[OutPort] = []
+        self.list_input_ports: List[InPort] = []
+        self.list_output_ports: List[OutPort] = []
 
         # Compilation state
         self._input_function: Optional[Callable[[float], np.ndarray]] = None
@@ -41,8 +41,8 @@ class ControlModel:
         """Initialize the control model and populate convenience block lists."""
         self.list_all_blocks = []
         self.list_linear_blocks = []
-        self.list_inports = []
-        self.list_outports = []
+        self.list_input_ports = []
+        self.list_output_ports = []
 
         for _, node_data in self.graph.nodes(data=True):
             block = node_data.get("block")
@@ -53,9 +53,9 @@ class ControlModel:
             if isinstance(block, LinearControlBlock):
                 self.list_linear_blocks.append(block)
             if isinstance(block, InPort):
-                self.list_inports.append(block)
+                self.list_input_ports.append(block)
             if isinstance(block, OutPort):
-                self.list_outports.append(block)
+                self.list_output_ports.append(block)
 
         self.initialized = True
 
@@ -108,7 +108,7 @@ class ControlModel:
 
     @staticmethod
     def _port_name_and_index(block: ControlBlock, port: Union[str, int], *, port_kind: str) -> Tuple[str, int]:
-        ports = block.outport_names if port_kind == "out" else block.inport_names
+        ports = block.output_names if port_kind == "out" else block.input_names
         if isinstance(port, int):
             if port < 0 or port >= len(ports):
                 raise IndexError(f"{port_kind}port index {port} out of range for block '{block.name}'")
@@ -146,7 +146,7 @@ class ControlModel:
                 dst_port_name=dst_port_name,
                 src_port_idx=src_port_idx,
                 dst_port_idx=dst_port_idx,
-                dtype=getattr(from_block, "outport_dtype", None),
+                dtype=getattr(from_block, "output_dtype", None),
             )
         else:
             # Fill in structural metadata if missing
@@ -158,7 +158,7 @@ class ControlModel:
             signal.dst_port_name = signal.dst_port_name or dst_port_name
             signal.src_port_idx = signal.src_port_idx if signal.src_port_idx is not None else src_port_idx
             signal.dst_port_idx = signal.dst_port_idx if signal.dst_port_idx is not None else dst_port_idx
-            signal.dtype = signal.dtype if signal.dtype is not None else getattr(from_block, "outport_dtype", None)
+            signal.dtype = signal.dtype if signal.dtype is not None else getattr(from_block, "output_dtype", None)
 
         self.graph.add_edge(from_block.name, to_block.name, key=signal.name, signal=signal)
         return signal
