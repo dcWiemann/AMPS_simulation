@@ -24,3 +24,5 @@ WARP.md
 .claude/
 .vscode/
 debug/
+docs/
+*.bak
