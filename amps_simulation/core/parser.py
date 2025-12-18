@@ -4,18 +4,18 @@ from typing import Any, Dict, Tuple, List, Optional
 import networkx as nx
 from .components import (
     Component, Resistor, Capacitor, Inductor,
-    PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction, Ammeter, Voltmeter
+	PowerSwitch, Diode, VoltageSource, CurrentSource, Ground, ElecJunction, Ammeter, Voltmeter
 )
-from .control_graph import ControlGraph
+from .control_model import ControlModel
+from .control_block import ControlPort as ControlPortBlock, SignalSource
 from .control_signal import ControlSignal
-from .control_port import ControlPort
 from .sim_info import SimInfo
 
 class CircuitParser(ABC):
     """Abstract base class for circuit parsers that produce NetworkX graphs."""
     
     @abstractmethod
-    def parse(self, circuit_data: Any) -> Tuple[nx.Graph, ControlGraph]:
+    def parse(self, circuit_data: Any) -> Tuple[nx.Graph, nx.MultiDiGraph]:
         """
         Parse circuit data into NetworkX graph and control graph structures.
         
@@ -23,7 +23,7 @@ class CircuitParser(ABC):
             circuit_data: Circuit description in the format supported by this parser
             
         Returns:
-            Tuple[nx.Graph, ControlGraph]: Electrical graph and control graph
+            Tuple[nx.Graph, nx.MultiDiGraph]: Electrical graph and control graph
         """
         pass
 
@@ -34,11 +34,11 @@ class ParserJson(CircuitParser):
     def __init__(self):
         """Initialize the parser with an empty directed graph."""
         self.graph = nx.MultiDiGraph()
-        self.control_graph = ControlGraph()
+        self.control_model = ControlModel()
         self.components_list = []
 
     
-    def parse(self, circuit_json: Dict[str, Any]) -> Tuple[nx.Graph, ControlGraph]:
+    def parse(self, circuit_json: Dict[str, Any]) -> Tuple[nx.Graph, nx.MultiDiGraph]:
         """
         Parse JSON circuit description into NetworkX graph and control graph structures.
         
@@ -46,12 +46,11 @@ class ParserJson(CircuitParser):
             circuit_json: Dictionary containing circuit description with 'nodes' and 'edges'
             
         Returns:
-            Tuple[nx.Graph, ControlGraph]: Electrical graph and control graph
+            Tuple[nx.Graph, nx.MultiDiGraph]: Electrical graph and control graph
         """
         # Clear registries to avoid duplicate ID issues
         Component.clear_registry()
         ElecJunction.clear_registry()
-        ControlPort.clear_registry()
 
         # Extract components and connections
         components = circuit_json["nodes"]
@@ -61,7 +60,7 @@ class ParserJson(CircuitParser):
         self._create_electrical_model(connections, components)
         self._create_control_graph(components)
         
-        return self.graph, self.control_graph
+        return self.graph, self.control_model.graph
     
 
     def _create_circuit_components(self, components: list) -> List[Component]:
@@ -363,7 +362,6 @@ class ParserJson(CircuitParser):
             # Create control signal from value
             signal_id = f"{comp_id}_signal"
             signal = ControlSignal(signal_id, value)
-            self.control_graph.add_signal(signal)
             
             # Create control port for the source
             port_name = f"{comp_id}_port"
@@ -373,8 +371,15 @@ class ParserJson(CircuitParser):
                 # Assign port name to the component
                 component.control_port_name = port_name
                 
-                port = ControlPort(name=port_name, variable=component.input_var, port_type="source")
-                self.control_graph.add_port(port)
-                
+                signal_source = SignalSource(name=f"{comp_id}__signal_source")
+                port_block = ControlPortBlock(
+                    name=port_name,
+                    port_type="source",
+                    variable=component.input_var,
+                    inport_names=[f"{port_name}__in"],
+                    outport_names=[f"{port_name}__out"],
+                )
+                self.control_model.add_block([signal_source, port_block])
+
                 # Connect signal to port (1:1 mapping for now)
-                self.control_graph.connect_signal_to_port(signal_id, port_name)
+                self.control_model.connect(signal_source, 0, port_block, 0, signal=signal)

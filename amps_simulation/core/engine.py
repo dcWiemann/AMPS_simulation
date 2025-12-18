@@ -1,6 +1,6 @@
 import sympy as sp
 import logging
-from typing import Dict, Set, Tuple, List, Any
+from typing import Dict, Set, Tuple, List, Any, Optional, Union
 import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
@@ -18,7 +18,7 @@ class Engine:
     This class takes an ElectricalModel and handles the simulation of the circuit.
     """
     
-    def __init__(self, electrical_model: ElectricalModel, control_model: ControlModel = None):
+    def __init__(self, electrical_model: ElectricalModel, control_model: Optional[Union[ControlModel, nx.MultiDiGraph]] = None):
         """
         Initialize the Engine class.
 
@@ -28,7 +28,10 @@ class Engine:
         """
         self.electrical_model = electrical_model
         self.graph = electrical_model.graph  # Keep reference to graph for compatibility
-        self.control_model = control_model or ControlModel()
+        if isinstance(control_model, nx.MultiDiGraph):
+            self.control_model = ControlModel(control_model)
+        else:
+            self.control_model = control_model or ControlModel()
         
         # Initialize simulation variables
         self.components_list = []
@@ -72,8 +75,7 @@ class Engine:
         self.diode_list = tuple(self.electrical_model.diode_list)
         
         # Build control model input function for sources only
-        source_ports = {name: port for name, port in self.control_model.ports.items()
-                       if port.port_type == "source"}
+        source_ports = self.control_model.port_blocks(port_type="source")
         if source_ports:
             # Create ordered list of SOURCE port names matching input_vars order
             # Engine determines and maintains this order throughout simulation
@@ -81,7 +83,7 @@ class Engine:
             for input_var in self.input_vars:
                 # Find the SOURCE control port that corresponds to this input variable
                 for port_name, port in source_ports.items():
-                    if port.variable == input_var:
+                    if getattr(port, "variable", None) == input_var:
                         port_order.append(port_name)
                         break
 

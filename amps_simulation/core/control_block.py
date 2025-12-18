@@ -62,6 +62,7 @@ class ControlPort(ControlBlock):
         self,
         name: str,
         port_type: str = "generic",
+        variable: Any = None,
         inport_names: Optional[List[str]] = None,
         outport_names: Optional[List[str]] = None,
     ):
@@ -71,9 +72,17 @@ class ControlPort(ControlBlock):
         self.inport_shape = [1] if self.n_inports else []
         self.outport_shape = [1] if self.n_outports else []
         self.port_type = port_type
+        self.variable = variable
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return u[0] if u else None
+
+
+class SignalSource(ControlBlock):
+    """Purely-structural block representing a signal origin."""
+
+    def __init__(self, name: str):
+        super().__init__(name=name, inport_names=[], outport_names=[f"{name}__out"])
 
 class InPort(ControlPort):
     """

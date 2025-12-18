@@ -10,7 +10,6 @@ from amps_simulation.core.parser import ParserJson
 from amps_simulation.core.dae_system import ElectricalDaeSystem
 from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.control_model import ControlModel
-from amps_simulation.core.control_graph import ControlGraph
 
 def load_test_circuit(filename):
     """Helper function to load test circuit from JSON file."""
@@ -328,7 +327,7 @@ def test_engine_control_model_integration():
 
     # Verify ControlModel was created
     assert hasattr(engine, 'control_model')
-    assert engine.control_model.control_graph is control_graph
+    assert engine.control_model.graph is control_graph
 
     # Verify control input function was created for source ports
     assert hasattr(engine, 'control_input_function')
@@ -409,4 +408,3 @@ def test_engine_multiple_source_control():
     # Values should match the order engine determines for input_vars
     assert 5.0 in input_values  # Voltage source value
     assert 0.1 in input_values  # Current source value
-

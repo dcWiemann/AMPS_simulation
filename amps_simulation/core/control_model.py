@@ -1,42 +1,33 @@
-from typing import Optional, List, Callable, Union, Tuple, Sequence
+from typing import Optional, List, Callable, Union, Tuple, Sequence, Any, Dict
 import numpy as np
 import networkx as nx
 from sympy import Symbol
 from .control_block import ControlBlock
-from .control_graph import ControlGraph
 from .control_signal import ControlSignal
-from .control_port import ControlPort
 
 
 class ControlModel:
     """
-    Control model managing control blocks/signals and legacy port wiring.
+    Control model managing control blocks/signals as a NetworkX MultiDiGraph.
 
     Similar to ElectricalModel, this class provides a high-level API for building
     and managing the control layer of a simulation.
     """
 
-    def __init__(self, graph: Optional[nx.MultiDiGraph] = None, control_graph: Optional[ControlGraph] = None):
+    def __init__(self, graph: Optional[nx.MultiDiGraph] = None):
         """
         Initialize the ControlModel.
 
         Args:
             graph: NetworkX MultiDiGraph containing ControlBlocks/ControlSignals.
-            control_graph: Legacy ControlGraph instance for port-level wiring.
         """
-        # Support legacy positional usage ControlModel(control_graph)
-        if isinstance(graph, ControlGraph) and control_graph is None:
-            control_graph = graph
-            graph = None
-
         self.graph = graph if graph is not None else nx.MultiDiGraph()
-        self.control_graph = control_graph if control_graph is not None else ControlGraph()
         self.block_list: List[ControlBlock] = []
         self.state_vars: List[Symbol] = []
 
         # Compilation state
-        self._input_function = None
-        self._port_order = []
+        self._input_function: Optional[Callable[[float], np.ndarray]] = None
+        self._port_order: List[str] = []
         self._compiled = False
         self.initialized = False
 
@@ -55,6 +46,33 @@ class ControlModel:
                 raise ValueError(f"Control block '{block.name}' already exists in graph")
             self.graph.add_node(block.name, block=block)
             self.block_list.append(block)
+
+    def get_block(self, name: str) -> ControlBlock:
+        """Get a block by node name."""
+        if not self.graph.has_node(name):
+            raise KeyError(f"Control block node '{name}' not found")
+        block = self.graph.nodes[name].get("block")
+        if not isinstance(block, ControlBlock):
+            raise TypeError(f"Control graph node '{name}' does not contain a ControlBlock")
+        return block
+
+    def port_blocks(self, *, port_type: Optional[str] = None) -> Dict[str, ControlBlock]:
+        """
+        Return a mapping of node_name -> block for nodes that look like "ports".
+
+        A block is considered a port if it has a `port_type` attribute.
+        """
+        result: Dict[str, ControlBlock] = {}
+        for node_name, node_data in self.graph.nodes(data=True):
+            block = node_data.get("block")
+            if not isinstance(block, ControlBlock):
+                continue
+            if not hasattr(block, "port_type"):
+                continue
+            if port_type is not None and getattr(block, "port_type") != port_type:
+                continue
+            result[str(node_name)] = block
+        return result
 
     @staticmethod
     def _port_name_and_index(block: ControlBlock, port: Union[str, int], *, port_kind: str) -> Tuple[str, int]:
@@ -88,17 +106,17 @@ class ControlModel:
 
         signal_name = signal.name if signal else f"{from_block.name}__{src_port_name}__{to_block.name}__{dst_port_name}"
         if signal is None:
-                signal = ControlSignal(
-                    signal_name,
-                    src_block_name=from_block.name,
-                    dst_block_name=to_block.name,
-                    src_port_name=src_port_name,
-                    dst_port_name=dst_port_name,
-                    src_port_idx=src_port_idx,
-                    dst_port_idx=dst_port_idx,
-                    dtype=getattr(from_block, "outport_dtype", None),
-                    shape=getattr(from_block, "outport_shape", None),
-                )
+            signal = ControlSignal(
+                signal_name,
+                src_block_name=from_block.name,
+                dst_block_name=to_block.name,
+                src_port_name=src_port_name,
+                dst_port_name=dst_port_name,
+                src_port_idx=src_port_idx,
+                dst_port_idx=dst_port_idx,
+                dtype=getattr(from_block, "outport_dtype", None),
+                shape=getattr(from_block, "outport_shape", None),
+            )
         else:
             # Fill in structural metadata if missing
             signal.name = signal_name
@@ -115,36 +133,50 @@ class ControlModel:
         self.graph.add_edge(from_block.name, to_block.name, key=signal.name, signal=signal)
         return signal
 
-    # Delegation to ControlGraph for building
-    def add_signal(self, signal: ControlSignal):
-        """Add control signal to the model"""
-        self.control_graph.add_signal(signal)
-
-    def add_port(self, port: ControlPort):
-        """Add control port to the model"""
-        self.control_graph.add_port(port)
-
-    def connect_signal_to_port(self, signal_id: str, port_name: str, gain: float = 1.0):
-        """Connect signal to control port"""
-        self.control_graph.connect_signal_to_port(signal_id, port_name, gain)
-
     # Compilation API
     def compile_input_function(self, port_order: List[str]) -> Callable[[float], np.ndarray]:
-        """Build optimized u(t) function using ControlPort static method
+        """
+        Build optimized u(t) function based on incoming ControlSignal edges.
 
         Args:
-            port_order: Ordered list of SOURCE control port names
+            port_order: Ordered list of SOURCE port node names
 
         Returns:
             Callable that takes time t and returns input vector u(t)
         """
-        self._port_order = port_order.copy()
-        self._input_function = ControlPort.compile_input_function(
-            port_order,
-            self.control_graph.ports,
-            self.control_graph.connections,
-            self.control_graph.signals
-        )
+        self._port_order = list(port_order)
+
+        # Pre-resolve the driving signal for each port for fast runtime evaluation.
+        drivers: List[Optional[ControlSignal]] = []
+        for port_name in self._port_order:
+            if not self.graph.has_node(port_name):
+                raise ValueError(f"Port node '{port_name}' not found in control graph")
+
+            in_edges = [
+                (u, v, k, d)
+                for u, v, k, d in self.graph.in_edges(port_name, keys=True, data=True)
+                if isinstance(d.get("signal"), ControlSignal)
+            ]
+
+            if len(in_edges) == 0:
+                drivers.append(None)
+                continue
+
+            if len(in_edges) > 1:
+                raise ValueError(f"Port node '{port_name}' has multiple driving signals; expected exactly 1")
+
+            _, _, _, data = in_edges[0]
+            drivers.append(data["signal"])
+
+        def input_function(t: float) -> np.ndarray:
+            u = np.zeros(len(self._port_order), dtype=float)
+            for i, signal in enumerate(drivers):
+                if signal is None:
+                    continue
+                u[i] = signal.evaluate(t)
+            return u
+
+        self._input_function = input_function
         self._compiled = True
         return self._input_function
 
@@ -152,24 +184,12 @@ class ControlModel:
         """Fast runtime call - must call compile_input_function first"""
         if not self._compiled:
             raise RuntimeError("Must call compile_input_function() first")
+        assert self._input_function is not None
         return self._input_function(t)
 
     def get_port_order(self) -> List[str]:
         """Get the current port order used for input vector"""
         return self._port_order.copy()
-
-    # Properties for convenience access
-    @property
-    def signals(self):
-        return self.control_graph.signals
-
-    @property
-    def ports(self):
-        return self.control_graph.ports
-
-    @property
-    def connections(self):
-        return self.control_graph.connections
 
     def __repr__(self):
         status = "compiled" if self._compiled else "not compiled"

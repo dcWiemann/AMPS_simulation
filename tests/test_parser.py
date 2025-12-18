@@ -6,8 +6,8 @@ from amps_simulation.core.components import (
     Resistor, Capacitor, Inductor, PowerSwitch,
     VoltageSource, Ground, Component, CurrentSource, Diode, Ammeter, Voltmeter, ElecJunction
 )
-from amps_simulation.core.control_graph import ControlGraph
-from amps_simulation.core.control_port import ControlPort
+from amps_simulation.core.control_model import ControlModel
+from amps_simulation.core.control_signal import ControlSignal
 
 def load_test_file(filename: str) -> dict:
     """Load a test circuit file from the test_data directory."""
@@ -204,7 +204,6 @@ def test_parser_networkx_has_ground_node() -> None:
 def test_parser_creates_control_graph():
     """Test that parser creates control graph from sources with values."""
     Component.clear_registry()
-    ControlPort.clear_registry()
 
     # Create test circuit with voltage source having a value
     circuit_data = {
@@ -224,27 +223,28 @@ def test_parser_creates_control_graph():
     graph, control_graph = parser.parse(circuit_data)
 
     # Verify control graph was created
-    assert isinstance(control_graph, ControlGraph)
+    assert isinstance(control_graph, nx.MultiDiGraph)
+    control_model = ControlModel(control_graph)
     
-    # Should have one signal for the voltage source
-    assert len(control_graph.signals) == 1
-    assert "V1_signal" in control_graph.signals
+    # Should have one SOURCE port block for the voltage source
+    source_ports = control_model.port_blocks(port_type="source")
+    assert len(source_ports) == 1
+    assert "V1_port" in source_ports
     
-    # Should have one port for the voltage source
-    assert len(control_graph.ports) == 1
-    assert "V1_port" in control_graph.ports
-    
-    # Port should be connected to signal
-    assert len(control_graph.connections) == 1
-    assert control_graph.connections["V1_port"] == ("V1_signal", 1.0)
+    # Port should have exactly one driving signal edge
+    in_edges = list(control_graph.in_edges("V1_port", keys=True, data=True))
+    assert len(in_edges) == 1
+    _, _, edge_key, edge_data = in_edges[0]
+    assert edge_key == "V1_signal"
+    assert isinstance(edge_data.get("signal"), ControlSignal)
     
     # Verify signal value
-    signal = control_graph.signals["V1_signal"]
+    signal = edge_data["signal"]
     assert signal.evaluate(0.0) == 12.0
     assert signal.evaluate(5.0) == 12.0  # Constant value
     
     # Verify port properties
-    port = control_graph.ports["V1_port"]
+    port = source_ports["V1_port"]
     assert port.port_type == "source"
     
     # Verify component has control_port_name set
@@ -254,7 +254,6 @@ def test_parser_creates_control_graph():
 def test_parser_control_graph_multiple_sources():
     """Test control graph creation with multiple sources."""
     Component.clear_registry()
-    ControlPort.clear_registry()
 
     circuit_data = {
         "nodes": [
@@ -275,32 +274,26 @@ def test_parser_control_graph_multiple_sources():
 
     parser = ParserJson()
     graph, control_graph = parser.parse(circuit_data)
+    control_model = ControlModel(control_graph)
 
-    # Should have signals only for sources with values
-    assert len(control_graph.signals) == 2
-    assert "V1_signal" in control_graph.signals
-    assert "I1_signal" in control_graph.signals
-    assert "V2_signal" not in control_graph.signals  # No value provided
-    
     # Should have ports only for sources with values
-    assert len(control_graph.ports) == 2
-    assert "V1_port" in control_graph.ports
-    assert "I1_port" in control_graph.ports
-    assert "V2_port" not in control_graph.ports  # No value provided
-    
-    # Verify connections
-    assert len(control_graph.connections) == 2
-    assert control_graph.connections["V1_port"] == ("V1_signal", 1.0)
-    assert control_graph.connections["I1_port"] == ("I1_signal", 1.0)
-    
-    # Verify values
-    assert control_graph.signals["V1_signal"].evaluate(0.0) == 5.0
-    assert control_graph.signals["I1_signal"].evaluate(0.0) == 0.1
+    source_ports = control_model.port_blocks(port_type="source")
+    assert len(source_ports) == 2
+    assert "V1_port" in source_ports
+    assert "I1_port" in source_ports
+    assert "V2_port" not in source_ports  # No value provided
+
+    # Verify driving signal edges exist for each port
+    v1_in = list(control_graph.in_edges("V1_port", keys=True, data=True))
+    i1_in = list(control_graph.in_edges("I1_port", keys=True, data=True))
+    assert len(v1_in) == 1
+    assert len(i1_in) == 1
+    assert v1_in[0][3]["signal"].evaluate(0.0) == 5.0
+    assert i1_in[0][3]["signal"].evaluate(0.0) == 0.1
 
 def test_parser_control_graph_no_sources_with_values():
     """Test control graph when no sources have values."""
     Component.clear_registry()
-    ControlPort.clear_registry()
 
     circuit_data = {
         "nodes": [
@@ -324,7 +317,5 @@ def test_parser_control_graph_no_sources_with_values():
     assert v_source.voltage == 0.0
     
     # Control graph should be empty since no "value" field was provided
-    assert len(control_graph.signals) == 0
-    assert len(control_graph.ports) == 0
-    assert len(control_graph.connections) == 0
-
+    assert len(control_graph.nodes) == 0
+    assert len(control_graph.edges) == 0
