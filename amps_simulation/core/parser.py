@@ -374,8 +374,6 @@ class ParserJson(CircuitParser):
                 signal_source = ControlSource(name=f"{comp_id}_signal_source", outport_names=[f"{comp_id}_out"])
                 port_block = ControlPortBlock(
                     name=port_name,
-                    port_type="source",
-                    variable=component.input_var,
                     inport_names=[f"{port_name}_in"],
                     outport_names=[f"{port_name}_out"],
                 )

@@ -226,10 +226,10 @@ def test_parser_creates_control_graph():
     assert isinstance(control_graph, nx.MultiDiGraph)
     control_model = ControlModel(control_graph)
     
-    # Should have one SOURCE port block for the voltage source
-    source_ports = control_model.port_blocks(port_type="source")
-    assert len(source_ports) == 1
-    assert "V1_port" in source_ports
+    # Should have one control port block for the voltage source
+    ports = control_model.port_blocks()
+    assert len(ports) == 1
+    assert "V1_port" in ports
     
     # Port should have exactly one driving signal edge
     in_edges = list(control_graph.in_edges("V1_port", keys=True, data=True))
@@ -242,10 +242,6 @@ def test_parser_creates_control_graph():
     signal = edge_data["signal"]
     assert signal.evaluate(0.0) == 12.0
     assert signal.evaluate(5.0) == 12.0  # Constant value
-    
-    # Verify port properties
-    port = source_ports["V1_port"]
-    assert port.port_type == "source"
     
     # Verify component has control_port_name set
     v_source = Component.get_component("V1")
@@ -277,11 +273,11 @@ def test_parser_control_graph_multiple_sources():
     control_model = ControlModel(control_graph)
 
     # Should have ports only for sources with values
-    source_ports = control_model.port_blocks(port_type="source")
-    assert len(source_ports) == 2
-    assert "V1_port" in source_ports
-    assert "I1_port" in source_ports
-    assert "V2_port" not in source_ports  # No value provided
+    ports = control_model.port_blocks()
+    assert len(ports) == 2
+    assert "V1_port" in ports
+    assert "I1_port" in ports
+    assert "V2_port" not in ports  # No value provided
 
     # Verify driving signal edges exist for each port
     v1_in = list(control_graph.in_edges("V1_port", keys=True, data=True))

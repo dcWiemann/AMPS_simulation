@@ -4,7 +4,7 @@ from typing import Dict, Set, Tuple, List, Any, Optional, Union
 import networkx as nx
 from scipy.integrate import solve_ivp
 import numpy as np
-from .components import Component
+from .components import Component, Source
 from .dae_system import ElectricalDaeSystem
 from .electrical_model import ElectricalModel
 from .engine_settings import EngineSettings
@@ -74,18 +74,20 @@ class Engine:
         self.switch_list = tuple(self.electrical_model.switch_list)
         self.diode_list = tuple(self.electrical_model.diode_list)
         
-        # Build control model input function for sources only
-        source_ports = self.control_model.port_blocks(port_type="source")
-        if source_ports:
-            # Create ordered list of SOURCE port names matching input_vars order
-            # Engine determines and maintains this order throughout simulation
-            port_order = []
+        # Build control model input function for source inputs.
+        # Mapping from electrical input_vars -> control port nodes is carried on Source.control_port_name.
+        if self.input_vars:
+            port_order: List[str] = []
             for input_var in self.input_vars:
-                # Find the SOURCE control port that corresponds to this input variable
-                for port_name, port in source_ports.items():
-                    if getattr(port, "variable", None) == input_var:
-                        port_order.append(port_name)
-                        break
+                for component in self.components_list:
+                    if not isinstance(component, Source):
+                        continue
+                    if component.input_var != input_var:
+                        continue
+                    if not component.control_port_name:
+                        continue
+                    port_order.append(component.control_port_name)
+                    break
 
             if port_order:
                 self.control_input_function = self.control_model.compile_input_function(port_order)

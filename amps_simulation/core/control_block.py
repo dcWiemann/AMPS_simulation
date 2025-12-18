@@ -55,16 +55,12 @@ class ControlPort(ControlBlock):
     def __init__(
         self,
         name: str,
-        port_type: str = "generic",
-        variable: Any = None,
         inport_names: Optional[List[str]] = None,
         outport_names: Optional[List[str]] = None,
     ):
         super().__init__(name=name, inport_names=inport_names or [], outport_names=outport_names or [])
         self.inport_dtype = Any
         self.outport_dtype = Any
-        self.port_type = port_type
-        self.variable = variable
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         return u[0] if u else None
@@ -77,7 +73,7 @@ class InPort(ControlPort):
     """
 
     def __init__(self, name: str):
-        super().__init__(name=name, port_type="input", inport_names=[f"{name}__in"], outport_names=[])
+        super().__init__(name=name, inport_names=[], outport_names=["out"])
         self.inport_dtype = Any
 
 class OutPort(ControlPort):
@@ -87,7 +83,7 @@ class OutPort(ControlPort):
     """
 
     def __init__(self, name: str):
-        super().__init__(name=name, port_type="output", inport_names=[], outport_names=[f"{name}__out"])
+        super().__init__(name=name, inport_names=["in"], outport_names=[])
         self.inport_dtype = []
         self.outport_dtype = Any
 

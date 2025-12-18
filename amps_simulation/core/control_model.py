@@ -2,7 +2,7 @@ from typing import Optional, List, Callable, Union, Tuple, Sequence, Any, Dict
 import numpy as np
 import networkx as nx
 from sympy import Symbol
-from .control_block import ControlBlock, InPort, OutPort, LinearControlBlock
+from .control_block import ControlBlock, ControlPort, InPort, OutPort, LinearControlBlock
 from .control_signal import ControlSignal
 
 
@@ -82,19 +82,27 @@ class ControlModel:
 
     def port_blocks(self, *, port_type: Optional[str] = None) -> Dict[str, ControlBlock]:
         """
-        Return a mapping of node_name -> block for nodes that look like "ports".
+        Return a mapping of node_name -> block for nodes that are control ports.
 
-        A block is considered a port if it has a `port_type` attribute.
+        Ports are represented by instances of ControlPort (including InPort/OutPort).
+        If `port_type` is provided, it filters by port class:
+          - "input"  -> InPort
+          - "output" -> OutPort
         """
         result: Dict[str, ControlBlock] = {}
         for node_name, node_data in self.graph.nodes(data=True):
             block = node_data.get("block")
             if not isinstance(block, ControlBlock):
                 continue
-            if not hasattr(block, "port_type"):
+            if not isinstance(block, ControlPort):
                 continue
-            if port_type is not None and getattr(block, "port_type") != port_type:
-                continue
+            if port_type is not None:
+                if port_type == "input" and not isinstance(block, InPort):
+                    continue
+                if port_type == "output" and not isinstance(block, OutPort):
+                    continue
+                if port_type not in {"input", "output"}:
+                    raise ValueError(f"Unsupported port_type '{port_type}' (supported: 'input', 'output')")
             result[str(node_name)] = block
         return result
 

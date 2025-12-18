@@ -19,7 +19,6 @@ def _build_model_with_two_sources() -> ControlModel:
         port_name = f"{comp_id}Port"
         port_block = ControlPort(
             name=port_name,
-            port_type="source",
             inport_names=[f"{port_name}In"],
             outport_names=[f"{port_name}Out"],
         )
@@ -34,7 +33,7 @@ def test_control_model_initialize_populates_block_lists():
     in_port = InPort(name="in1")
     out_port = OutPort(name="out1")
     linear = LinearControlBlock(name="G", inport_names=["u"], outport_names=["y"])
-    generic = ControlPort(name="Vsrc", port_type="source", outport_names=["VsrcOut"])
+    generic = ControlPort(name="Vsrc", outport_names=["VsrcOut"])
 
     model.add_block([in_port, out_port, linear, generic])
     model.initialize()
@@ -55,14 +54,14 @@ def test_control_model_construction_defaults():
 
 def test_control_model_add_block_and_get_block_errors():
     model = ControlModel()
-    port = ControlPort(name="P", port_type="source", outport_names=["POut"])
+    port = ControlPort(name="P", outport_names=["POut"])
     model.add_block(port)
 
     assert model.get_block("P") is port
     assert model.block_list == [port]
 
     with pytest.raises(ValueError, match="already exists"):
-        model.add_block(ControlPort(name="P", port_type="source", outport_names=["POut"]))
+        model.add_block(ControlPort(name="P", outport_names=["POut"]))
 
     with pytest.raises(KeyError, match="not found"):
         model.get_block("missing")
@@ -77,7 +76,6 @@ def test_control_model_connect_creates_edge_and_signal_metadata():
     src = ControlSource(name="V1Source", outport_names=["V1Out"])
     dst = ControlPort(
         name="V1Port",
-        port_type="source",
         inport_names=["V1PortIn"],
         outport_names=["V1PortOut"],
     )
@@ -99,7 +97,7 @@ def test_control_model_connect_creates_edge_and_signal_metadata():
 def test_control_model_initialize_ignores_nodes_without_control_blocks():
     model = ControlModel()
     model.graph.add_node("junk", block="not a block")
-    model.add_block(ControlPort(name="P", port_type="source", outport_names=["POut"]))
+    model.add_block(ControlPort(name="P", outport_names=["POut"]))
     model.initialize()
 
     assert [b.name for b in model.list_all_blocks] == ["P"]
@@ -115,7 +113,7 @@ def test_control_model_initialize_lists_for_source_ports():
     assert {b.name for b in model.list_inports} == set()
     assert {b.name for b in model.list_outports} == set()
 
-    assert set(model.port_blocks(port_type="source").keys()) == {"I1Port", "V5Port"}
+    assert set(model.port_blocks().keys()) == {"I1Port", "V5Port"}
 
 
 def test_control_model_compile_input_function_builds_u_vector_from_signals():
@@ -136,7 +134,6 @@ def test_control_model_compile_input_function_rejects_multiple_drivers():
     model = ControlModel()
     dst = ControlPort(
         name="P",
-        port_type="source",
         inport_names=["PIn"],
         outport_names=["POut"],
     )
