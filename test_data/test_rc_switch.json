@@ -1,0 +1,224 @@
+{
+  "nodes": [
+    {
+      "id": "V1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 250,
+        "y": 170
+      },
+      "data": {
+        "svgPath": "/svg/voltage-source.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Voltage Source",
+        "componentType": "voltage-source",
+        "value": 5,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "V"
+    },
+    {
+      "id": "R1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 520,
+        "y": 100
+      },
+      "data": {
+        "svgPath": "/svg/resistor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 4,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 76,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Resistor",
+        "componentType": "resistor",
+        "value": 10,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "R"
+    },
+    {
+      "id": "C1",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 640,
+        "y": 160
+      },
+      "data": {
+        "svgPath": "/svg/capacitor.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "top",
+            "x": 40,
+            "y": 4,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "bottom",
+            "x": 40,
+            "y": 76,
+            "type": "target"
+          }
+        ],
+        "label": "Capacitor",
+        "componentType": "capacitor",
+        "value": 0.01,
+        "rotation": 0
+      },
+      "increment": 1,
+      "abbreviation": "C"
+    },
+    {
+      "id": "S2",
+      "type": "electrical-component",
+      "initialized": false,
+      "position": {
+        "x": 350,
+        "y": 100
+      },
+      "data": {
+        "svgPath": "/svg/switch.svg",
+        "terminals": [
+          {
+            "id": "0",
+            "position": "left",
+            "x": 4,
+            "y": 40,
+            "type": "source"
+          },
+          {
+            "id": "1",
+            "position": "right",
+            "x": 76,
+            "y": 40,
+            "type": "target"
+          }
+        ],
+        "label": "Switch",
+        "componentType": "switch",
+        "value": 2,
+        "rotation": 0
+      },
+      "increment": 2,
+      "abbreviation": "S"
+    }
+  ],
+  "edges": [
+    {
+      "id": "vueflow__edge-C10-R11",
+      "type": "step",
+      "source": "C1",
+      "target": "R1",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 679.999863639769,
+      "sourceY": 160,
+      "targetX": 600,
+      "targetY": 140
+    },
+    {
+      "id": "vueflow__edge-C11-V11",
+      "type": "step",
+      "source": "C1",
+      "target": "V1",
+      "sourceHandle": "1",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 679.999863639769,
+      "sourceY": 239.99980118271571,
+      "targetX": 290,
+      "targetY": 250
+    },
+    {
+      "id": "edge-R1-S2",
+      "type": "step",
+      "source": "R1",
+      "target": "S2",
+      "sourceHandle": "0",
+      "targetHandle": "1",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 520,
+      "sourceY": 140,
+      "targetX": 429.9999820995225,
+      "targetY": 139.9999729160112
+    },
+    {
+      "id": "edge-S2-V1",
+      "type": "step",
+      "source": "S2",
+      "target": "V1",
+      "sourceHandle": "0",
+      "targetHandle": "0",
+      "data": {},
+      "label": "",
+      "style": {
+        "stroke": "currentColor",
+        "strokeWidth": 2
+      },
+      "sourceX": 350,
+      "sourceY": 139.9999729160112,
+      "targetX": 290,
+      "targetY": 170
+    }
+  ],
+  "position": [
+    129.32423781617285,
+    75.43683099763383
+  ],
+  "zoom": 0.8414576103978639,
+  "viewport": {
+    "x": 129.32423781617285,
+    "y": 75.43683099763383,
+    "zoom": 0.8414576103978639
+  }
+}
