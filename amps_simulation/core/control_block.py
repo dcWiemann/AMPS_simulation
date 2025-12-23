@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Sequence
 
+import control
 import numpy as np
 
 
@@ -113,6 +114,9 @@ class LinearControlBlock(ControlBlock):
         # Optional state naming (used when nx > 0)
         self.x_names: List[str] = []
 
+        # StateSpace model from python-control. Populated in _validate_and_finalize_from_matrices().
+        self.state_space: Optional[control.StateSpace] = None
+
     @staticmethod
     def _as_2d_float_array(value: Any, *, name: str) -> np.ndarray:
         if value is None:
@@ -174,6 +178,8 @@ class LinearControlBlock(ControlBlock):
 
         if nx > 0 and not self.x_names:
             self.x_names = [f"x{i}" for i in range(1, nx + 1)]
+
+        self.state_space = control.StateSpace(self.A, self.B, self.C, self.D)
 
     def evaluate(self, t: float, u: Sequence[Any], x: Optional[Sequence[float]] = None) -> Any:
         """

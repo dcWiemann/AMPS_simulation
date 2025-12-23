@@ -1,7 +1,10 @@
 import networkx as nx
 import pytest
 
-from amps_simulation.core.control_block import ControlPort, ControlSource, InPort, LinearControlBlock, OutPort
+import control
+import numpy as np
+
+from amps_simulation.core.control_block import ControlPort, ControlSource, Gain, InPort, LinearControlBlock, OutPort, StateSpaceModel, Sum
 from amps_simulation.core.control_model import ControlModel
 from amps_simulation.core.control_signal import ControlSignal
 
@@ -152,3 +155,59 @@ def test_control_model_get_input_vector_requires_compile():
     model = ControlModel()
     with pytest.raises(RuntimeError, match="compile_input_function"):
         model.get_input_vector(0.0)
+
+
+def test_control_model_api_feedback_system_with_pi_and_plant_state_space():
+    model = ControlModel()
+
+    ref = InPort(name="Ref")
+    error_sum = Sum(name="ErrorSum", signs=[1, -1], n_inputs=2)
+
+    kp = 2.0
+    ki = 3.0
+    pi = StateSpaceModel(
+        name="PI",
+        A=np.array([[0.0]]),
+        B=np.array([[1.0]]),
+        C=np.array([[ki]]),
+        D=np.array([[kp]]),
+    )
+
+    a = 4.0
+    b = 1.5
+    c = 1.0
+    plant = StateSpaceModel(
+        name="Plant",
+        A=np.array([[-a]]),
+        B=np.array([[b]]),
+        C=np.array([[c]]),
+        D=np.array([[0.0]]),
+    )
+
+    kfb = Gain(name="Kfb", gain=0.7)
+    y = OutPort(name="Y")
+
+    model.add_block([ref, error_sum, pi, plant, kfb, y])
+
+    model.connect(ref, 0, error_sum, 0, signal=ControlSignal("RefToSum", 0.0))
+    model.connect(plant, 0, kfb, 0, signal=ControlSignal("PlantToKfb", 0.0))
+    model.connect(kfb, 0, error_sum, 1, signal=ControlSignal("KfbToSum", 0.0))
+    model.connect(error_sum, 0, pi, 0, signal=ControlSignal("ErrorToPI", 0.0))
+    model.connect(pi, 0, plant, 0, signal=ControlSignal("PIToPlant", 0.0))
+    model.connect(plant, 0, y, 0, signal=ControlSignal("PlantToY", 0.0))
+
+    model.initialize()
+
+    assert model.list_input_ports == [ref]
+    assert model.list_output_ports == [y]
+    assert set(b.name for b in model.list_linear_blocks) == {"ErrorSum", "PI", "Plant", "Kfb"}
+
+    assert error_sum.signs == [1, -1]
+    assert error_sum.D.tolist() == [[1.0, -1.0]]
+
+    assert isinstance(pi.state_space, control.StateSpace)
+    assert isinstance(plant.state_space, control.StateSpace)
+    assert isinstance(kfb.state_space, control.StateSpace)
+
+    cycles = list(nx.simple_cycles(nx.DiGraph(model.graph)))
+    assert any({"ErrorSum", "PI", "Plant", "Kfb"}.issubset(set(cycle)) for cycle in cycles)
