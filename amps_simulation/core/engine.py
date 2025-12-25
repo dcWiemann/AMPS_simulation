@@ -175,15 +175,6 @@ class Engine:
         switch_events = [create_event_function(switch.switch_time) for switch in self.switch_list]
         
         return switch_events
-    
-    # def _get_possible_switch_positions(self):
-    #     """
-    #     Get all possible switch positions for the circuit.
-        
-    #     Returns:
-    #         List[Tuple[int, ...]]: A list of tuples representing the possible switch positions
-    #     """
-    #     return list(itertools.product([0, 1], repeat=len(self.power_switches)))
 
     def _sort_derivatives_by_state_vars(self, derivatives: List[sp.Eq]) -> List[sp.Eq]:
         """
