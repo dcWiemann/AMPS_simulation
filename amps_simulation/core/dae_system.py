@@ -61,6 +61,8 @@ class ElectricalDaeSystem(DaeSystem):
         self.electrical_model = electrical_model
         self.initialized = False
         self.switchmap = {}
+        # Cache for diode LCP matrices keyed by switch topology
+        self.lcp_switchmap = {}
 
     def _get_component_sim_info(self, component) -> Optional[Any]:
         """Return the sim_info object stored on the edge for this component, if any."""
@@ -127,7 +129,9 @@ class ElectricalDaeSystem(DaeSystem):
         self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
         self.output_eqs = self.compute_output_equations()
+        # Reset caches
         self.switchmap = {}
+        self.lcp_switchmap = {}
         self.initialized = True
 
     def _run_sanity_checks(self) -> None:
@@ -854,6 +858,12 @@ class ElectricalDaeSystem(DaeSystem):
             # No diodes in circuit, return empty matrices
             return Matrix([]), Matrix([])
 
+        # Cache LCP matrices per switch topology
+        switch_states = tuple(int(self._get_component_state(switch, default=False)) for switch in (self.switch_list or []))
+        if switch_states in self.lcp_switchmap:
+            logging.debug(f"LCP: Using cached M/q for switch states {switch_states}")
+            return self.lcp_switchmap[switch_states]
+
         # Build or reuse cached shunt model and equations (topology-dependent, computed once)
         if self.shunt_model is None:
             logging.debug("LCP: Building shunt model and equations (first call)")
@@ -995,6 +1005,9 @@ class ElectricalDaeSystem(DaeSystem):
         logging.debug(f"LCP: Generated M matrix shape: {M_matrix.shape}")
         logging.debug(f"LCP: Generated q vector shape: {q_vector.shape}")
         
+        # Cache matrices for this switch topology
+        self.lcp_switchmap[switch_states] = (M_matrix, q_vector)
+
         return M_matrix, q_vector
     
     def detect_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> List[bool]:
