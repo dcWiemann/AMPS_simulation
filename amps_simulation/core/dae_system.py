@@ -56,11 +56,6 @@ class ElectricalDaeSystem(DaeSystem):
         derivatives (Dict[str, float]): Dictionary mapping state variable names to their derivatives
         outputs (Dict[str, float]): Dictionary mapping output variable names to their values
     """
-    # Configurable tolerances for diode state checks
-    # diode_current_tol = 1e-6
-    # diode_voltage_tol = 1e-6
-    diode_current_tol = 0.0
-    diode_voltage_tol = 0.0
     def __init__(self, electrical_model: ElectricalModel):
         super().__init__(electrical_model.graph)
         self.electrical_model = electrical_model
@@ -393,66 +388,6 @@ class ElectricalDaeSystem(DaeSystem):
             else:
                 return None
 
-    def _extract_diode_voltage_expressions(self, solution: Dict) -> List:
-        ### Todo: remove redundancy
-        """Extract diode voltage expressions in ElectricalModel.diode_list order.
-        
-        Args:
-            solution: Dictionary mapping variables to their symbolic expressions
-            
-        Returns:
-            List of symbolic diode voltage expressions in consistent order
-        """
-        diode_voltage_exprs = []
-        
-        # Iterate through diodes in ElectricalModel order to maintain consistency
-        for diode in self.electrical_model.diode_list:
-            voltage_var = diode.voltage_var
-            
-            if voltage_var in solution:
-                # Extract v_D expression 
-                expr = solution[voltage_var]
-                diode_voltage_exprs.append(expr)
-            else:
-                raise ValueError(f"Could not find solution for diode voltage {voltage_var} (diode {diode.comp_id})")
-        
-        logging.debug(f"Extracted {len(diode_voltage_exprs)} diode voltage expressions in order")
-        return diode_voltage_exprs
-
-    def _solve_lcp(self, M: np.ndarray, q: np.ndarray) -> List[bool]:
-        """Solve LCP and return diode modes in ElectricalModel.diode_list order.
-
-        Args:
-            M: LCP matrix
-            q: LCP vector
-
-        Returns:
-            List of diode conducting states (True = conducting) in consistent order
-        """
-        # Get diode names in ElectricalModel order for logging
-        diode_names = [diode.comp_id for diode in self.electrical_model.diode_list]
-
-        # Solve LCP using new LCP class
-        lcp = LCP(M, q)
-        w, z, info = lcp.solve()
-
-        # Interpret solution: z represents diode currents
-        # If z[i] > tolerance, diode i is conducting
-        # current_tol = 1e-10
-        current_tol = 0.0  # Use zero tolerance for strict interpretation
-        conducting_states = [z_i > current_tol for z_i in z]
-
-        # Log results
-        logging.debug(f"LCP solver: converged={info['converged']}, pivots={info['pivots']}")
-        if info['converged']:
-            logging.debug(f"LCP complementarity: {info['complementarity']:.2e}")
-
-        for diode_name, is_conducting, z_val, w_val in zip(diode_names, conducting_states, z, w):
-            state_str = "CONDUCTING" if is_conducting else "BLOCKING"
-            logging.debug(f"  {diode_name}: {state_str} (i_D={z_val:.6e}, -v_D={w_val:.6e})")
-
-        return conducting_states
-
     def _initialize_diode_modes(self, conducting_states: List[bool]) -> None:
         """Update diode component modes based on LCP solution.
 
@@ -467,22 +402,6 @@ class ElectricalDaeSystem(DaeSystem):
             self._set_component_state(diode, is_conducting)
             logging.debug(f"Set diode {diode.comp_id}: {'CONDUCTING' if is_conducting else 'BLOCKING'}")
 
-    def _clear_shunt_model_cache(self) -> None:
-        """Clear cached shunt model and equations.
-
-        Call this method if circuit topology changes (e.g., components added/removed).
-        Note: Switch state changes do NOT require clearing the cache since switch
-        equations are computed dynamically.
-        """
-        logging.debug("Clearing shunt model cache")
-        self.shunt_model = None
-        self.shunt_kcl = None
-        self.shunt_kvl = None
-        self.shunt_static = None
-        self.shunt_vars_to_solve = None
-
-    
-    
     def compute_kcl_equations(self, electrical_model=None) -> List[Symbol]:
         """Compute Kirchhoff's Current Law equations.
 
@@ -1230,6 +1149,10 @@ class ElectricalDaeSystem(DaeSystem):
         Returns:
             List[bool]: List of diode conducting states (True = conducting, False = blocking)
         """
+        # Configurable tolerances for diode state checks
+        diode_current_tol = 0.0
+        diode_voltage_tol = 0.0
+
         if not self.diode_list:
             return []
 
@@ -1318,27 +1241,27 @@ class ElectricalDaeSystem(DaeSystem):
 
                     # Check physical constraints
                     # 1. Current should never be negative
-                    if i_diode_val < -self.diode_current_tol:
+                    if i_diode_val < -diode_current_tol:
                         is_consistent = False
                         inconsistency_reasons.append(f"{diode.comp_id}: negative current {i_diode_val:.6e}")
                         continue
 
                     # 2. Voltage should never be positive (forward bias beyond ideal)
-                    if v_diode_val > self.diode_voltage_tol:
+                    if v_diode_val > diode_voltage_tol:
                         is_consistent = False
                         inconsistency_reasons.append(f"{diode.comp_id}: positive voltage {v_diode_val:.6e}")
                         continue
 
                     # 3. If conducting (is_on=True), voltage should be ~0
                     if combination[i]:  # Conducting
-                        if v_diode_val < -self.diode_voltage_tol:
+                        if v_diode_val < -diode_voltage_tol:
                             is_consistent = False
                             inconsistency_reasons.append(f"{diode.comp_id}: conducting with negative voltage {v_diode_val:.6e}")
                             continue
 
                     # 4. If blocking (is_on=False), current should be ~0
                     else:  # Blocking
-                        if i_diode_val > self.diode_current_tol:
+                        if i_diode_val > diode_current_tol:
                             is_consistent = False
                             inconsistency_reasons.append(f"{diode.comp_id}: blocking with positive current {i_diode_val:.6e}")
                             continue
