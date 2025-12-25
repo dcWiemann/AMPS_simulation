@@ -94,6 +94,12 @@ def create_test_circuit():
     return graph
 
 
+def load_test_circuit(filename):
+    """Helper function to load test circuit from JSON file."""
+    with open(f"test_data/{filename}", "r") as f:
+        return json.load(f)
+
+
 def test_electrical_dae_system_initialization():
     """Test initialization of ElectricalDaeSystem."""
     G = create_test_circuit()
@@ -265,6 +271,77 @@ def test_print_dae_model_components():
     print("\nderivatives: ", model.derivatives)
     print("\noutput_eqs: ", model.output_eqs)
 
+
+
+def test_compute_state_space_model():
+    """Test computation of state-space matrices for a simple RLC circuit."""
+    circuit_data = load_test_circuit("test_rlc.json")
+    parser = ParserJson()
+    graph, _ = parser.parse(circuit_data)
+
+    electrical_model = ElectricalModel(graph)
+    model = ElectricalDaeSystem(electrical_model)
+    model.initialize()
+
+    derivatives = model.derivatives
+    output_eqs = model.output_eqs
+
+    sorted_derivatives = model._sort_derivatives_by_state_vars(derivatives)
+    sorted_output_eqs = model._sort_output_eqs_by_output_vars(output_eqs)
+
+    A, B, C, D = model.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+
+    n_states = len(model.state_vars)
+    n_inputs = len(model.input_vars)
+    n_outputs = len(model.output_vars)
+
+    assert A.shape == (n_states, n_states)
+    assert B.shape == (n_states, n_inputs)
+    assert C.shape == (n_outputs, n_states)
+    assert D.shape == (n_outputs, n_inputs)
+
+    assert all(isinstance(expr, sympy.Basic) for expr in A)
+    assert all(isinstance(expr, sympy.Basic) for expr in B)
+    assert all(isinstance(expr, sympy.Basic) for expr in C)
+    assert all(isinstance(expr, sympy.Basic) for expr in D)
+
+
+def test_update_ode_returns_numeric_matrices_and_caches():
+    """Test update_ode returns numeric matrices and caches results."""
+    circuit_data = load_test_circuit("test_rlc.json")
+    parser = ParserJson()
+    graph, _ = parser.parse(circuit_data)
+
+    electrical_model = ElectricalModel(graph)
+    model = ElectricalDaeSystem(electrical_model)
+    model.initialize()
+
+    x = np.zeros(len(model.state_vars))
+    u = np.zeros(len(model.input_vars))
+
+    A1, B1, C1, D1 = model.update_ode([], x, u)
+
+    assert isinstance(A1, np.ndarray)
+    assert isinstance(B1, np.ndarray)
+    assert isinstance(C1, np.ndarray)
+    assert isinstance(D1, np.ndarray)
+
+    n_states = len(model.state_vars)
+    n_inputs = len(model.input_vars)
+    n_outputs = len(model.output_vars)
+    assert A1.shape == (n_states, n_states)
+    assert B1.shape == (n_states, n_inputs)
+    assert C1.shape == (n_outputs, n_states)
+    assert D1.shape == (n_outputs, n_inputs)
+
+    assert len(model.switchmap) == 1
+    A2, B2, C2, D2 = model.update_ode([], x, u)
+    assert len(model.switchmap) == 1
+
+    assert np.allclose(A1, A2)
+    assert np.allclose(B1, B2)
+    assert np.allclose(C1, C2)
+    assert np.allclose(D1, D2)
 
 def test_kcl_equations_exclude_ground():
     """Test that KCL equations exclude the ground node equation."""

@@ -5,9 +5,8 @@ from sympy.abc import t
 import json
 import numpy as np
 from amps_simulation.core.engine import Engine
-from amps_simulation.core.components import Capacitor, Inductor, VoltageSource, CurrentSource, PowerSwitch, Component
+from amps_simulation.core.components import Component
 from amps_simulation.core.parser import ParserJson
-from amps_simulation.core.dae_system import ElectricalDaeSystem
 from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.control_model import ControlModel
 
@@ -245,56 +244,6 @@ def test_switch_events():
             assert hasattr(event, 'direction')
             assert event.terminal == False  # Should allow continuation
             assert event.direction == 1     # Positive crossings only
-
-def test_compute_state_space_model():
-    """
-    Test the computation of state space model matrices for an RLC circuit.
-    The circuit consists of:
-    - A voltage source V
-    - A resistor R
-    - An inductor L
-    - A capacitor C
-    """
-    # Load and parse RLC circuit
-    circuit_data = load_test_circuit("test_rlc.json")
-    parser = ParserJson()
-    graph, control_graph = parser.parse(circuit_data)
-
-    # Create electrical model and engine instance
-    electrical_model = ElectricalModel(graph)
-    control_model = ControlModel(control_graph)
-    engine = Engine(electrical_model, control_model)
-    engine.initialize()
-    
-    # Create model and get equations
-    electrical_model = ElectricalModel(graph)
-    model = ElectricalDaeSystem(electrical_model)
-    model.initialize()
-    derivatives = model.get_derivatives()
-    output_eqs = model.output_eqs
-    
-    # Sort equations to match state and output variables
-    sorted_derivatives = engine._sort_derivatives_by_state_vars(derivatives)
-    sorted_output_eqs = engine._sort_output_eqs_by_output_vars(output_eqs)
-    
-    # Compute state space model
-    A, B, C, D = engine.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
-    
-    # Test matrix dimensions
-    n_states = len(engine.state_vars)
-    n_inputs = len(engine.input_vars)
-    n_outputs = len(engine.output_vars)
-    
-    assert A.shape == (n_states, n_states)
-    assert B.shape == (n_states, n_inputs)
-    assert C.shape == (n_outputs, n_states)
-    assert D.shape == (n_outputs, n_inputs)
-    
-    # Test that matrices contain symbolic expressions
-    assert all(isinstance(expr, sp.Expr) for expr in A)
-    assert all(isinstance(expr, sp.Expr) for expr in B)
-    assert all(isinstance(expr, sp.Expr) for expr in C)
-    assert all(isinstance(expr, sp.Expr) for expr in D)
 
 def test_engine_control_model_integration():
     """Test that Engine integrates with ControlModel for sources with values."""

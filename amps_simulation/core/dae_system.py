@@ -6,6 +6,7 @@ from amps_simulation.core.components import Resistor, PowerSwitch, Inductor, Cap
 from amps_simulation.core.electrical_model import ElectricalModel
 from amps_simulation.core.circuit_sanity_checker import CircuitSanityChecker
 from amps_simulation.core.lcp import LCP
+import sympy as sp
 from sympy import Matrix, Symbol, sympify, solve
 import logging
 import itertools
@@ -64,6 +65,7 @@ class ElectricalDaeSystem(DaeSystem):
         super().__init__(electrical_model.graph)
         self.electrical_model = electrical_model
         self.initialized = False
+        self.switchmap = {}
 
     def _get_component_sim_info(self, component) -> Optional[Any]:
         """Return the sim_info object stored on the edge for this component, if any."""
@@ -130,7 +132,166 @@ class ElectricalDaeSystem(DaeSystem):
         self.circuit_eqs = self.compute_circuit_equations()
         self.derivatives = self.compute_derivatives()
         self.output_eqs = self.compute_output_equations()
+        self.switchmap = {}
         self.initialized = True
+
+    def _run_sanity_checks(self) -> None:
+        """Run circuit topology sanity checks and handle any issues found."""
+        logging.info("Running circuit topology sanity checks...")
+
+        checker = CircuitSanityChecker(self.graph)
+
+        try:
+            result = checker.check_all(raise_on_error=True)
+
+            if result["warnings"]:
+                logging.warning("Circuit topology warnings detected:")
+                for warning in result["warnings"]:
+                    logging.warning(f"  - {warning}")
+
+            constraints = checker.get_constraint_modifications()
+
+            if any(constraints.values()):
+                logging.info("Circuit constraints required:")
+                if constraints["zero_current_inductors"]:
+                    logging.info(f"  - Zero current inductors: {constraints['zero_current_inductors']}")
+                if constraints["zero_voltage_inductors"]:
+                    logging.info(f"  - Zero voltage inductors: {constraints['zero_voltage_inductors']}")
+                if constraints["zero_voltage_capacitors"]:
+                    logging.info(f"  - Zero voltage capacitors: {constraints['zero_voltage_capacitors']}")
+                self.circuit_constraints = constraints
+            else:
+                self.circuit_constraints = None
+
+            logging.info("Circuit topology sanity checks passed")
+
+        except Exception:
+            checker.log_results()
+            logging.error("Circuit topology sanity checks failed - cannot proceed with simulation")
+            raise
+
+    def _sort_derivatives_by_state_vars(self, derivatives: List) -> List:
+        """Sort derivatives to match the order of state variables."""
+        derivative_map = {}
+        for eq in derivatives:
+            state_var = eq.lhs.args[0]
+            derivative_map[state_var] = eq
+
+        sorted_derivatives = []
+        for state_var in self.state_vars:
+            if state_var in derivative_map:
+                sorted_derivatives.append(derivative_map[state_var])
+
+        return sorted_derivatives
+
+    def _sort_output_eqs_by_output_vars(self, output_eqs) -> List:
+        """Sort output equations to match the order of output variables."""
+        if isinstance(output_eqs, dict):
+            sorted_output_eqs = []
+            for output_var in self.output_vars:
+                if output_var in output_eqs:
+                    eq = sp.Eq(output_var, output_eqs[output_var])
+                    sorted_output_eqs.append(eq)
+            return sorted_output_eqs
+
+        output_map = {}
+        for eq in output_eqs:
+            output_var = eq.lhs
+            output_map[output_var] = eq
+
+        sorted_output_eqs = []
+        for output_var in self.output_vars:
+            if output_var in output_map:
+                sorted_output_eqs.append(output_map[output_var])
+
+        return sorted_output_eqs
+
+    def compute_state_space_model(self, derivatives: List, output_eqs: List) -> Tuple:
+        """Compute the state space model of the circuit."""
+        n_states = len(self.state_vars)
+        n_inputs = len(self.input_vars)
+        n_outputs = len(self.output_vars)
+        assert n_states == len(derivatives), "Number of state variables does not match number of derivatives"
+        assert n_outputs == len(output_eqs), "Number of output variables does not match number of output equations"
+
+        if derivatives:
+            dx_dt = sp.Matrix([eq.rhs for eq in derivatives])
+            A = dx_dt.jacobian(self.state_vars)
+            B = dx_dt.jacobian(self.input_vars)
+        else:
+            A = sp.zeros(n_states, n_states)
+            B = sp.zeros(n_states, n_inputs)
+
+        if output_eqs:
+            y = sp.Matrix([eq.rhs for eq in output_eqs])
+            if n_states > 0:
+                C = y.jacobian(self.state_vars)
+            else:
+                C = sp.zeros(n_outputs, n_states)
+            if n_inputs > 0:
+                D = y.jacobian(self.input_vars)
+            else:
+                D = sp.zeros(n_outputs, n_inputs)
+        else:
+            C = sp.zeros(n_outputs, n_states)
+            D = sp.zeros(n_outputs, n_inputs)
+
+        return A, B, C, D
+
+    def _as_numeric_matrix(self, matrix: Any) -> np.ndarray:
+        if hasattr(matrix, "subs"):
+            matrix_func = sp.lambdify([], matrix, "numpy")
+            numeric = np.array(matrix_func(), dtype=float)
+            target_shape = getattr(matrix, "shape", None)
+            if target_shape is not None and numeric.shape != target_shape:
+                numeric = numeric.reshape(target_shape)
+            return numeric
+        return np.array(matrix, dtype=float)
+
+    def update_ode(self, sw: List[int], x: np.ndarray, u: np.ndarray) -> Tuple:
+        """Update switch/diode states and return state-space matrices."""
+        if not self.initialized:
+            raise ValueError("DAE system must be initialized before update_ode")
+
+        switch_states = tuple(int(state) for state in (sw or ()))
+        if self.switch_list:
+            if len(switch_states) != len(self.switch_list):
+                raise ValueError(f"Switch state length {len(switch_states)} != switch count {len(self.switch_list)}")
+            for switch, state in zip(self.switch_list, switch_states):
+                self._set_component_state(switch, bool(state))
+        elif switch_states:
+            raise ValueError("Switch states provided but no switches are defined in the model")
+
+        if self.diode_list:
+            diode_states, _ = self.update_diode_states(x, u)
+        else:
+            diode_states = []
+
+        diode_states_key = tuple(int(state) for state in diode_states)
+        cache_key = (switch_states, diode_states_key)
+
+        if cache_key in self.switchmap:
+            return self.switchmap[cache_key]
+
+        logging.debug(
+            "Computing new state-space model for states: "
+            f"switches={switch_states}, diodes={diode_states_key}"
+        )
+
+        self._run_sanity_checks()
+        _, derivatives, output_eqs = self.update_all_equations()
+
+        sorted_derivatives = self._sort_derivatives_by_state_vars(derivatives)
+        sorted_output_eqs = self._sort_output_eqs_by_output_vars(output_eqs)
+
+        A, B, C, D = self.compute_state_space_model(sorted_derivatives, sorted_output_eqs)
+        A_num = self._as_numeric_matrix(A)
+        B_num = self._as_numeric_matrix(B)
+        C_num = self._as_numeric_matrix(C)
+        D_num = self._as_numeric_matrix(D)
+        self.switchmap[cache_key] = (A_num, B_num, C_num, D_num)
+
+        return A_num, B_num, C_num, D_num
     
     def _solve_symbolic_system(self, equations: List, vars_to_solve: List, strict: bool = True) -> Optional[Dict]:
         """Unified symbolic equation solver using sympy.
