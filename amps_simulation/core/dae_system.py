@@ -1100,7 +1100,8 @@ class ElectricalDaeSystem(DaeSystem):
             diode_names = [diode.comp_id for diode in diode_list]
 
             # Use new LCP class to solve
-            lcp = LCP(M_np, q_np)
+            z_init = [self._get_component_state(d, default=False) for d in self.diode_list]
+            lcp = LCP(M_np, q_np, z_init=z_init)
             w, z, info = lcp.solve()
 
             # Interpret solution: z represents diode currents
