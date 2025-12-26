@@ -858,11 +858,29 @@ class ElectricalDaeSystem(DaeSystem):
             # No diodes in circuit, return empty matrices
             return Matrix([]), Matrix([])
 
-        # Cache LCP matrices per switch topology
         switch_states = tuple(int(self._get_component_state(switch, default=False)) for switch in (self.switch_list or []))
-        if switch_states in self.lcp_switchmap:
-            logging.debug(f"LCP: Using cached M/q for switch states {switch_states}")
-            return self.lcp_switchmap[switch_states]
+        cached_symbolic = self.lcp_switchmap.get(switch_states)
+        if cached_symbolic is not None:
+            logging.debug(f"LCP: Using cached symbolic M/q for switch states {switch_states}")
+            M_matrix, q_vector = cached_symbolic
+        else:
+            M_matrix = None
+            q_vector = None
+
+        if self.initialized:
+            state_vars = self.state_vars
+            input_vars = self.input_vars
+        else:
+            state_vars = (
+                self.electrical_model.state_vars
+                if self.electrical_model.state_vars is not None
+                else self.electrical_model.find_state_vars()
+            )
+            input_vars = (
+                self.electrical_model.input_vars
+                if self.electrical_model.input_vars is not None
+                else self.electrical_model.find_input_vars()
+            )
 
         # Build or reuse cached shunt model and equations (topology-dependent, computed once)
         if self.shunt_model is None:
@@ -886,8 +904,8 @@ class ElectricalDaeSystem(DaeSystem):
             # Combine all variables
             combined_vars = junction_voltage_var_list_cleaned + component_current_var_list + component_voltage_var_list
 
-            # Remove excluded variables (only diode_current_vars)
-            excluded = set(diode_current_vars)
+            # Remove excluded variables (diode currents, state vars, and input vars)
+            excluded = set(diode_current_vars) | set(state_vars) | set(input_vars)
             self.shunt_vars_to_solve = [var for var in combined_vars if var not in excluded]
 
             logging.debug(f"LCP: Cached shunt model equations: KCL={len(self.shunt_kcl)}, KVL={len(self.shunt_kvl)}, Static={len(self.shunt_static)}")
@@ -901,114 +919,98 @@ class ElectricalDaeSystem(DaeSystem):
         # Build equations from cached components
         equations = self.shunt_kcl + self.shunt_kvl + self.shunt_static + shunt_switch
 
-        # Add initial condition equations: state_var = state_value, input_var = input_value
-        # Get variables from electrical model (works without DAE initialization)
-        if self.initialized:
-            state_vars = self.state_vars
-            input_vars = self.input_vars
-        else:
-            state_vars = self.electrical_model.state_vars
-            input_vars = self.electrical_model.input_vars
+        if cached_symbolic is None:
+            # Get diode current variables to exclude from solving
+            diode_current_vars = [diode.current_var for diode in self.electrical_model.diode_list]
+            logging.debug(f"LCP: Diode current vars to exclude: {[str(v) for v in diode_current_vars]}")
 
-        initial_condition_count = 0
-        for i, state_var in enumerate(state_vars):
-            if i < len(state_values):
-                equations.append(state_var - state_values[i])
-                initial_condition_count += 1
-                logging.debug(f"LCP: Added state equation: {state_var} = {state_values[i]}")
-        for i, input_var in enumerate(input_vars):
-            if i < len(input_values):
-                equations.append(input_var - input_values[i])
-                initial_condition_count += 1
-                logging.debug(f"LCP: Added input equation: {input_var} = {input_values[i]}")
+            # Use cached vars_to_solve
+            vars_to_solve = self.shunt_vars_to_solve
+            logging.debug(f"LCP: Total equations before solving: {len(equations)}")
+            logging.debug(
+                "LCP: Variables to solve: "
+                f"{len(vars_to_solve)} (excluded {len(diode_current_vars)} diode currents, "
+                f"{len(state_vars)} state vars, {len(input_vars)} input vars)"
+            )
 
-        logging.debug(f"LCP: Added {initial_condition_count} initial condition equations")
-        logging.debug(f"LCP: Total equations before solving: {len(equations)}")
+            # Solve circuit without diodes using generic solver
+            logging.debug("="*80)
+            logging.debug("LCP FORMULATION DEBUG - EQUATIONS, VARIABLES, AND SOLUTIONS")
+            logging.debug("="*80)
 
-        # Get diode current variables to exclude from solving
-        diode_current_vars = [diode.current_var for diode in self.electrical_model.diode_list]
-        logging.debug(f"LCP: Diode current vars to exclude: {[str(v) for v in diode_current_vars]}")
+            logging.debug(f"EQUATIONS ({len(equations)} total):")
+            for i, eq in enumerate(equations):
+                logging.debug(f"  [{i:2d}] {eq} = 0")
 
-        # Use cached vars_to_solve
-        vars_to_solve = self.shunt_vars_to_solve
-        logging.debug(f"LCP: Variables to solve: {len(vars_to_solve)} (excluded {len(diode_current_vars)} diode currents)")
+            logging.debug(f"VARIABLES TO SOLVE ({len(vars_to_solve)} total):")
+            for i, var in enumerate(vars_to_solve):
+                logging.debug(f"  [{i:2d}] {var}")
 
-        # Solve circuit without diodes using generic solver
-        logging.debug("="*80)
-        logging.debug("LCP FORMULATION DEBUG - EQUATIONS, VARIABLES, AND SOLUTIONS")
-        logging.debug("="*80)
+            solution = self._solve_symbolic_system(equations, vars_to_solve, strict=True)
 
-        logging.debug(f"EQUATIONS ({len(equations)} total):")
-        for i, eq in enumerate(equations):
-            logging.debug(f"  [{i:2d}] {eq} = 0")
+            logging.debug(f"SOLUTIONS ({len(solution)} total):")
+            for var, expr in solution.items():
+                logging.debug(f"  {var} = {expr}")
 
-        logging.debug(f"VARIABLES TO SOLVE ({len(vars_to_solve)} total):")
-        for i, var in enumerate(vars_to_solve):
-            logging.debug(f"  [{i:2d}] {var}")
-
-        solution = self._solve_symbolic_system(equations, vars_to_solve, strict=True)
-
-        logging.debug(f"SOLUTIONS ({len(solution)} total):")
-        for var, expr in solution.items():
-            logging.debug(f"  {var} = {expr}")
-
-        logging.debug("="*80)
-        
-        # Extract diode voltage expressions in correct order
-        # diode_voltage_exprs = self._extract_diode_voltage_expressions(solution)
-        
-        # Apply -1 factor for LCP formulation: -v_D = M*i_D + q (positive = blocking)
-        # diode_voltage_exprs = [-expr for expr in diode_voltage_exprs]
-        # logging.debug(f"Diode voltage expressions (with -1 factor):")
-        # for i, expr in enumerate(diode_voltage_exprs):
-        #     diode_name = self.electrical_model.diode_list[i].comp_id
-        #     logging.debug(f"  [{i}] {diode_name}: -v_D = {expr}")
-
-        # Extract M matrix and q vector by collecting coefficients
-        n_diodes = len(self.electrical_model.diode_list)
-        M_matrix = Matrix.zeros(n_diodes, n_diodes)
-        q_vector = Matrix.zeros(n_diodes, 1)
-
-        diode_voltage_exprs = []
-        voltage_vars = []
-        current_vars = []
-        # Iterate through diodes in ElectricalModel order to maintain consistency
-        for diode in self.electrical_model.diode_list:
-            voltage_var = diode.voltage_var
-            voltage_vars.append(voltage_var)
-            current_vars.append(diode.current_var)
-            logging.debug(f"LCP: Processing diode {diode.comp_id} with voltage var {voltage_var} and current var {diode.current_var}")
-            if diode.voltage_var in solution:
-                # Extract v_D expression 
-                expr = solution[voltage_var]
-                logging.debug(f"LCP: Diode {diode.comp_id} voltage expression before -1 factor: v_D = {expr}")
-                diode_voltage_exprs.append(-expr) # Apply -1 factor for LCP -v_D = M*i_D + q
-                logging.debug(f"LCP: Diode {diode.comp_id} voltage expression: -v_D = {-expr}")
-            else:
-                raise ValueError(f"Could not find solution for diode voltage {voltage_var} (diode {diode.comp_id})")
-        
-        for i, expr in enumerate(diode_voltage_exprs):
-            # Extract coefficients for each diode current (maintain order)
-            logging.debug(f"LCP: Processing diode voltage expression for M and q extraction: {expr}")
-            for j, current_var in enumerate(current_vars):
-                coeff = expr.coeff(current_var, 1)
-                if coeff is not None:
-                    M_matrix[i, j] = coeff
+            logging.debug("="*80)
             
-            # Get constant term (expression with all diode currents set to zero)
-            constant_term = expr.subs({var: 0 for var in diode_current_vars})
-            logging.debug(f"LCP: Diode {self.electrical_model.diode_list[i].comp_id} constant term (q): {constant_term}")
-            q_vector[i] = constant_term
-        
-        logging.debug(f"LCP: Generated M matrix:\n{M_matrix}")
-        logging.debug(f"LCP: Generated q vector:\n{q_vector}")
-        logging.debug(f"LCP: Generated M matrix shape: {M_matrix.shape}")
-        logging.debug(f"LCP: Generated q vector shape: {q_vector.shape}")
-        
-        # Cache matrices for this switch topology
-        self.lcp_switchmap[switch_states] = (M_matrix, q_vector)
+            # Extract M matrix and q vector by collecting coefficients
+            n_diodes = len(self.electrical_model.diode_list)
+            M_matrix = Matrix.zeros(n_diodes, n_diodes)
+            q_vector = Matrix.zeros(n_diodes, 1)
 
-        return M_matrix, q_vector
+            diode_voltage_exprs = []
+            voltage_vars = []
+            current_vars = []
+            # Iterate through diodes in ElectricalModel order to maintain consistency
+            for diode in self.electrical_model.diode_list:
+                voltage_var = diode.voltage_var
+                voltage_vars.append(voltage_var)
+                current_vars.append(diode.current_var)
+                logging.debug(f"LCP: Processing diode {diode.comp_id} with voltage var {voltage_var} and current var {diode.current_var}")
+                if diode.voltage_var in solution:
+                    # Extract v_D expression 
+                    expr = solution[voltage_var]
+                    logging.debug(f"LCP: Diode {diode.comp_id} voltage expression before -1 factor: v_D = {expr}")
+                    diode_voltage_exprs.append(-expr) # Apply -1 factor for LCP -v_D = M*i_D + q
+                    logging.debug(f"LCP: Diode {diode.comp_id} voltage expression: -v_D = {-expr}")
+                else:
+                    raise ValueError(f"Could not find solution for diode voltage {voltage_var} (diode {diode.comp_id})")
+            
+            for i, expr in enumerate(diode_voltage_exprs):
+                # Extract coefficients for each diode current (maintain order)
+                logging.debug(f"LCP: Processing diode voltage expression for M and q extraction: {expr}")
+                for j, current_var in enumerate(current_vars):
+                    coeff = expr.coeff(current_var, 1)
+                    if coeff is not None:
+                        M_matrix[i, j] = coeff
+                
+                # Get constant term (expression with all diode currents set to zero)
+                constant_term = expr.subs({var: 0 for var in diode_current_vars})
+                logging.debug(f"LCP: Diode {self.electrical_model.diode_list[i].comp_id} constant term (q): {constant_term}")
+                q_vector[i] = constant_term
+            
+            logging.debug(f"LCP: Generated M matrix:\n{M_matrix}")
+            logging.debug(f"LCP: Generated q vector:\n{q_vector}")
+            logging.debug(f"LCP: Generated M matrix shape: {M_matrix.shape}")
+            logging.debug(f"LCP: Generated q vector shape: {q_vector.shape}")
+
+            self.lcp_switchmap[switch_states] = (M_matrix, q_vector)
+
+        state_values_list = list(state_values) if state_values is not None else []
+        input_values_list = list(input_values) if input_values is not None else []
+        substitutions = {}
+        for i, state_var in enumerate(state_vars):
+            value = state_values_list[i] if i < len(state_values_list) else 0.0
+            substitutions[state_var] = float(value)
+        for i, input_var in enumerate(input_vars):
+            value = input_values_list[i] if i < len(input_values_list) else 0.0
+            substitutions[input_var] = float(value)
+
+        M_numeric = M_matrix.subs(substitutions)
+        q_numeric = q_vector.subs(substitutions)
+
+        return M_numeric, q_numeric
     
     def detect_diode_states(self, state_values: np.ndarray, input_values: np.ndarray, t: float = 0.0) -> List[bool]:
         """Detect the conducting state of all diodes in the circuit.
