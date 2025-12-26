@@ -84,8 +84,8 @@ class TestFullWorkflow:
     def validate_simulation_results(self, simulation_results):
         """Validate that all circuits produce expected and identical results."""
         # Expected tolerances
-        voltage_tolerance = 0.1  # ±0.1V
-        current_tolerance = 0.1  # ±0.1A
+        voltage_tolerance = 0.001  # ±0.1V
+        current_tolerance = 0.001  # ±0.1A
         
         # Expected final values
         expected_final_voltage = 5.0  # V
