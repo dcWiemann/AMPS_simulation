@@ -2,6 +2,7 @@
 archive/
 todo/
 plecs/
+simulink/
 *.log
 amps_simulation/__pycache__/
 amps_simulation/core/__pycache__/
