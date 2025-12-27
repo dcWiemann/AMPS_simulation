@@ -26,7 +26,13 @@ def _build_model_with_two_sources() -> ControlModel:
             output_names=[f"{port_name}Out"],
         )
         model.add_block([signal_source, port_block])
-        model.connect(signal_source, 0, port_block, 0, signal=ControlSignal(f"{comp_id}_signal", value))
+        model.connect(
+            from_block=signal_source,
+            from_output=0,
+            to_block=port_block,
+            to_input=0,
+            signal=ControlSignal(f"{comp_id}_signal", value),
+        )
 
     return model
 
@@ -84,7 +90,13 @@ def test_control_model_connect_creates_edge_and_signal_metadata():
     )
     model.add_block([src, dst])
 
-    signal = model.connect(src, 0, dst, 0, signal=ControlSignal("V1Signal", 1.0))
+    signal = model.connect(
+        from_block=src,
+        from_output=0,
+        to_block=dst,
+        to_input=0,
+        signal=ControlSignal("V1Signal", 1.0),
+    )
     assert signal.name == "V1Signal"
     assert signal.src_block_name == "V1Source"
     assert signal.dst_block_name == "V1Port"
@@ -144,8 +156,20 @@ def test_control_model_compile_input_function_rejects_multiple_drivers():
     s2 = ControlSource(name="S2", output_names=["S2Out"])
     model.add_block([dst, s1, s2])
 
-    model.connect(s1, 0, dst, 0, signal=ControlSignal("sig1", 1.0))
-    model.connect(s2, 0, dst, 0, signal=ControlSignal("sig2", 2.0))
+    model.connect(
+        from_block=s1,
+        from_output=0,
+        to_block=dst,
+        to_input=0,
+        signal=ControlSignal("sig1", 1.0),
+    )
+    model.connect(
+        from_block=s2,
+        from_output=0,
+        to_block=dst,
+        to_input=0,
+        signal=ControlSignal("sig2", 2.0),
+    )
 
     with pytest.raises(ValueError, match="multiple driving signals"):
         model.compile_input_function(["P"])
@@ -189,12 +213,48 @@ def test_control_model_api_feedback_system_with_pi_and_plant_state_space():
 
     model.add_block([ref, error_sum, pi, plant, kfb, y])
 
-    model.connect(ref, 0, error_sum, 0, signal=ControlSignal("RefToSum", 0.0))
-    model.connect(plant, 0, kfb, 0, signal=ControlSignal("PlantToKfb", 0.0))
-    model.connect(kfb, 0, error_sum, 1, signal=ControlSignal("KfbToSum", 0.0))
-    model.connect(error_sum, 0, pi, 0, signal=ControlSignal("ErrorToPI", 0.0))
-    model.connect(pi, 0, plant, 0, signal=ControlSignal("PIToPlant", 0.0))
-    model.connect(plant, 0, y, 0, signal=ControlSignal("PlantToY", 0.0))
+    model.connect(
+        from_block=ref,
+        from_output=0,
+        to_block=error_sum,
+        to_input=0,
+        signal=ControlSignal("RefToSum", 0.0),
+    )
+    model.connect(
+        from_block=plant,
+        from_output=0,
+        to_block=kfb,
+        to_input=0,
+        signal=ControlSignal("PlantToKfb", 0.0),
+    )
+    model.connect(
+        from_block=kfb,
+        from_output=0,
+        to_block=error_sum,
+        to_input=1,
+        signal=ControlSignal("KfbToSum", 0.0),
+    )
+    model.connect(
+        from_block=error_sum,
+        from_output=0,
+        to_block=pi,
+        to_input=0,
+        signal=ControlSignal("ErrorToPI", 0.0),
+    )
+    model.connect(
+        from_block=pi,
+        from_output=0,
+        to_block=plant,
+        to_input=0,
+        signal=ControlSignal("PIToPlant", 0.0),
+    )
+    model.connect(
+        from_block=plant,
+        from_output=0,
+        to_block=y,
+        to_input=0,
+        signal=ControlSignal("PlantToY", 0.0),
+    )
 
     model.initialize()
 

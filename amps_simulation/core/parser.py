@@ -380,4 +380,10 @@ class ParserJson(CircuitParser):
                 self.control_model.add_block([signal_source, port_block])
 
                 # Connect signal to port (1:1 mapping for now)
-                self.control_model.connect(signal_source, 0, port_block, 0, signal=signal)
+                self.control_model.connect(
+                    from_block=signal_source,
+                    from_output=0,
+                    to_block=port_block,
+                    to_input=0,
+                    signal=signal,
+                )

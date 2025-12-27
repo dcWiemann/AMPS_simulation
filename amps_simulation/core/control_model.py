@@ -89,6 +89,8 @@ class ControlModel:
         Return a mapping of node_name -> block for nodes that are control ports.
 
         Ports are represented by instances of ControlPort (including InPort/OutPort).
+        These are the physical control interfaces on the model graph, not the
+        logical inputs/outputs of an arbitrary ControlBlock.
         If `port_type` is provided, it filters by port class:
           - "input"  -> InPort
           - "output" -> OutPort
@@ -111,45 +113,59 @@ class ControlModel:
         return result
 
     @staticmethod
-    def _port_name_and_index(block: ControlBlock, port: Union[str, int], *, port_kind: str) -> Tuple[str, int]:
-        ports = block.output_names if port_kind == "out" else block.input_names
-        if isinstance(port, int):
-            if port < 0 or port >= len(ports):
-                raise IndexError(f"{port_kind}port index {port} out of range for block '{block.name}'")
-            return ports[port], port
-        if port in ports:
-            return port, ports.index(port)
-        raise ValueError(f"{port_kind}port '{port}' not found on block '{block.name}'")
+    def _io_name_and_index(block: ControlBlock, endpoint: Union[str, int], *, direction: str) -> Tuple[str, int]:
+        """
+        Resolve an input/output reference on a ControlBlock to (name, index).
+        Uses the block's logical inputs/outputs, not ControlPort graph nodes.
+        """
+        if direction not in {"in", "out"}:
+            raise ValueError(f"direction must be 'in' or 'out', got '{direction}'")
+        names = block.output_names if direction == "out" else block.input_names
+        if isinstance(endpoint, int):
+            if endpoint < 0 or endpoint >= len(names):
+                raise IndexError(f"{direction}put index {endpoint} out of range for block '{block.name}'")
+            return names[endpoint], endpoint
+        if endpoint in names:
+            return endpoint, names.index(endpoint)
+        raise ValueError(f"{direction}put '{endpoint}' not found on block '{block.name}'")
 
-    def connect(self, from_block: ControlBlock, from_port: Union[str, int],
-                to_block: ControlBlock, to_port: Union[str, int],
+    def connect(self, from_block: ControlBlock, from_output: Union[str, int],
+                to_block: ControlBlock, to_input: Union[str, int],
                 signal: Optional[ControlSignal] = None) -> ControlSignal:
         """
         Connect two control blocks via a ControlSignal edge.
 
+        The `from_output`/`to_input` arguments refer to the logical outputs/inputs
+        on each ControlBlock (as defined by `output_names` / `input_names`), not
+        the ControlPort nodes (InPort/OutPort) used to expose the model boundary.
+
         Args:
             from_block: Source block instance
-            from_port: Source port name or index
+            from_output: Source output name or index on the source block
             to_block: Destination block instance
-            to_port: Destination port name or index
+            to_input: Destination input name or index on the destination block
             signal: Optional pre-constructed ControlSignal to attach
 
         Returns:
             ControlSignal stored on the created edge
         """
-        src_port_name, src_port_idx = self._port_name_and_index(from_block, from_port, port_kind="out")
-        dst_port_name, dst_port_idx = self._port_name_and_index(to_block, to_port, port_kind="in")
+        src_output_name, src_output_idx = self._io_name_and_index(from_block, from_output, direction="out")
+        dst_input_name, dst_input_idx = self._io_name_and_index(to_block, to_input, direction="in")
 
-        signal_name = signal.name if signal else f"{from_block.name}__{src_port_name}__{to_block.name}__{dst_port_name}"
+        signal_name = (
+            signal.name
+            if signal
+            else f"{from_block.name}__{src_output_name}__{to_block.name}__{dst_input_name}"
+        )
         if signal is None:
             signal = ControlSignal(
                 signal_name,
                 src_block_name=from_block.name,
                 dst_block_name=to_block.name,
-                src_port_name=src_port_name,
-                dst_port_name=dst_port_name,
-                src_port_idx=src_port_idx,
-                dst_port_idx=dst_port_idx,
+                src_port_name=src_output_name,
+                dst_port_name=dst_input_name,
+                src_port_idx=src_output_idx,
+                dst_port_idx=dst_input_idx,
                 dtype=getattr(from_block, "output_dtype", None),
             )
         else:
@@ -158,10 +174,10 @@ class ControlModel:
             signal.signal_id = signal_name
             signal.src_block_name = signal.src_block_name or from_block.name
             signal.dst_block_name = signal.dst_block_name or to_block.name
-            signal.src_port_name = signal.src_port_name or src_port_name
-            signal.dst_port_name = signal.dst_port_name or dst_port_name
-            signal.src_port_idx = signal.src_port_idx if signal.src_port_idx is not None else src_port_idx
-            signal.dst_port_idx = signal.dst_port_idx if signal.dst_port_idx is not None else dst_port_idx
+            signal.src_port_name = signal.src_port_name or src_output_name
+            signal.dst_port_name = signal.dst_port_name or dst_input_name
+            signal.src_port_idx = signal.src_port_idx if signal.src_port_idx is not None else src_output_idx
+            signal.dst_port_idx = signal.dst_port_idx if signal.dst_port_idx is not None else dst_input_idx
             signal.dtype = signal.dtype if signal.dtype is not None else getattr(from_block, "output_dtype", None)
 
         self.graph.add_edge(from_block.name, to_block.name, key=signal.name, signal=signal)
@@ -173,7 +189,8 @@ class ControlModel:
         Build optimized u(t) function based on incoming ControlSignal edges.
 
         Args:
-            port_order: Ordered list of SOURCE port node names
+            port_order: Ordered list of ControlPort node names (physical control
+                        ports that expose the model boundary)
 
         Returns:
             Callable that takes time t and returns input vector u(t)
