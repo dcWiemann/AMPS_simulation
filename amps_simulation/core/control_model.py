@@ -2,7 +2,7 @@ from typing import Optional, List, Callable, Union, Tuple, Sequence, Any, Dict
 import numpy as np
 import networkx as nx
 from sympy import Symbol
-from .control_block import ControlBlock, ControlPort, InPort, OutPort, LinearControlBlock
+from .control_block import ControlBlock, ControlPort, InPort, OutPort, LinearControlBlock, ControlSource
 from .control_signal import ControlSignal
 
 
@@ -28,6 +28,7 @@ class ControlModel:
         # Convenience lists (populated in initialize())
         self.list_all_blocks: List[ControlBlock] = []
         self.list_linear_blocks: List[LinearControlBlock] = []
+        self.list_sources: List[ControlSource] = []
         self.list_input_ports: List[InPort] = []
         self.list_output_ports: List[OutPort] = []
 
@@ -41,6 +42,7 @@ class ControlModel:
         """Initialize the control model and populate convenience block lists."""
         self.list_all_blocks = []
         self.list_linear_blocks = []
+        self.list_sources = []
         self.list_input_ports = []
         self.list_output_ports = []
 
@@ -52,6 +54,8 @@ class ControlModel:
             self.list_all_blocks.append(block)
             if isinstance(block, LinearControlBlock):
                 self.list_linear_blocks.append(block)
+            if isinstance(block, ControlSource):
+                self.list_sources.append(block)
             if isinstance(block, InPort):
                 self.list_input_ports.append(block)
             if isinstance(block, OutPort):
